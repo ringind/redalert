@@ -1,0 +1,34 @@
+configuration:
+  bridge_host:
+    name: Hue Bridge IP
+    description: >-
+      IP address of the Hue Bridge. Optional – can also be supplied per /pair call.
+  area_id:
+    name: Entertainment area ID
+    description: >-
+      ID of the Hue Entertainment area to stream to. Read it from the "Bereiche laden"
+      button in the web UI or GET /areas.
+  channel_order:
+    name: Channel order
+    description: >-
+      Optional explicit list of channel IDs defining the order the comet sweeps
+      along. Leave empty to use the area's native channel order.
+  color:
+    name: Colour
+    description: Hex colour of the chase effect (default #FF0000, Star Trek red).
+  fps:
+    name: Frames per second
+    description: DTLS stream rate. Higher = smoother, more network traffic (5–50).
+  sweep_seconds:
+    name: Sweep duration
+    description: Seconds for one pass of the comet across all lamps (0.3–5.0).
+  cue_file:
+    name: Cue file path
+    description: >-
+      Path to an alternative redalert_cue.json (e.g. /share/redalert_cue.json).
+      Empty = use the bundled cue.
+  log_level:
+    name: Log level
+    description: Verbosity of the add-on log (trace, debug, info, notice, warning, error, fatal).
+network:
+  8099/tcp: REST API and web UI (only needed for access outside Ingress, e.g. rest_command)

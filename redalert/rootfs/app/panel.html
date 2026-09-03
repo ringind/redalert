@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Red Alert Entertainment</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f4f5f7; --card: #ffffff; --fg: #1b1c1f; --muted: #6b7280;
+    --line: #e2e4e8; --accent: #d61f1f; --accent-fg: #ffffff; --ok: #1a8f3c; --off: #9aa0a6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111214; --card: #1c1e22; --fg: #e8e9ec; --muted: #9aa0a6;
+      --line: #2c2f34; --accent: #e5484d; --accent-fg: #ffffff; --ok: #3fb950; --off: #6b7280;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; align-items: center; gap: .6rem; padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--line); background: var(--card); }
+  header .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 10px var(--accent); }
+  header h1 { font-size: 1rem; margin: 0; font-weight: 600; }
+  main { max-width: 720px; margin: 0 auto; padding: 1.25rem; display: grid; gap: 1rem; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.1rem; }
+  .card h2 { margin: 0 0 .75rem; font-size: .95rem; font-weight: 600; }
+  .row { display: flex; flex-wrap: wrap; gap: .6rem; align-items: end; }
+  label { display: block; font-size: .8rem; color: var(--muted); margin-bottom: .2rem; }
+  input, select { font: inherit; padding: .45rem .55rem; border: 1px solid var(--line);
+    border-radius: 8px; background: var(--bg); color: var(--fg); }
+  input[type=number] { width: 6.5rem; }
+  input[type=text] { min-width: 12rem; }
+  button { font: inherit; font-weight: 600; padding: .5rem .9rem; border: 0; border-radius: 8px;
+    background: var(--accent); color: var(--accent-fg); cursor: pointer; }
+  button.secondary { background: transparent; color: var(--fg); border: 1px solid var(--line); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .pill { display: inline-flex; align-items: center; gap: .4rem; font-size: .8rem;
+    padding: .2rem .55rem; border-radius: 999px; border: 1px solid var(--line); }
+  .pill .led { width: 8px; height: 8px; border-radius: 50%; background: var(--off); }
+  .pill.on .led { background: var(--ok); }
+  .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .5rem .9rem; }
+  .status-grid div span { display: block; color: var(--muted); font-size: .75rem; }
+  .areas { display: grid; gap: .5rem; }
+  .area { border: 1px solid var(--line); border-radius: 8px; padding: .55rem .7rem;
+    display: flex; justify-content: space-between; align-items: center; gap: .6rem; }
+  .area code { font-size: .8rem; color: var(--muted); }
+  pre#log { background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+    padding: .7rem; max-height: 220px; overflow: auto; font-size: .8rem; white-space: pre-wrap; margin: 0; }
+  .muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <span class="dot"></span>
+  <h1>Red Alert Entertainment</h1>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Status</h2>
+    <div class="row" style="margin-bottom:.8rem">
+      <span class="pill" id="pill-pair"><span class="led"></span> Bridge</span>
+      <span class="pill" id="pill-run"><span class="led"></span> Effekt</span>
+      <button class="secondary" id="btn-refresh" style="margin-left:auto">Aktualisieren</button>
+    </div>
+    <div class="status-grid" id="status"></div>
+  </section>
+
+  <section class="card">
+    <h2>1 · Mit Bridge pairen</h2>
+    <p class="muted" style="margin-top:0">Zuerst den Link-Button auf der Hue Bridge drücken, dann innerhalb ~30 s pairen.</p>
+    <div class="row">
+      <div><label for="bridge">Bridge-IP</label><input type="text" id="bridge" placeholder="192.168.1.50"></div>
+      <button id="btn-pair">Pairen</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>2 · Entertainment-Bereich</h2>
+    <div class="row" style="margin-bottom:.7rem">
+      <button class="secondary" id="btn-areas">Bereiche laden</button>
+    </div>
+    <div class="areas" id="areas"><span class="muted">Noch nichts geladen.</span></div>
+  </section>
+
+  <section class="card">
+    <h2>3 · Steuerung</h2>
+    <div class="row">
+      <div><label for="area">area_id</label><input type="text" id="area" placeholder="abcd-1234"></div>
+      <div><label for="duration">Dauer (s, leer = Cue)</label><input type="number" id="duration" min="0" step="1" placeholder="auto"></div>
+      <div><label for="fps">fps</label><input type="number" id="fps" min="5" max="50" step="1"></div>
+      <div><label for="sweep">sweep_seconds</label><input type="number" id="sweep" min="0.3" max="5" step="0.1"></div>
+      <div><label for="color">Farbe</label><input type="color" id="color" value="#ff0000"></div>
+      <div><label><input type="checkbox" id="usecue" checked> Cue nutzen</label></div>
+    </div>
+    <div class="row" style="margin-top:.9rem">
+      <button id="btn-start">▶ Start</button>
+      <button class="secondary" id="btn-stop">■ Stop</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Protokoll (Antworten)</h2>
+    <pre id="log">Bereit.</pre>
+  </section>
+</main>
+
+<script>
+  // Relative URLs -> funktioniert hinter Ingress und via Port 8099 direkt.
+  const $ = (id) => document.getElementById(id);
+  const logEl = $("log");
+  function logLine(msg, obj) {
+    const t = new Date().toLocaleTimeString();
+    logEl.textContent = `[${t}] ${msg}` + (obj !== undefined ? "\n" + JSON.stringify(obj, null, 2) : "") + "\n\n" + logEl.textContent;
+  }
+  async function api(path, opts) {
+    try {
+      const res = await fetch(path, opts);
+      const data = await res.json().catch(() => ({}));
+      logLine(`${opts?.method || "GET"} ${path} → ${res.status}`, data);
+      return { ok: res.ok, data };
+    } catch (e) {
+      logLine(`${path} → Netzwerkfehler: ${e}`);
+      return { ok: false, data: {} };
+    }
+  }
+  function setPill(el, on, label) {
+    el.classList.toggle("on", !!on);
+    el.lastChild.textContent = " " + label;
+  }
+  async function refresh() {
+    const { ok, data } = await api("config");
+    if (!ok) return;
+    setPill($("pill-pair"), data.paired, data.paired ? "Bridge gepaart" : "Nicht gepaart");
+    setPill($("pill-run"), data.running, data.running ? "Effekt läuft" : "Effekt aus");
+    const s = $("status"); s.innerHTML = "";
+    const fields = {
+      "Bridge": data.bridge_host || "–",
+      "area_id (Option)": data.area_id || "–",
+      "Kanalreihenfolge": (data.channel_order && data.channel_order.join(", ")) || "Bereichs-Standard",
+      "Farbe": data.color,
+      "fps": data.fps,
+      "sweep_seconds": data.sweep_seconds,
+      "Cue": data.cue_loaded ? `${data.cue_duration_s}s (${data.cue_source})` : "keine",
+    };
+    for (const [k, v] of Object.entries(fields)) {
+      const d = document.createElement("div");
+      d.innerHTML = `<span>${k}</span>${v}`;
+      s.appendChild(d);
+    }
+    if (data.area_id && !$("area").value) $("area").value = data.area_id;
+    if (data.fps && !$("fps").value) $("fps").value = data.fps;
+    if (data.sweep_seconds && !$("sweep").value) $("sweep").value = data.sweep_seconds;
+    if (data.color) $("color").value = data.color.toLowerCase();
+  }
+  $("btn-refresh").onclick = refresh;
+  $("btn-pair").onclick = async () => {
+    const body = {};
+    if ($("bridge").value.trim()) body.bridge_ip = $("bridge").value.trim();
+    await api("pair", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    refresh();
+  };
+  $("btn-areas").onclick = async () => {
+    const { ok, data } = await api("areas");
+    const box = $("areas"); box.innerHTML = "";
+    if (!ok || !Array.isArray(data) || data.length === 0) {
+      box.innerHTML = '<span class="muted">Keine Bereiche gefunden.</span>'; return;
+    }
+    for (const a of data) {
+      const el = document.createElement("div");
+      el.className = "area";
+      el.innerHTML = `<div><strong>${a.name || "(ohne Name)"}</strong><br><code>${a.id}</code> · Kanäle: ${a.channels.join(", ")}</div>`;
+      const b = document.createElement("button");
+      b.className = "secondary"; b.textContent = "übernehmen";
+      b.onclick = () => { $("area").value = a.id; logLine("area_id gesetzt: " + a.id); };
+      el.appendChild(b);
+      box.appendChild(el);
+    }
+  };
+  $("btn-start").onclick = async () => {
+    const body = { use_cue: $("usecue").checked, color: $("color").value };
+    if ($("area").value.trim()) body.area_id = $("area").value.trim();
+    if ($("duration").value !== "") body.duration = Number($("duration").value);
+    if ($("fps").value !== "") body.fps = Number($("fps").value);
+    if ($("sweep").value !== "") body.sweep_seconds = Number($("sweep").value);
+    await api("start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    refresh();
+  };
+  $("btn-stop").onclick = async () => {
+    await api("stop", { method: "POST" });
+    refresh();
+  };
+  refresh();
+  setInterval(refresh, 5000);
+</script>
+</body>
+</html>

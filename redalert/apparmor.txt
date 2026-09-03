@@ -1,0 +1,33 @@
+#include <tunables/global>
+
+profile redalert flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+  #include <abstractions/python>
+
+  # Netzwerk (REST-API + DTLS zur Bridge)
+  network,
+
+  signal (send) set=(kill,term,int,hup,cont),
+
+  # s6-overlay / Init der HA-Basis
+  /init ix,
+  /bin/** ix,
+  /usr/bin/** ix,
+  /usr/lib/bashio/** ix,
+  /command/** ix,
+  /package/** ix,
+  /etc/s6-overlay/** ix,
+  /run/{s6,s6-rc*,service}/** ix,
+  /run/{,**} rwk,
+  /dev/tty rw,
+
+  # Python-App
+  /usr/bin/python3* ix,
+  /app/** r,
+
+  # Persistente Daten / Freigaben
+  /data/** rw,
+  /config/** rw,
+  /share/** rw,
+  /tmp/** rwk,
+}

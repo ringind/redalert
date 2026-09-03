@@ -1,0 +1,13 @@
+#!/command/with-contenv bashio
+# ==============================================================================
+# Startet den Red-Alert-Entertainment-Dienst
+# ==============================================================================
+declare log_level
+
+log_level="$(bashio::config 'log_level' 'info')"
+export REDALERT_LOG_LEVEL="${log_level}"
+
+bashio::log.info "Red Alert Entertainment startet (Log-Level: ${log_level})…"
+bashio::log.info "REST-API & Web-UI auf Port 8099 / via Ingress erreichbar."
+
+exec python3 /app/main.py

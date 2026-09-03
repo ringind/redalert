@@ -1,0 +1,12 @@
+#!/command/with-contenv bashio
+# ==============================================================================
+# Läuft nach dem Ende des Dienstes – beendet den Container sauber,
+# damit Supervisor Watchdog/Neustart korrekt greifen kann.
+# ==============================================================================
+declare exit_code="${1}"
+
+if [[ "${exit_code}" -ne 0 ]] && [[ "${exit_code}" -ne 256 ]]; then
+    bashio::log.warning "Dienst mit Exit-Code ${exit_code} beendet."
+fi
+
+exec /run/s6/basedir/bin/halt

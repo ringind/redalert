@@ -1,0 +1,2 @@
+hue-entertainment==0.1.2
+aiohttp>=3.9,<4

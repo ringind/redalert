@@ -1,0 +1,32 @@
+# Red Alert Entertainment
+
+Star-Trek-„Alarmstufe Rot“-Lauflicht über Philips-Hue-Lampen via **Hue
+Entertainment API** (DTLS-Streaming), mit Ingress-Web-UI zur Steuerung und
+optionalem Audio-Sync per Cue-Datei.
+
+Vollständige Anleitung: siehe **[DOCS.md](DOCS.md)** (wird in HA als Tab
+„Dokumentation“ angezeigt).
+
+## Auf einen Blick
+
+- **Info / Konfiguration / Dokumentation / Protokoll**: Standard-Tabs des Add-ons.
+- **Steuerung**: Seitenleisten-Panel „Red Alert“ (Ingress) – Pairing, Bereiche
+  laden, Start/Stop, Farbe/Dauer/fps/sweep.
+- **REST-API** auf Port `8099`: `/health`, `/config`, `/pair`, `/areas`,
+  `/start`, `/stop` – für `rest_command`-Automationen.
+- **Watchdog** auf `/health`, s6-Supervision, DE/EN-Übersetzung.
+
+## Dateien
+
+| Datei | Zweck |
+|-------|-------|
+| `config.yaml` | Add-on-Manifest (Optionen, Ingress, Ports, Watchdog). |
+| `build.yaml` | Basis-Images (`home-assistant/base-python`). |
+| `Dockerfile` | Image-Build. |
+| `translations/` | Beschriftung der Konfigurationsoberfläche (de/en). |
+| `apparmor.txt` | AppArmor-Profil. |
+| `rootfs/etc/s6-overlay/…` | Service-Definition (Start/Logging). |
+| `rootfs/app/main.py` | REST-Server, Streaming-Loop, Ingress-Panel. |
+| `rootfs/app/chase.py` | Comet-Sweep-Berechnung (Larson-Scanner). |
+| `rootfs/app/panel.html` | Web-UI. |
+| `rootfs/app/redalert_cue.json` | Vorgefertigte Helligkeits-Hüllkurve (kein Audio). |

@@ -1,0 +1,34 @@
+configuration:
+  bridge_host:
+    name: Hue-Bridge-IP
+    description: >-
+      IP-Adresse der Hue Bridge. Optional – kann auch pro /pair-Aufruf übergeben werden.
+  area_id:
+    name: Entertainment-Bereich-ID
+    description: >-
+      ID des Hue-Entertainment-Bereichs, an den gestreamt wird. Über den Button
+      „Bereiche laden“ im Web-UI oder GET /areas ermitteln.
+  channel_order:
+    name: Kanalreihenfolge
+    description: >-
+      Optionale explizite Liste von channel_ids, die die Reihenfolge des
+      Kometen-Sweeps bestimmt. Leer lassen = native Reihenfolge des Bereichs.
+  color:
+    name: Farbe
+    description: Hex-Farbe des Lauflichts (Standard #FF0000, Star-Trek-Rot).
+  fps:
+    name: Frames pro Sekunde
+    description: Taktrate des DTLS-Streams. Höher = flüssiger, mehr Netzlast (5–50).
+  sweep_seconds:
+    name: Sweep-Dauer
+    description: Sekunden für einen Durchlauf des Kometen über alle Lampen (0.3–5.0).
+  cue_file:
+    name: Pfad zur Cue-Datei
+    description: >-
+      Pfad zu einer alternativen redalert_cue.json (z. B. /share/redalert_cue.json).
+      Leer = mitgelieferte Cue verwenden.
+  log_level:
+    name: Log-Level
+    description: Ausführlichkeit des Add-on-Protokolls (trace, debug, info, notice, warning, error, fatal).
+network:
+  8099/tcp: REST-API und Web-UI (nur nötig für Zugriff außerhalb von Ingress, z. B. rest_command)
