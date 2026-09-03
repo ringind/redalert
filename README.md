@@ -154,8 +154,8 @@ Liefert z. B.:
 Trage die `id` als Add-on-Option `area_id` ein (Konfiguration-Tab des
 Add-ons). Falls die `channels`-Reihenfolge nicht deiner physischen Anordnung
 entspricht, kannst du die gewünschte Reihenfolge explizit als
-`channel_order` setzen – als Add-on-Option (Liste der channel_ids) **oder**
-direkt im Web-UI unter „3 · Steuerung“ (kommagetrennt, z. B. `2,3,1,0,5,4`).
+`channel_order` setzen – als kommagetrennte Liste (z. B. `2,3,1,0,5,4`),
+entweder als Add-on-Option oder direkt im Web-UI unter „3 · Steuerung“.
 Welche `channel_id` welche Lampe ist, findest du im Web-UI unter
 „4 · Lampen zuordnen“ (leuchtet die Kanäle einzeln auf). Add-on nach einer
 Options-Änderung neu starten.
@@ -166,13 +166,15 @@ Options-Änderung neu starten.
 |-------------------|--------------|----------|-------------------------------------------------------------------|
 | `bridge_host`     | String        | leer     | IP der Hue Bridge. Kann auch pro `/pair`-Aufruf übergeben werden. |
 | `area_id`         | String        | leer     | ID des Entertainment-Bereichs (siehe Schritt 4).                  |
-| `channel_order`   | Liste[int]    | leer     | Optionale explizite Kanalreihenfolge (für `chase`).               |
-| `effect`          | `pulse`\|`chase` | `pulse` | `pulse` = alle Lampen zusammen 0 → 100 % → 0 im Musiktakt. `chase` = umlaufender Komet mit Schweif. |
+| `channel_order`   | String        | leer     | Kanalreihenfolge (`chase`) als kommagetrennte Liste, z. B. `2,3,1,0,5,4`. |
+| `effect`          | `pulse`\|`chase` | `pulse` | `pulse` = alle Lampen zusammen `glow_low` → `glow_high` → `glow_low` im Musiktakt. `chase` = umlaufender Komet mit Schweif. |
 | `color`           | Hex-String    | `#FF0000`| Farbe des Effekts.                                                |
 | `fps`             | int (5–50)    | 25       | Frames/Sekunde des DTLS-Streams.                                   |
 | `sweep_seconds`   | float (0.3–5) | 1.4      | `chase`: Dauer einer vollen Umrundung. `pulse` ohne Cue: Zyklusdauer. |
-| `attack_ms`       | int (0–2000)  | 140      | `pulse`: Aufblendzeit 0 → 100 %.                                  |
-| `release_ms`      | int (0–5000)  | 70       | `pulse`: Abblendzeit → 0 (kleiner als `attack_ms`).               |
+| `attack_ms`       | int (0–2000)  | 140      | `pulse`: Aufblendzeit `glow_low` → `glow_high`.                   |
+| `release_ms`      | int (0–5000)  | 70       | `pulse`: Abblendzeit → `glow_low` (kleiner als `attack_ms`).       |
+| `glow_low`        | float (0–1)   | 0.08     | **Beide Effekte:** Ruhe-Helligkeit zwischen den Pulsen (`0` = ganz aus). |
+| `glow_high`       | float (0–1)   | 1.0      | **Beide Effekte:** Helligkeit im Puls-Maximum (über `glow_low`).   |
 | `restore_state`   | bool          | `true`   | Lampenzustand vor dem Effekt sichern und danach wiederherstellen.  |
 | `cue_file`        | String        | leer     | Pfad zu einer alternativen `redalert_cue.json` (z. B. `/share/...`). |
 | `log_level`       | Liste         | `info`   | Ausführlichkeit des Add-on-Protokolls (`trace`…`fatal`).           |
@@ -186,7 +188,7 @@ Options-Änderung neu starten.
 | `/config` | GET     | Effektive Konfiguration (für das Web-UI)                                                |
 | `/pair`   | POST    | Einmalige Kopplung mit der Bridge. Body: `{"bridge_ip": "..."}` (optional, falls Option gesetzt) |
 | `/areas`  | GET     | Verfügbare Entertainment-Bereiche + Kanäle auflisten                                    |
-| `/start`  | POST    | Effekt starten (antwortet sofort; DTLS-Handshake läuft im Hintergrund). Body optional: `area_id`, `effect`, `duration` (Sek.), `cue_offset` (Sek.), `fps`, `sweep_seconds`, `attack_ms`, `release_ms`, `color`, `use_cue`, `restore_state`, `channel_order` (`[2,3,1,0,5,4]` oder `"2,3,1,0,5,4"`) |
+| `/start`  | POST    | Effekt starten (antwortet sofort; DTLS-Handshake läuft im Hintergrund). Body optional: `area_id`, `effect`, `duration` (Sek.), `cue_offset` (Sek.), `fps`, `sweep_seconds`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `color`, `use_cue`, `restore_state`, `channel_order` (`[2,3,1,0,5,4]` oder `"2,3,1,0,5,4"`) |
 | `/stop`   | POST    | Effekt sofort stoppen                                                                   |
 | `/sync`   | POST    | Feinsynchronisation zur Musik. Body `{"position": <Sek. im Track>}`; zieht den Licht-Cue max. ±0,5 s/Aufruf nach. `409`, wenn nichts läuft. |
 | `/identify` | POST  | Lampen einzeln durchtesten (`channel_id` → Lampe). Body optional: `area_id`, `channel_id` (fehlt = alle nacheinander), `seconds`, `color`, `restore_state`. Ein DTLS-Handshake für den Durchlauf; belegt denselben Slot wie `/start`. |
@@ -281,7 +283,13 @@ eintragen (Add-on-Neustart genügt, kein Neubau nötig).
 
 Effekt wählen: Option `effect` bzw. `"effect": "pulse"|"chase"` im `/start`-Body.
 
-`pulse` (Standard) – alle Lampen gemeinsam von 0 auf 100 % und wieder auf 0:
+**Beide Effekte:** `glow_low` / `glow_high` (Optionen **oder** `/start`-Body,
+`0`–`1`) legen fest, worauf die Lampen zwischen den Pulsen zurückgehen bzw. wie
+hell das Puls-Maximum ist. Standard `0.08` / `1.0`; `glow_low: 0` = geht ganz
+aus.
+
+`pulse` (Standard) – alle Lampen gemeinsam von `glow_low` auf `glow_high` und
+zurück:
 - `attack_ms` / `release_ms` – Aufblend- bzw. Abblendzeit; `release_ms` kleiner
   wählen für schnelleres Abfallen als Aufblenden.
 - `sweep_seconds` – Zyklusdauer, wenn keine Cue aktiv ist.
@@ -289,18 +297,17 @@ Effekt wählen: Option `effect` bzw. `"effect": "pulse"|"chase"` im `/start`-Bod
   Beat-Gate (Schmitt-Trigger): ab `hi` an, wieder aus, wenn der Pegel `hold_s`
   lang unter `lo` bleibt.
 
-`chase` – umlaufender Komet; jede Lampe für sich pulst: kurz hell, langes
-Ausblenden, dann eine echte Dunkelpause bei 0, dann wieder (`RedAlertChase` in
-`chase.py`):
+`chase` – umlaufender Komet; jede Lampe für sich pulst: kurz hell (`glow_high`),
+langes Ausblenden, dann eine Ruhephase auf `glow_low`, dann wieder
+(`RedAlertChase` in `chase.py`):
 - `sweep_seconds` – Dauer einer vollen Umrundung aller Lampen (Standard 1.4 s);
   zugleich der Abstand zwischen zwei Pulsen derselben Lampe.
 - `attack_frac` – Anstiegszeit als Bruchteil von `sweep_seconds` (klein =
   schlagartig hell, Standard 0.07).
 - `decay_frac` – Abkling-Zeitkonstante als Bruchteil von `sweep_seconds`
   (Standard 0.22); bestimmt, wie steil der Anfang des Ausblendens ist.
-- `fade_frac` – Bruchteil des Zyklus, nach dem die Lampe **exakt 0** erreicht
-  und bis zum nächsten Anstieg dunkel bleibt (Standard 0.6).
-- `base_glow` – Grundhelligkeit (0–1); `0` (Standard) = Lampe geht ganz aus.
+- `fade_frac` – Bruchteil des Zyklus, nach dem die 0..1-Form **den Tiefpunkt**
+  erreicht und bis zum nächsten Anstieg dort bleibt (Standard 0.6).
 
 Farbe ist aktuell fest auf Rot (`green=0, blue=0`) gesetzt; über
 `LightColorCommand` lassen sich bei Bedarf auch andere Farbverläufe fahren.

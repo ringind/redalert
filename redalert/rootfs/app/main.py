@@ -99,15 +99,29 @@ def _parse_channel_order(value) -> list[int] | None:
     return order or None
 
 
+def _config_channel_order() -> list[int] | None:
+    """channel_order aus den Add-on-Optionen (String "2,3,1,0" oder alte Liste)."""
+    try:
+        return _parse_channel_order(options.get("channel_order"))
+    except (TypeError, ValueError):
+        log.warning(
+            "channel_order-Option %r ungültig – ignoriert (erwartet z. B. \"2,3,1,0,5,4\")",
+            options.get("channel_order"),
+        )
+        return None
+
+
 state = {
     "credentials": load_json(CRED_FILE, None),
     "bridge_host": options.get("bridge_host") or None,
     "area_id": options.get("area_id") or None,
-    "channel_order": options.get("channel_order") or None,
+    "channel_order": _config_channel_order(),
     "color": hex_to_rgb(options.get("color", "#FF0000")),
     "effect": _effect_name(options.get("effect", "pulse")),
     "attack_ms": int(options.get("attack_ms", 140)),
     "release_ms": int(options.get("release_ms", 70)),
+    "glow_low": float(options.get("glow_low", 0.08)),
+    "glow_high": float(options.get("glow_high", 1.0)),
     "restore_state": bool(options.get("restore_state", True)),
     "cue": cue,
     "cue_source": (cue_option or str(DEFAULT_CUE_PATH)) if cue else None,
@@ -119,7 +133,7 @@ state = {
 
 log.info(
     "Konfiguration: bridge_host=%s area_id=%s channels=%s effect=%s color=%s fps=%s "
-    "sweep=%ss attack=%sms release=%sms cue=%s",
+    "sweep=%ss attack=%sms release=%sms glow=%s..%s cue=%s",
     state["bridge_host"],
     state["area_id"],
     state["channel_order"],
@@ -129,6 +143,8 @@ log.info(
     options.get("sweep_seconds", 1.4),
     state["attack_ms"],
     state["release_ms"],
+    state["glow_low"],
+    state["glow_high"],
     "geladen" if cue else "keine",
 )
 if state["credentials"]:
@@ -265,6 +281,8 @@ async def handle_config(request: web.Request) -> web.Response:
             "sweep_seconds": float(options.get("sweep_seconds", 1.4)),
             "attack_ms": state["attack_ms"],
             "release_ms": state["release_ms"],
+            "glow_low": state["glow_low"],
+            "glow_high": state["glow_high"],
             "restore_state": state["restore_state"],
             "cue_loaded": state["cue"] is not None,
             "cue_source": state["cue_source"],
@@ -349,12 +367,17 @@ async def _run_effect(
     cue_offset: float,
     attack_s: float,
     release_s: float,
+    glow_low: float,
+    glow_high: float,
     bridge_host: str,
     app_key: str,
     restore: bool,
 ) -> None:
     n = len(channel_ids)
     cr, cg, cb = color
+    glow_low = min(max(glow_low, 0.0), 1.0)
+    glow_high = min(max(glow_high, glow_low), 1.0)
+    glow_span = glow_high - glow_low
     chase = RedAlertChase(num_lights=n, sweep_seconds=sweep_seconds)
     pulse = RedAlertPulse(num_lights=n, attack_s=attack_s, release_s=release_s)
     frames = 0
@@ -400,6 +423,9 @@ async def _run_effect(
                 levels = pulse.step(target, now - prev)
 
             prev = now
+            # 0..1-Form beider Effekte auf den Bereich glow_low..glow_high abbilden:
+            # zwischen den Pulsen ruhen die Lampen auf glow_low statt auf 0.
+            levels = [glow_low + glow_span * lvl for lvl in levels]
             session.send(
                 [
                     LightColorCommand(
@@ -572,6 +598,11 @@ async def handle_start(request: web.Request) -> web.Response:
     color = hex_to_rgb(body["color"]) if body.get("color") else state["color"]
     attack_s = float(body.get("attack_ms", state["attack_ms"])) / 1000.0
     release_s = float(body.get("release_ms", state["release_ms"])) / 1000.0
+    try:
+        glow_low = min(max(float(body.get("glow_low", state["glow_low"])), 0.0), 1.0)
+        glow_high = min(max(float(body.get("glow_high", state["glow_high"])), 0.0), 1.0)
+    except (TypeError, ValueError):
+        glow_low, glow_high = state["glow_low"], state["glow_high"]
     restore = bool(body.get("restore_state", state["restore_state"]))
     if "channel_order" in body:
         try:
@@ -627,7 +658,7 @@ async def handle_start(request: web.Request) -> web.Response:
     state["task"] = asyncio.create_task(
         _run_effect(
             session, area_id, channel_ids, duration, fps, sweep_seconds, active_cue, color,
-            effect, cue_offset, attack_s, release_s,
+            effect, cue_offset, attack_s, release_s, glow_low, glow_high,
             creds["bridge_host"], creds["username"], restore,
         )
     )
@@ -644,6 +675,8 @@ async def handle_start(request: web.Request) -> web.Response:
         "cue_offset": cue_offset,
         "attack_ms": round(attack_s * 1000),
         "release_ms": round(release_s * 1000),
+        "glow_low": round(glow_low, 3),
+        "glow_high": round(max(glow_low, glow_high), 3),
         "restore_state": restore,
     }
     log.info("Start angefordert: %s", state["last_start"])

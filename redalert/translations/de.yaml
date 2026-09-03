@@ -11,8 +11,9 @@ configuration:
   channel_order:
     name: Kanalreihenfolge
     description: >-
-      Optionale explizite Liste von channel_ids, die die Reihenfolge des
-      Kometen-Sweeps bestimmt. Leer lassen = native Reihenfolge des Bereichs.
+      Optionale Reihenfolge der channel_ids für den Kometen-Sweep, als
+      kommagetrennte Liste, z. B. 2,3,1,0,5,4. Leer lassen = native Reihenfolge
+      des Bereichs.
   effect:
     name: Effekt
     description: >-
@@ -34,12 +35,22 @@ configuration:
   attack_ms:
     name: Attack (ms)
     description: >-
-      pulse – wie langsam das Licht von 0 auf 100 % aufblendet.
+      pulse – wie langsam das Licht von glow_low auf glow_high aufblendet.
   release_ms:
     name: Release (ms)
     description: >-
-      pulse – wie schnell das Licht zwischen den Pulsen auf 0 abfällt.
+      pulse – wie schnell das Licht zwischen den Pulsen auf glow_low abfällt.
       Für den typischen Look kleiner als Attack wählen (schnelleres Abfallen).
+  glow_low:
+    name: Grund-Glühwert
+    description: >-
+      Helligkeit (0–1), auf die die Lampen zwischen den Pulsen zurückgehen –
+      bei beiden Effekten. 0 = ganz aus, z. B. 0.08 = schwaches Dauerglühen.
+  glow_high:
+    name: Spitzen-Wert
+    description: >-
+      Helligkeit (0–1) im Puls-Maximum (beide Effekte). Standard 1.0 = volle
+      Helligkeit. Muss über dem Grund-Glühwert liegen.
   restore_state:
     name: Lichtzustand wiederherstellen
     description: >-

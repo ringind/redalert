@@ -78,8 +78,8 @@ Lampenzustand wiederhergestellt.
 
 | `effect` | Verhalten |
 |----------|-----------|
-| `pulse` (Standard) | Alle Lampen **gemeinsam**: von **0** linear auf **100 %** im Takt der Musik, zwischen den Pulsen zurück auf **0**. Ein Schmitt-Trigger auf der Cue-Hüllkurve macht aus jedem Beat ein sauberes Ein/Aus, der Anstieg läuft dadurch ruckelfrei-monoton hoch. `attack_ms` = Aufblend-, `release_ms` = Abblendzeit; `release_ms` kleiner = schnelleres Abfallen als Aufblenden. Ohne Cue: gleichmäßiger Puls mit Periode `sweep_seconds`. |
-| `chase` | Ein Komet läuft **gleichmäßig in eine Richtung** um alle Kanäle (wraparound, konstante Geschwindigkeit). Jede Lampe für sich pulst dabei: **ganz kurz hell, langes exponentielles Ausblenden, dann eine Dunkelpause bei 0**, dann wieder; nacheinander ergibt das den Kometen mit Schweif. Optional durch die Cue gedimmt. |
+| `pulse` (Standard) | Alle Lampen **gemeinsam**: von `glow_low` linear auf `glow_high` im Takt der Musik, zwischen den Pulsen zurück auf `glow_low`. Ein Schmitt-Trigger auf der Cue-Hüllkurve macht aus jedem Beat ein sauberes Ein/Aus, der Anstieg läuft dadurch ruckelfrei-monoton hoch. `attack_ms` = Aufblend-, `release_ms` = Abblendzeit; `release_ms` kleiner = schnelleres Abfallen als Aufblenden. Ohne Cue: gleichmäßiger Puls mit Periode `sweep_seconds`. |
+| `chase` | Ein Komet läuft **gleichmäßig in eine Richtung** um alle Kanäle (wraparound, konstante Geschwindigkeit). Jede Lampe für sich pulst dabei: **ganz kurz hell (`glow_high`), langes exponentielles Ausblenden, dann eine Ruhephase auf `glow_low`**, dann wieder; nacheinander ergibt das den Kometen mit Schweif. Optional durch die Cue gedimmt. |
 
 **Lichtzustand:** Vor dem Effekt sichert das Add-on an/aus, Helligkeit und Farbe
 aller Lampen des Bereichs (Hue CLIP v2) und schreibt sie nach dem Effekt zurück
@@ -93,13 +93,15 @@ Bridge nach dem Stream-Ende).
 |-----------------|--------------------|------------|-----------|
 | `bridge_host`   | String             | `""`       | IP der Hue Bridge. Optional, auch pro `/pair` übergebbar. |
 | `area_id`       | String             | `""`       | ID des Entertainment-Bereichs (Schritt 2). |
-| `channel_order` | Liste[int]         | `[]`       | Explizite Kanalreihenfolge (für `chase`). Leer = Bereichs-Standard. |
+| `channel_order` | String             | `""`       | Kanalreihenfolge für `chase` als kommagetrennte Liste, z. B. `2,3,1,0,5,4`. Leer = Bereichs-Standard. |
 | `effect`        | `pulse` \| `chase` | `pulse`    | Lichteffekt, siehe oben. |
 | `color`         | Hex-String         | `#FF0000`  | Farbe des Effekts. |
 | `fps`           | int (5–50)         | `25`       | Frames/Sekunde des DTLS-Streams. |
 | `sweep_seconds` | float (0.3–5.0)    | `1.4`      | `chase`: Dauer einer vollen Umrundung. `pulse` ohne Cue: Zyklusdauer. |
-| `attack_ms`     | int (0–2000)       | `140`      | `pulse`: Aufblendzeit 0 → 100 %. |
-| `release_ms`    | int (0–5000)       | `70`       | `pulse`: Abblendzeit → 0 zwischen den Pulsen (kleiner als `attack_ms` = schnelleres Abfallen). |
+| `attack_ms`     | int (0–2000)       | `140`      | `pulse`: Aufblendzeit `glow_low` → `glow_high`. |
+| `release_ms`    | int (0–5000)       | `70`       | `pulse`: Abblendzeit → `glow_low` zwischen den Pulsen (kleiner als `attack_ms` = schnelleres Abfallen). |
+| `glow_low`      | float (0–1)        | `0.08`     | **Beide Effekte:** Ruhe-Helligkeit zwischen den Pulsen. `0` = ganz aus. |
+| `glow_high`     | float (0–1)        | `1.0`      | **Beide Effekte:** Helligkeit im Puls-Maximum. Muss über `glow_low` liegen. |
 | `restore_state` | bool               | `true`     | Lampenzustand (an/aus, Helligkeit, Farbe) vor dem Effekt sichern und danach wiederherstellen. |
 | `cue_file`      | String             | `""`       | Pfad zu alternativer `redalert_cue.json` (z. B. `/share/…`). |
 | `log_level`     | Liste              | `info`     | `trace`,`debug`,`info`,`notice`,`warning`,`error`,`fatal`. |
@@ -116,7 +118,7 @@ Panel-Pfad).
 | `/config` | GET     | Effektive Konfiguration (für das Web-UI). |
 | `/pair`   | POST    | Einmalige Kopplung. Body: `{"bridge_ip": "..."}` (optional bei gesetzter Option). |
 | `/areas`  | GET     | Entertainment-Bereiche + Kanäle auflisten. |
-| `/start`  | POST    | Effekt starten (antwortet sofort; DTLS-Handshake läuft im Hintergrund). Body optional: `area_id`, `effect`, `duration`, `cue_offset`, `fps`, `sweep_seconds`, `attack_ms`, `release_ms`, `color`, `use_cue`, `restore_state`, `channel_order`. `channel_order` als Liste (`[2,3,1,0,5,4]`) oder String (`"2,3,1,0,5,4"`); muss genau die Kanäle des Bereichs in gewünschter Reihenfolge enthalten, sonst `400`. |
+| `/start`  | POST    | Effekt starten (antwortet sofort; DTLS-Handshake läuft im Hintergrund). Body optional: `area_id`, `effect`, `duration`, `cue_offset`, `fps`, `sweep_seconds`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `color`, `use_cue`, `restore_state`, `channel_order`. `channel_order` als Liste (`[2,3,1,0,5,4]`) oder String (`"2,3,1,0,5,4"`); muss genau die Kanäle des Bereichs in gewünschter Reihenfolge enthalten, sonst `400`. |
 | `/stop`   | POST    | Effekt sofort stoppen. |
 | `/sync`   | POST    | Laufende Feinsynchronisation. Body: `{"position": <Sekunden im Track>}` – die echte Wiedergabeposition des media_player. Der Licht-Cue wird um die Differenz nachgezogen (max. ±0,5 s pro Aufruf, damit nichts springt). `409`, wenn kein Effekt läuft. |
 | `/identify` | POST  | Lampen einzeln durchtesten (Zuordnung `channel_id` → Lampe). Body optional: `area_id`, `channel_id` (fehlt = alle Kanäle nacheinander), `seconds` (Standard 3 einzeln / 2 bei „alle“), `color`, `restore_state`. Ein DTLS-Handshake für den ganzen Durchlauf. Belegt denselben Slot wie `/start` (`already_running`, `/stop` bricht ab). |

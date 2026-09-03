@@ -29,7 +29,7 @@ LABEL \
     io.hass.name="Red Alert Entertainment" \
     io.hass.description="Hue-Entertainment-Lauflicht (Star Trek Alarmstufe Rot)" \
     io.hass.type="addon" \
-    io.hass.version="1.1.4"
+    io.hass.version="1.1.5"
 
 # Ersetzt die (obsolete) config.yaml-Option `watchdog`: Supervisor wertet den
 # Container-Health-Status aus und startet bei Bedarf neu.

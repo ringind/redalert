@@ -11,8 +11,8 @@ configuration:
   channel_order:
     name: Channel order
     description: >-
-      Optional explicit list of channel IDs defining the order the comet sweeps
-      along. Leave empty to use the area's native channel order.
+      Optional order of channel IDs for the comet sweep, as a comma-separated
+      list, e.g. 2,3,1,0,5,4. Leave empty to use the area's native channel order.
   effect:
     name: Effect
     description: >-
@@ -32,12 +32,22 @@ configuration:
       pulse without a cue: length of one full up/down cycle (0.3–5.0).
   attack_ms:
     name: Attack (ms)
-    description: pulse – how slowly the light ramps from 0 to 100 %.
+    description: pulse – how slowly the light ramps from glow_low to glow_high.
   release_ms:
     name: Release (ms)
     description: >-
-      pulse – how fast the light drops back to 0 between pulses. Keep it smaller
-      than attack for the intended look (faster fall than rise).
+      pulse – how fast the light drops back to glow_low between pulses. Keep it
+      smaller than attack for the intended look (faster fall than rise).
+  glow_low:
+    name: Resting glow level
+    description: >-
+      Brightness (0–1) the lamps return to between pulses – for both effects.
+      0 = fully off, e.g. 0.08 = a faint constant glow.
+  glow_high:
+    name: Peak level
+    description: >-
+      Brightness (0–1) at the pulse peak (both effects). Default 1.0 = full
+      brightness. Must be above the resting glow level.
   restore_state:
     name: Restore light state
     description: >-

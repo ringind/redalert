@@ -9,11 +9,12 @@ Two effects, selected by the ``effect`` option / ``/start`` body:
 - ``chase``: a comet running **continuously in one direction** around the
   channels (wraps at the end, constant speed). Each lamp on its own runs a
   **pulse**: a very short rise as the head arrives, then a long exponential
-  fade, over a dim wash. Consecutive lamps peak one after another, so together
-  they read as a comet dragging a tail.
+  fade back to the resting glow. Consecutive lamps peak one after another, so
+  together they read as a comet dragging a tail.
 
-Both classes only compute brightness in ``[0, 1]``; ``main.py`` applies the
-colour and 16-bit scaling.
+Both classes only compute a **0..1 shape**; ``main.py`` maps it onto the
+configured ``glow_low`` / ``glow_high`` levels and applies the colour + 16-bit
+scaling.
 """
 
 from __future__ import annotations
@@ -40,13 +41,14 @@ class RedAlertChase:
     - last ``attack_frac``: a raised-cosine rise from 0 back to the ``1.0`` peak
       – the head arriving again.
 
-    The peak is exactly ``1.0`` every pass (no sub-frame sampling jitter), and a
-    single lamp pulses just the same. ``fade_frac`` / ``decay_frac`` /
-    ``attack_frac`` are fractions of ``sweep_seconds``: small ``attack_frac`` for
-    a sharp onset, ``fade_frac`` < ``1 - attack_frac`` so there is a real dark
-    gap, ``decay_frac`` sets how front-loaded the fall is. ``base_glow`` > 0
-    lifts the whole pattern off 0 (a dim wash); the default 0 lets every lamp
-    reach true black between pulses.
+    The peak is exactly ``1.0`` every pass (no sub-frame sampling jitter), the
+    trough exactly ``0.0``, and a single lamp pulses just the same. ``fade_frac``
+    / ``decay_frac`` / ``attack_frac`` are fractions of ``sweep_seconds``: small
+    ``attack_frac`` for a sharp onset, ``fade_frac`` < ``1 - attack_frac`` so
+    there is a real hold at the trough, ``decay_frac`` sets how front-loaded the
+    fall is. The ``0 .. 1`` shape is mapped onto the actual low/high glow levels
+    by ``main.py`` (options ``glow_low`` / ``glow_high``), so "0" here means
+    "return to the resting glow", not necessarily black.
     """
 
     def __init__(
@@ -56,36 +58,36 @@ class RedAlertChase:
         decay_frac: float = 0.22,
         attack_frac: float = 0.07,
         fade_frac: float = 0.6,
-        base_glow: float = 0.0,
     ) -> None:
         self.num_lights = max(1, num_lights)
         self.sweep_seconds = max(0.1, sweep_seconds)
         self.decay_frac = max(0.02, decay_frac)
         self.attack_frac = min(max(attack_frac, 0.01), 0.5)
         self.fade_frac = min(max(fade_frac, 0.05), 1.0 - self.attack_frac - 1e-3)
-        self.base_glow = min(max(base_glow, 0.0), 1.0)
 
     def _envelope(self, phase: float) -> float:
-        """Pulse over one lamp cycle: 1.0 at ``phase`` 0 / 1, a dark gap between."""
+        """Pulse over one lamp cycle: 1.0 at ``phase`` 0 / 1, a trough hold between."""
         rise_start = 1.0 - self.attack_frac
         if phase >= rise_start:
             x = (phase - rise_start) / self.attack_frac  # 0 -> 1 over the attack
             return 0.5 - 0.5 * math.cos(math.pi * x)  # 0 -> 1, raised cosine
         if phase >= self.fade_frac:
-            return 0.0  # dark gap
+            return 0.0  # trough hold
         # exp decay shifted/scaled to hit exactly 0.0 at fade_frac
         floor = math.exp(-self.fade_frac / self.decay_frac)
         return (math.exp(-phase / self.decay_frac) - floor) / (1.0 - floor)
 
     def brightness_for(self, t: float) -> list[float]:
-        """Per-light brightness in [0, 1] at time t (seconds since start)."""
+        """Per-light 0..1 pulse shape at time t (seconds since start).
+
+        ``main.py`` maps this onto ``[glow_low, glow_high]``.
+        """
         n = self.num_lights
         turns = t / self.sweep_seconds
         levels = []
         for i in range(n):
             phase = (turns - i / n) % 1.0
-            e = self._envelope(phase)
-            levels.append(min(1.0, self.base_glow + (1.0 - self.base_glow) * e))
+            levels.append(min(1.0, max(0.0, self._envelope(phase))))
         return levels
 
     def frame(self, t: float) -> list[dict]:

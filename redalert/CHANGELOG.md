@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.1.5
+
+- **`glow_low` / `glow_high` – neue Optionen für beide Effekte.** Zwischen den
+  Pulsen ruhen die Lampen jetzt auf `glow_low` (Standard `0.08`) statt auf `0`,
+  im Puls-Maximum auf `glow_high` (Standard `1.0`). Gilt für `pulse` **und**
+  `chase`, einstellbar in der Add-on-Konfiguration und im Web-UI (Abschnitt 3)
+  sowie per `/start`-Body. `glow_low: 0` = wie bisher ganz aus.
+- **`channel_order` als kommagetrennte Liste.** Die Option ist jetzt ein String
+  (`"2,3,1,0,5,4"`) statt einer int-Liste – so lässt sie sich in der
+  HA-Add-on-Konfiguration direkt eintippen. Alte Listen-Werte werden weiter
+  akzeptiert; ungültige Eingaben werden ignoriert (Warnung im Log).
+
 ## 1.1.4
 
 - **Fix `chase`: Flackern und ungleichmäßige Helligkeit.** Drei Ursachen:

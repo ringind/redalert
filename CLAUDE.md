@@ -46,7 +46,7 @@ redalert/                  the add-on
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.1.4**.
+No build system, linter, or test suite. Current version: **1.1.5**.
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
   after every code change — the only static check available.
@@ -99,19 +99,24 @@ Three layers under `redalert/rootfs/app/`:
   loaded once at startup into `state["cue"]`. `REDALERT_LOG_LEVEL` (exported by
   the s6 `run` script from the `log_level` option) sets the logging level.
   `/start` body overrides per call: `area_id`, `effect`, `duration`,
-  `cue_offset`, `fps`, `sweep_seconds`, `attack_ms`, `release_ms`, `color`,
-  `use_cue`, `restore_state`, `channel_order` (list[int] or `"2,3,1,0"` string,
-  parsed by `_parse_channel_order`; must be exactly the area's channels reordered).
+  `cue_offset`, `fps`, `sweep_seconds`, `attack_ms`, `release_ms`, `glow_low`,
+  `glow_high`, `color`, `use_cue`, `restore_state`, `channel_order` (list[int] or
+  `"2,3,1,0"` string, parsed by `_parse_channel_order`; must be exactly the
+  area's channels reordered).
   `/identify` (body `area_id?`, `channel_id?`, `seconds?`, `color?`,
   `restore_state?`) lights one channel — or, with `channel_id` omitted, every
   channel in turn (~`seconds`+0.4 s gap each) — over a single DTLS handshake, to
   map channel_id → physical lamp. Shares the `state["task"]` slot with `/start`
   (`already_running` guard, `/stop` cancels it).
-- **`chase.py`** — two generators, pure math, no I/O.
-  - `RedAlertChase.brightness_for(t)` → per-light `[0,1]` list: a comet head
-    running one-way around the channels (wrap-around, constant speed), with an
-    `exp(d/tail_len)` trailing tail and short `exp(-d/head_len)` leading glow,
-    over a `base_glow` wash. `sweep_seconds` = one full loop.
+- **`chase.py`** — two generators, pure math, no I/O. Both emit a **0..1 shape**;
+  `_run_effect` maps it onto `[glow_low, glow_high]` (options / `/start` body,
+  clamped, `glow_high` forced ≥ `glow_low`) — so "0" is the resting glow, not
+  necessarily black.
+  - `RedAlertChase.brightness_for(t)` → per-light `[0,1]` list. Per lamp, a pure
+    function of `phase` (fraction of `sweep_seconds` since the head passed it):
+    raised-cosine rise over the last `attack_frac`, `exp(-phase/decay_frac)` fall
+    shifted to hit 0 at `fade_frac`, held at 0 until the next rise. Peak exactly
+    1.0, trough exactly 0.0, no sub-frame jitter. `sweep_seconds` = one full loop.
   - `RedAlertPulse.step(level, dt)` → uniform level for all lights. A Schmitt gate
     (on above `hi`, off after `hold_s` below `lo`) turns the noisy cue into a
     stable 0/1, then a **linear** slew hits exactly 1.0 in `attack_s` / 0.0 in
@@ -136,6 +141,8 @@ then for `effect == "pulse"` feeds `sample_gain(cue, cue_t)` (or `periodic`) int
 only if a cue is active — multiplied by `CHASE_CUE_FLOOR + (1-floor)*gate` where
 `gate` is `sample_gain` run through the **same** `pulse` gate+slew (the raw gain
 flickers the comet), so the cue dims the comet between `CHASE_CUE_FLOOR` and 1.0.
+The resulting 0..1 levels are then mapped to `glow_low + (glow_high-glow_low)*lvl`
+(one line before `session.send`), so between pulses lamps rest at `glow_low`, not 0.
 Levels → per-channel `LightColorCommand` scaled by the colour
 (`value_8bit * 257 * level`). Frames are paced against an **absolute** clock
 (`start + n/fps`), not `sleep(1/fps)`, so the light timeline doesn't drift.
