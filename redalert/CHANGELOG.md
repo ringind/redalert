@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.1
+
+- **`pulse` geht jetzt voll von 0 auf 100 % und wieder auf 0.** Kein
+  Grundglühen mehr (`base_glow` = 0). Eine Kontrastkurve (`lo`/`hi`) drückt
+  Pausen auf echte 0 und laute Beats auf echte 100 %; ein Snap überbrückt die
+  letzten Prozente.
+- Standard-Fades umgestellt, sodass das **Abfallen schneller ist als das
+  Aufblenden**: `attack_ms` 60 → **140**, `release_ms` 300 → **70**.
+
 ## 1.1.0
 
 - **Neuer Effekt `pulse` (jetzt Standard):** alle Lampen blenden gemeinsam im

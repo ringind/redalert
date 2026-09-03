@@ -1,5 +1,5 @@
 name: "Red Alert Entertainment"
-version: "1.1.0"
+version: "1.1.1"
 slug: "redalert"
 description: >-
   Rotes Lauflicht über Philips-Hue-Lampen via Hue Entertainment API
@@ -27,8 +27,8 @@ options:
   color: "#FF0000"
   fps: 25
   sweep_seconds: 1.4
-  attack_ms: 60
-  release_ms: 300
+  attack_ms: 140
+  release_ms: 70
   cue_file: ""
   log_level: info
 schema:

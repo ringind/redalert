@@ -63,7 +63,7 @@ setzen, dann **Start** / **Stop**.
 
 | `effect` | Verhalten |
 |----------|-----------|
-| `pulse` (Standard) | Alle Lampen blenden **gemeinsam** auf und ab – hell bei Ton, dunkel in der Pause. Der Verlauf kommt direkt aus der Lautstärke-Hüllkurve der Cue-Datei; `attack_ms`/`release_ms` bestimmen, wie schnell auf- bzw. abgeblendet wird. Ohne Cue: gleichmäßiger Cosinus-Puls mit Periode `sweep_seconds`. |
+| `pulse` (Standard) | Alle Lampen **gemeinsam**: von **0** auf **100 %** im Takt der Musik, zwischen den Pulsen zurück auf **0**. Der Takt kommt aus der Lautstärke-Hüllkurve der Cue-Datei (leise → 0, lauter Beat → volle Helligkeit). `attack_ms` = Aufblend-, `release_ms` = Abblendzeit; für den typischen Look ist `release_ms` kleiner (schnelleres Abfallen als Aufblenden). Ohne Cue: gleichmäßiger Puls mit Periode `sweep_seconds`. |
 | `chase` | Originales Larson-Scanner-Lauflicht: ein Komet wandert über die Kanäle, auf einem schwachen Dauerglühen, optional durch die Cue gedimmt. |
 
 ## Konfiguration
@@ -77,8 +77,8 @@ setzen, dann **Start** / **Stop**.
 | `color`         | Hex-String         | `#FF0000`  | Farbe des Effekts. |
 | `fps`           | int (5–50)         | `25`       | Frames/Sekunde des DTLS-Streams. |
 | `sweep_seconds` | float (0.3–5.0)    | `1.4`      | `chase`: Dauer eines Durchlaufs. `pulse` ohne Cue: Zyklusdauer. |
-| `attack_ms`     | int (0–2000)       | `60`       | `pulse`: Aufblend-Geschwindigkeit (kleiner = knackiger). |
-| `release_ms`    | int (0–5000)       | `300`      | `pulse`: Abblend-Geschwindigkeit in der Pause. |
+| `attack_ms`     | int (0–2000)       | `140`      | `pulse`: Aufblendzeit 0 → 100 %. |
+| `release_ms`    | int (0–5000)       | `70`       | `pulse`: Abblendzeit → 0 zwischen den Pulsen (kleiner als `attack_ms` = schnelleres Abfallen). |
 | `cue_file`      | String             | `""`       | Pfad zu alternativer `redalert_cue.json` (z. B. `/share/…`). |
 | `log_level`     | Liste              | `info`     | `trace`,`debug`,`info`,`notice`,`warning`,`error`,`fatal`. |
 

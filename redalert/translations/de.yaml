@@ -16,7 +16,8 @@ configuration:
   effect:
     name: Effekt
     description: >-
-      pulse = alle Lampen blenden gemeinsam im Takt der Musik auf und ab.
+      pulse = alle Lampen zusammen: von 0 auf 100 % im Takt der Musik, zwischen
+      den Pulsen wieder auf 0 (Abfallen schneller als Aufblenden).
       chase = originales Larson-Scanner-Lauflicht über die Kanäle.
   color:
     name: Farbe
@@ -31,10 +32,13 @@ configuration:
       pulse ohne Cue: Dauer eines vollständigen Auf-/Ab-Zyklus (0.3–5.0).
   attack_ms:
     name: Attack (ms)
-    description: pulse – wie schnell das Licht bei Ton aufblendet (kleiner = knackiger).
+    description: >-
+      pulse – wie langsam das Licht von 0 auf 100 % aufblendet.
   release_ms:
     name: Release (ms)
-    description: pulse – wie schnell das Licht in der Pause wieder abblendet.
+    description: >-
+      pulse – wie schnell das Licht zwischen den Pulsen auf 0 abfällt.
+      Für den typischen Look kleiner als Attack wählen (schnelleres Abfallen).
   cue_file:
     name: Pfad zur Cue-Datei
     description: >-

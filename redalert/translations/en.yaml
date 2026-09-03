@@ -16,7 +16,8 @@ configuration:
   effect:
     name: Effect
     description: >-
-      pulse = all lamps fade up and down together in time with the music.
+      pulse = all lamps together: 0 to 100 % on the beat, back to 0 between
+      pulses (fall faster than rise).
       chase = original Larson-scanner comet sweeping across the channels.
   color:
     name: Colour
@@ -31,10 +32,12 @@ configuration:
       pulse without a cue: length of one full up/down cycle (0.3–5.0).
   attack_ms:
     name: Attack (ms)
-    description: pulse – how fast the light fades up on sound (smaller = snappier).
+    description: pulse – how slowly the light ramps from 0 to 100 %.
   release_ms:
     name: Release (ms)
-    description: pulse – how fast the light fades back down in the pauses.
+    description: >-
+      pulse – how fast the light drops back to 0 between pulses. Keep it smaller
+      than attack for the intended look (faster fall than rise).
   cue_file:
     name: Cue file path
     description: >-

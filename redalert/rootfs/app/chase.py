@@ -63,40 +63,58 @@ class RedAlertChase:
 
 
 class RedAlertPulse:
-    """All channels together: fade up on sound, fade down on silence.
+    """All channels together: dark → full → dark, in time with the music.
 
-    Call :meth:`step` once per frame with the raw target level (the cue gain, or
-    :meth:`periodic` when there is no cue) and the elapsed time since the last
-    call. An exponential follower with separate attack/release time constants
-    smooths the target so quick beats still ramp instead of snapping.
+    Each frame, :meth:`step` takes the raw level (the cue gain, or
+    :meth:`periodic` when there is no cue) and the time since the last call.
+
+    - ``_shape`` first maps the raw value onto a hard 0..1 range: anything at or
+      below ``lo`` is treated as silence (0), anything at or above ``hi`` as a
+      full beat (1). So the pulse really rests at 0 between beats and really
+      reaches 100 % on the loud ones.
+    - A linear slew then drives the actual level toward that target: it rises at
+      ``1 / attack_s`` per second and falls at ``1 / release_s`` per second, so
+      it reaches **exactly** 1.0 ``attack_s`` after a beat starts and **exactly**
+      0.0 ``release_s`` after it ends. Keep ``release_s`` < ``attack_s`` for the
+      intended look: ramp up to full, then drop back down faster.
     """
 
     def __init__(
         self,
         num_lights: int,
-        base_glow: float = 0.06,
-        attack_s: float = 0.06,
-        release_s: float = 0.30,
-        gamma: float = 1.0,
+        attack_s: float = 0.14,
+        release_s: float = 0.07,
+        lo: float = 0.18,
+        hi: float = 0.30,
+        gamma: float = 0.9,
     ) -> None:
         self.num_lights = max(1, num_lights)
-        self.base_glow = min(max(base_glow, 0.0), 1.0)
         self.attack_s = max(1e-3, attack_s)
         self.release_s = max(1e-3, release_s)
+        self.lo = min(max(lo, 0.0), 0.95)
+        self.hi = max(self.lo + 1e-3, min(hi, 1.0))
         self.gamma = max(0.1, gamma)
         self._current = 0.0
 
     def reset(self, value: float = 0.0) -> None:
         self._current = min(1.0, max(0.0, value))
 
-    def step(self, target: float, dt: float) -> list[float]:
-        """Advance ``dt`` seconds toward ``target`` (0..1); return per-channel levels."""
-        target = min(1.0, max(0.0, target)) ** self.gamma
-        tau = self.attack_s if target > self._current else self.release_s
-        alpha = 1.0 - math.exp(-max(0.0, dt) / tau)
-        self._current += (target - self._current) * alpha
-        level = self.base_glow + (1.0 - self.base_glow) * self._current
-        return [level] * self.num_lights
+    def _shape(self, g: float) -> float:
+        """Raw level -> hard 0..1 target: <=lo is silence, >=hi is a full beat."""
+        g = min(1.0, max(0.0, g))
+        if g <= self.lo:
+            return 0.0
+        return min(1.0, (g - self.lo) / (self.hi - self.lo)) ** self.gamma
+
+    def step(self, level: float, dt: float) -> list[float]:
+        """Slew ``dt`` seconds toward the shaped ``level``; return per-channel levels."""
+        target = self._shape(level)
+        span = (1.0 / self.attack_s if target > self._current else 1.0 / self.release_s) * max(0.0, dt)
+        if target > self._current:
+            self._current = min(target, self._current + span)
+        else:
+            self._current = max(target, self._current - span)
+        return [self._current] * self.num_lights
 
     @staticmethod
     def periodic(t: float, period_s: float) -> float:

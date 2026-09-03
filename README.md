@@ -164,12 +164,12 @@ Add-on danach neu starten.
 | `bridge_host`     | String        | leer     | IP der Hue Bridge. Kann auch pro `/pair`-Aufruf übergeben werden. |
 | `area_id`         | String        | leer     | ID des Entertainment-Bereichs (siehe Schritt 4).                  |
 | `channel_order`   | Liste[int]    | leer     | Optionale explizite Kanalreihenfolge (für `chase`).               |
-| `effect`          | `pulse`\|`chase` | `pulse` | `pulse` = alle Lampen blenden gemeinsam im Takt auf/ab. `chase` = Larson-Lauflicht. |
+| `effect`          | `pulse`\|`chase` | `pulse` | `pulse` = alle Lampen zusammen 0 → 100 % → 0 im Musiktakt. `chase` = Larson-Lauflicht. |
 | `color`           | Hex-String    | `#FF0000`| Farbe des Effekts.                                                |
 | `fps`             | int (5–50)    | 25       | Frames/Sekunde des DTLS-Streams.                                   |
 | `sweep_seconds`   | float (0.3–5) | 1.4      | `chase`: Durchlaufdauer. `pulse` ohne Cue: Zyklusdauer.           |
-| `attack_ms`       | int (0–2000)  | 60       | `pulse`: Aufblend-Geschwindigkeit.                                |
-| `release_ms`      | int (0–5000)  | 300      | `pulse`: Abblend-Geschwindigkeit in der Pause.                    |
+| `attack_ms`       | int (0–2000)  | 140      | `pulse`: Aufblendzeit 0 → 100 %.                                  |
+| `release_ms`      | int (0–5000)  | 70       | `pulse`: Abblendzeit → 0 (kleiner als `attack_ms`).               |
 | `cue_file`        | String        | leer     | Pfad zu einer alternativen `redalert_cue.json` (z. B. `/share/...`). |
 | `log_level`       | Liste         | `info`   | Ausführlichkeit des Add-on-Protokolls (`trace`…`fatal`).           |
 
@@ -276,11 +276,12 @@ eintragen (Add-on-Neustart genügt, kein Neubau nötig).
 
 Effekt wählen: Option `effect` bzw. `"effect": "pulse"|"chase"` im `/start`-Body.
 
-`pulse` (Standard) – gemeinsames Auf-/Abblenden aller Lampen:
-- `attack_ms` / `release_ms` – Fade-Geschwindigkeit auf / ab.
+`pulse` (Standard) – alle Lampen gemeinsam von 0 auf 100 % und wieder auf 0:
+- `attack_ms` / `release_ms` – Aufblend- bzw. Abblendzeit; `release_ms` kleiner
+  wählen für schnelleres Abfallen als Aufblenden.
 - `sweep_seconds` – Zyklusdauer, wenn keine Cue aktiv ist.
-- `RedAlertPulse.gamma` / `base_glow` in `redalert/rootfs/app/chase.py` – Kontrast
-  der Hüllkurve bzw. Grundhelligkeit.
+- `RedAlertPulse` `lo` / `hi` / `gamma` in `redalert/rootfs/app/chase.py` –
+  Kontrastkurve: unter `lo` = 0, ab `hi` = 100 %.
 
 `chase` – Larson-Scanner-Lauflicht (`RedAlertChase` in `chase.py`):
 - `sweep_seconds` – Dauer eines Durchlaufs über alle Lampen (Standard 1.4 s).
