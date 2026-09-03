@@ -29,7 +29,6 @@ redalert/                  the add-on
   build.yaml               base images: ghcr.io/home-assistant/{arch}-base-python
   Dockerfile               installs requirements, copies rootfs, chmods s6 scripts
   DOCS.md / CHANGELOG.md   "Documentation" / "Changelog" tabs in HA
-  apparmor.txt             AppArmor profile (delete if it blocks startup)
   translations/{de,en}.yaml  config-option labels shown in the HA UI
   icon.png / logo.png      store graphics (generated, solid-red beacon)
   rootfs/etc/s6-overlay/s6-rc.d/redalert/{type,run,finish}  s6 service (bashio)

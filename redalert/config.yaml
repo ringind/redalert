@@ -1,5 +1,5 @@
 name: "Red Alert Entertainment"
-version: "1.0.0"
+version: "1.0.1"
 slug: "redalert"
 description: >-
   Rotes Lauflicht über Philips-Hue-Lampen via Hue Entertainment API

@@ -24,7 +24,6 @@ Vollständige Anleitung: siehe **[DOCS.md](DOCS.md)** (wird in HA als Tab
 | `build.yaml` | Basis-Images (`home-assistant/base-python`). |
 | `Dockerfile` | Image-Build. |
 | `translations/` | Beschriftung der Konfigurationsoberfläche (de/en). |
-| `apparmor.txt` | AppArmor-Profil. |
 | `rootfs/etc/s6-overlay/…` | Service-Definition (Start/Logging). |
 | `rootfs/app/main.py` | REST-Server, Streaming-Loop, Ingress-Panel. |
 | `rootfs/app/chase.py` | Comet-Sweep-Berechnung (Larson-Scanner). |

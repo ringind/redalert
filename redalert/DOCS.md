@@ -169,7 +169,7 @@ zeigt zusätzlich die letzten API-Antworten im Abschnitt „Protokoll (Antworten
 | Lampen reagieren nicht | V1-Bridge (kein Entertainment) oder UDP-Port 2100 zur Bridge blockiert. |
 | Streaming bricht ab | Die Bridge erlaubt nur **einen** aktiven Entertainment-Stream – Hue-Sync-App/andere Clients schließen. |
 | Lauflicht ruckelt | `fps` erhöhen oder Netzlast zur Bridge prüfen. |
-| Add-on startet nach Update nicht, Log zeigt `Permission denied` | `redalert/apparmor.txt` entfernen und Add-on neu bauen. |
+| Start bricht ab mit `/bin/sh: can't open '/init': Permission denied` | Behoben ab 1.0.1 (kein eigenes AppArmor-Profil mehr). Add-on aktualisieren; ältere Version deinstallieren und neu installieren, falls das Update nicht greift. |
 
 ## Rechtlicher Hinweis zur Audiodatei
 

@@ -306,7 +306,6 @@ selbst im Unterordner `redalert/`.
 │   ├── requirements.txt         Python-Abhängigkeiten (hue-entertainment, aiohttp)
 │   ├── DOCS.md                  In HA angezeigte Anleitung (Tab „Dokumentation“)
 │   ├── CHANGELOG.md             Versionshistorie (Tab „Changelog“)
-│   ├── apparmor.txt             AppArmor-Profil
 │   ├── icon.png / logo.png      Store-Grafiken
 │   ├── translations/{de,en}.yaml  Beschriftung der Konfigurationsoberfläche
 │   └── rootfs/

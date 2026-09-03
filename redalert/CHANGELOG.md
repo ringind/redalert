@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.1
+
+- **Fix:** Start bricht ab mit `/bin/sh: can't open '/init': Permission denied`.
+  Das mitgelieferte AppArmor-Profil (`apparmor.txt`) hat den s6-overlay-Entrypoint
+  `/init` der HA-Basis nicht zugelassen. Profil entfernt – Home Assistant erzeugt
+  automatisch ein passendes Standard-Profil.
+
 ## 1.0.0
 
 Erstes vollständiges Add-on-Release.
