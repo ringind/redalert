@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.6
+
+- **Fix `chase`: Spitze flackerte unregelmäßig.** Das Puls-Maximum war nur ein
+  einzelner Punkt (raised-cosine-Scheitel) – bei 25 fps traf ihn je nach
+  Frame-Zeitpunkt mal 100 %, mal ~90 %, sodass jeder Sweep anders hell war. Die
+  Spitze wird jetzt **flach auf 100 % gehalten** (`peak_frac`, Standard 0.08 des
+  Zyklus); bei jeder Framerate landen mehrere Frames exakt auf dem Maximum.
+- **`chase`: weicher Übergang zwischen den Lampen.** Der 100-%-Kopf ist jetzt
+  etwas breiter als der Lampenabstand (`1/n + overlap_frac`, `overlap_frac`
+  Standard 0.10 ≈ 140 ms). Dadurch stehen zwei benachbarte Lampen kurz gemeinsam
+  auf 100 % und glühen dann nacheinander aus – es gibt keine Lücke mehr, in der
+  keine Lampe voll leuchtet. `fade_frac`-Standard 0.60 → 0.62.
+
 ## 1.1.5
 
 - **`glow_low` / `glow_high` – neue Optionen für beide Effekte.** Zwischen den

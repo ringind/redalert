@@ -79,7 +79,7 @@ Lampenzustand wiederhergestellt.
 | `effect` | Verhalten |
 |----------|-----------|
 | `pulse` (Standard) | Alle Lampen **gemeinsam**: von `glow_low` linear auf `glow_high` im Takt der Musik, zwischen den Pulsen zurück auf `glow_low`. Ein Schmitt-Trigger auf der Cue-Hüllkurve macht aus jedem Beat ein sauberes Ein/Aus, der Anstieg läuft dadurch ruckelfrei-monoton hoch. `attack_ms` = Aufblend-, `release_ms` = Abblendzeit; `release_ms` kleiner = schnelleres Abfallen als Aufblenden. Ohne Cue: gleichmäßiger Puls mit Periode `sweep_seconds`. |
-| `chase` | Ein Komet läuft **gleichmäßig in eine Richtung** um alle Kanäle (wraparound, konstante Geschwindigkeit). Jede Lampe für sich pulst dabei: **ganz kurz hell (`glow_high`), langes exponentielles Ausblenden, dann eine Ruhephase auf `glow_low`**, dann wieder; nacheinander ergibt das den Kometen mit Schweif. Optional durch die Cue gedimmt. |
+| `chase` | Ein Komet läuft **gleichmäßig in eine Richtung** um alle Kanäle (wraparound, konstante Geschwindigkeit). Jede Lampe für sich pulst dabei: **kurz hell (`glow_high`), langes exponentielles Ausblenden, dann eine Ruhephase auf `glow_low`**, dann wieder. Der Kopf ist etwas breiter als der Lampenabstand – zwei benachbarte Lampen stehen kurz gemeinsam auf 100 % und glühen dann nacheinander aus, sodass immer mindestens eine Lampe voll leuchtet. Optional durch die Cue gedimmt. |
 
 **Lichtzustand:** Vor dem Effekt sichert das Add-on an/aus, Helligkeit und Farbe
 aller Lampen des Bereichs (Hue CLIP v2) und schreibt sie nach dem Effekt zurück

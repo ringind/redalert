@@ -32,17 +32,18 @@ until curl -sf -o /dev/null $B/health; do sleep 0.5; done      # ~3 s bind race 
 
 If `curl -s $B/config` shows `"paired": false` (no `devdata/credentials.json`):
 ask the user to press the bridge link button, then
-`curl -s -X POST $B/pair -H 'Content-Type: application/json' -d '{"bridge_ip":"192.168.178.50"}'`
-within ~30 s.
+`curl -s -X POST $B/pair -H 'Content-Type: application/json' -d '{"bridge_ip":"192.168.178.84"}'`
+within ~30 s. (`devdata/credentials.<ip>.json.bak` files hold prior pairings —
+`cp` one back to `credentials.json` to switch bridges without a link-button press.)
 
 ## Exercise an effect
 
-Maintainer's test area **Flur** = `18aa512d-62f9-4dd3-a390-247a87d3deed` (confirm
-with `GET /areas`; the bridge/area may change).
+Maintainer's test area **Houseparty Büro** = `226c7c2a-0a6d-4b01-a28a-8b29fd8cb219`
+(3 channels; confirm with `GET /areas` — the bridge/area may change).
 
 ```bash
 curl -s -X POST $B/start -H 'Content-Type: application/json' \
-  -d '{"area_id":"18aa512d-62f9-4dd3-a390-247a87d3deed","effect":"pulse","duration":20,"use_cue":true}'
+  -d '{"area_id":"226c7c2a-0a6d-4b01-a28a-8b29fd8cb219","effect":"pulse","duration":20,"use_cue":true}'
 ```
 
 Then wait for it to finish and report — run this **backgrounded**:

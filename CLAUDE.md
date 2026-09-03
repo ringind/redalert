@@ -46,7 +46,7 @@ redalert/                  the add-on
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.1.5**.
+No build system, linter, or test suite. Current version: **1.1.6**.
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
   after every code change — the only static check available.
@@ -77,8 +77,11 @@ curl -s -X POST $B/start -H 'Content-Type: application/json' \
   -d '{"area_id":"<area>","effect":"pulse","duration":20,"use_cue":true}'
 ```
 
-- The maintainer's test rig (may change): bridge `192.168.178.50`, area **Flur** =
-  `18aa512d-62f9-4dd3-a390-247a87d3deed` (BSB002 / API 1.78). `GET /areas` lists current ones.
+- The maintainer's test rig (may change): bridge `192.168.178.84`, area
+  **Houseparty Büro** = `226c7c2a-0a6d-4b01-a28a-8b29fd8cb219` (3 channels).
+  `GET /areas` lists current ones. (An earlier rig was `192.168.178.50` / **Flur**
+  `18aa512d-…`; `devdata/credentials.<ip>.json.bak` files hold prior pairings so
+  you don't have to re-press a link button to switch back.)
 - The DTLS handshake logs a `ServerHello timeout … resending` retry almost every
   time and takes ~3–9 s — **normal**, not a failure. `/start` returns *before* it
   (`_run_effect` does the handshake), so poll `/health` `running` for real state.
@@ -114,9 +117,11 @@ Three layers under `redalert/rootfs/app/`:
   necessarily black.
   - `RedAlertChase.brightness_for(t)` → per-light `[0,1]` list. Per lamp, a pure
     function of `phase` (fraction of `sweep_seconds` since the head passed it):
-    raised-cosine rise over the last `attack_frac`, `exp(-phase/decay_frac)` fall
-    shifted to hit 0 at `fade_frac`, held at 0 until the next rise. Peak exactly
-    1.0, trough exactly 0.0, no sub-frame jitter. `sweep_seconds` = one full loop.
+    a flat `1.0` head of width `self.top` (= `max(peak_frac, 1/n + overlap_frac)`
+    for n≥2 — wider than the lamp spacing so two adjacent lamps hold 100% together
+    for `overlap_frac` of a sweep), then `exp(-·/decay_frac)` fall shifted to hit
+    0 at `fade_frac`, held at 0 (resting glow) until the raised-cosine `attack_frac`
+    rise. Flat top ⇒ peak is sampling-proof (no shimmer). `sweep_seconds` = one loop.
   - `RedAlertPulse.step(level, dt)` → uniform level for all lights. A Schmitt gate
     (on above `hi`, off after `hold_s` below `lo`) turns the noisy cue into a
     stable 0/1, then a **linear** slew hits exactly 1.0 in `attack_s` / 0.0 in

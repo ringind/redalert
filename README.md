@@ -298,16 +298,23 @@ zurück:
   lang unter `lo` bleibt.
 
 `chase` – umlaufender Komet; jede Lampe für sich pulst: kurz hell (`glow_high`),
-langes Ausblenden, dann eine Ruhephase auf `glow_low`, dann wieder
-(`RedAlertChase` in `chase.py`):
+langes Ausblenden, dann eine Ruhephase auf `glow_low`, dann wieder. Der Kopf ist
+etwas breiter als der Lampenabstand, sodass zwei benachbarte Lampen kurz
+gemeinsam auf 100 % stehen und dann nacheinander ausglühen (`RedAlertChase` in
+`chase.py`):
 - `sweep_seconds` – Dauer einer vollen Umrundung aller Lampen (Standard 1.4 s);
   zugleich der Abstand zwischen zwei Pulsen derselben Lampe.
 - `attack_frac` – Anstiegszeit als Bruchteil von `sweep_seconds` (klein =
   schlagartig hell, Standard 0.07).
+- `peak_frac` – Mindestbreite des flachen 100-%-Kopfes (Standard 0.08); hält die
+  Spitze bei jeder Framerate treffsicher, damit sie nicht flackert.
+- `overlap_frac` – wie lange (Bruchteil von `sweep_seconds`) zwei benachbarte
+  Lampen gemeinsam auf 100 % stehen (Standard 0.10 ≈ 140 ms). Der Kopf ist damit
+  `1/n + overlap_frac` breit.
 - `decay_frac` – Abkling-Zeitkonstante als Bruchteil von `sweep_seconds`
   (Standard 0.22); bestimmt, wie steil der Anfang des Ausblendens ist.
 - `fade_frac` – Bruchteil des Zyklus, nach dem die 0..1-Form **den Tiefpunkt**
-  erreicht und bis zum nächsten Anstieg dort bleibt (Standard 0.6).
+  erreicht und bis zum nächsten Anstieg dort bleibt (Standard 0.62).
 
 Farbe ist aktuell fest auf Rot (`green=0, blue=0`) gesetzt; über
 `LightColorCommand` lassen sich bei Bedarf auch andere Farbverläufe fahren.
