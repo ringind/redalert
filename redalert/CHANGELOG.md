@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.1.4
+
+- **Fix `chase`: Flackern und ungleichmäßige Helligkeit.** Drei Ursachen:
+  1. Die Helligkeit wurde aus der räumlichen `exp`-Distanz zum Kometenkopf
+     berechnet; deren scharfe Spitze bei `d=0` wurde je nach Frame-Zeitpunkt mal
+     getroffen, mal knapp verfehlt, sodass jeder Durchlauf einer Lampe anders
+     hell war. Jetzt ist die Helligkeit ein reines **zeitliches Puls-Profil pro
+     Lampe**: kurzer Raised-Cosine-Anstieg beim Eintreffen des Kopfes, dann
+     langes `exp`-Ausblenden – jeder Durchlauf peakt exakt auf `1.0`. Eine
+     einzelne Lampe pulst damit genauso (vorher: konstant `1.0`).
+     `tail_len` / `head_len` ersetzt durch `attack_frac` / `decay_frac` /
+     `fade_frac` (Bruchteile von `sweep_seconds`).
+  2. Jede Lampe geht zwischen den Pulsen jetzt **ganz auf 0** und bleibt ein
+     Stück des Zyklus dunkel (`fade_frac`, Standard 0.6), statt über ein
+     `base_glow`-Grundleuchten nie ganz auszugehen (`base_glow` Standard jetzt
+     `0`).
+  3. Bei aktiver Cue wurde der Komet Frame für Frame mit dem **rohen**
+     Cue-Gain multipliziert, der mehrfach pro Beat über einen weiten Bereich
+     zappelt – sichtbares Flackern. Der Gain läuft jetzt durch dasselbe
+     Beat-Gate + Slew wie `pulse` und dimmt den Kometen sauber zwischen 12 %
+     (Beat aus) und 100 % (Beat an).
+- **`channel_order` im Web-UI konfigurierbar.** Neues Feld unter „3 · Steuerung“
+  (kommagetrennt, z. B. `2,3,1,0,5,4`); `/start` nimmt `channel_order` jetzt auch
+  im Body an (Liste oder String). Ungültige Reihenfolge → `400` mit Hinweis.
+- **Neu: „4 · Lampen zuordnen“ im Web-UI** + Endpoint `POST /identify`. Leuchtet
+  Kanäle einzeln auf – einen bestimmten (`channel_id`) oder alle nacheinander –,
+  um herauszufinden, welche `channel_id` welche physische Lampe ist. Ein
+  DTLS-Handshake pro Durchlauf, danach Lampen-Wiederherstellung.
+
 ## 1.1.3
 
 - **`chase` überarbeitet:** Der Komet läuft jetzt **gleichmäßig in eine

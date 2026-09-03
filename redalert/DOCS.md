@@ -56,15 +56,30 @@ REST-Variante: `curl http://<ha-ip>:8099/areas`
 ### 3 · Steuerung
 
 Im Web-UI unter **„3 · Steuerung“**: `area_id`, **Effekt**, Dauer (leer = Länge
-der Cue-Datei), `cue_offset`, `fps`, `sweep_seconds`, Farbe und „Cue nutzen“
-setzen, dann **Start** / **Stop**.
+der Cue-Datei), `cue_offset`, `fps`, `sweep_seconds`, Farbe, „Cue nutzen“ und
+**`channel_order`** setzen, dann **Start** / **Stop**.
+
+`channel_order` (leer = Bereichs-Standard) legt fest, in welcher Reihenfolge der
+`chase`-Komet die Lampen durchläuft – als kommagetrennte Liste der
+`channel_id`s, z. B. `2,3,1,0,5,4`. Es müssen genau die Kanäle des Bereichs
+sein, nur in anderer Reihenfolge.
+
+### 4 · Lampen zuordnen
+
+Um herauszufinden, welche `channel_id` welche physische Lampe ist: Bereich
+wählen, **„Bereiche laden“**, dann unter **„4 · Lampen zuordnen“** entweder
+**„Alle Kanäle nacheinander“** (leuchtet 0, 1, 2, … je einige Sekunden rot auf)
+oder einen einzelnen **„Kanal N“**-Button klicken. „Sekunden je Kanal“ steuert
+die Leuchtdauer. Jeder Klick nutzt kurz den Entertainment-Stream (ein
+DTLS-Handshake, ~3–9 s, dann leuchtet der Kanal). Danach wird der vorherige
+Lampenzustand wiederhergestellt.
 
 ## Effekte
 
 | `effect` | Verhalten |
 |----------|-----------|
 | `pulse` (Standard) | Alle Lampen **gemeinsam**: von **0** linear auf **100 %** im Takt der Musik, zwischen den Pulsen zurück auf **0**. Ein Schmitt-Trigger auf der Cue-Hüllkurve macht aus jedem Beat ein sauberes Ein/Aus, der Anstieg läuft dadurch ruckelfrei-monoton hoch. `attack_ms` = Aufblend-, `release_ms` = Abblendzeit; `release_ms` kleiner = schnelleres Abfallen als Aufblenden. Ohne Cue: gleichmäßiger Puls mit Periode `sweep_seconds`. |
-| `chase` | Ein Komet läuft **gleichmäßig in eine Richtung** um alle Kanäle (wraparound, konstante Geschwindigkeit) und zieht einen **exponentiell auslaufenden Schweif** hinter sich her – heller Kopf, kurzer Vorglanz, langer Nachlauf, über einem schwachen Dauerglühen. Optional durch die Cue gedimmt. |
+| `chase` | Ein Komet läuft **gleichmäßig in eine Richtung** um alle Kanäle (wraparound, konstante Geschwindigkeit). Jede Lampe für sich pulst dabei: **ganz kurz hell, langes exponentielles Ausblenden, dann eine Dunkelpause bei 0**, dann wieder; nacheinander ergibt das den Kometen mit Schweif. Optional durch die Cue gedimmt. |
 
 **Lichtzustand:** Vor dem Effekt sichert das Add-on an/aus, Helligkeit und Farbe
 aller Lampen des Bereichs (Hue CLIP v2) und schreibt sie nach dem Effekt zurück
@@ -101,9 +116,10 @@ Panel-Pfad).
 | `/config` | GET     | Effektive Konfiguration (für das Web-UI). |
 | `/pair`   | POST    | Einmalige Kopplung. Body: `{"bridge_ip": "..."}` (optional bei gesetzter Option). |
 | `/areas`  | GET     | Entertainment-Bereiche + Kanäle auflisten. |
-| `/start`  | POST    | Effekt starten (antwortet sofort; DTLS-Handshake läuft im Hintergrund). Body optional: `area_id`, `effect`, `duration`, `cue_offset`, `fps`, `sweep_seconds`, `attack_ms`, `release_ms`, `color`, `use_cue`, `restore_state`. |
+| `/start`  | POST    | Effekt starten (antwortet sofort; DTLS-Handshake läuft im Hintergrund). Body optional: `area_id`, `effect`, `duration`, `cue_offset`, `fps`, `sweep_seconds`, `attack_ms`, `release_ms`, `color`, `use_cue`, `restore_state`, `channel_order`. `channel_order` als Liste (`[2,3,1,0,5,4]`) oder String (`"2,3,1,0,5,4"`); muss genau die Kanäle des Bereichs in gewünschter Reihenfolge enthalten, sonst `400`. |
 | `/stop`   | POST    | Effekt sofort stoppen. |
 | `/sync`   | POST    | Laufende Feinsynchronisation. Body: `{"position": <Sekunden im Track>}` – die echte Wiedergabeposition des media_player. Der Licht-Cue wird um die Differenz nachgezogen (max. ±0,5 s pro Aufruf, damit nichts springt). `409`, wenn kein Effekt läuft. |
+| `/identify` | POST  | Lampen einzeln durchtesten (Zuordnung `channel_id` → Lampe). Body optional: `area_id`, `channel_id` (fehlt = alle Kanäle nacheinander), `seconds` (Standard 3 einzeln / 2 bei „alle“), `color`, `restore_state`. Ein DTLS-Handshake für den ganzen Durchlauf. Belegt denselben Slot wie `/start` (`already_running`, `/stop` bricht ab). |
 
 - `duration` weglassen → bei aktiver Cue-Datei deren Restlänge ab `cue_offset`,
   sonst läuft der Effekt bis `/stop`.

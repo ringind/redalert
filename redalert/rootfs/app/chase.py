@@ -7,8 +7,10 @@ Two effects, selected by the ``effect`` option / ``/start`` body:
   cosine when no cue is active), with an asymmetric attack/release so the
   transitions read as fades rather than steps.
 - ``chase``: a comet running **continuously in one direction** around the
-  channels (wraps at the end, constant speed), with a bright head, a short glow
-  ahead of it and a long exponential tail trailing behind, over a dim wash.
+  channels (wraps at the end, constant speed). Each lamp on its own runs a
+  **pulse**: a very short rise as the head arrives, then a long exponential
+  fade, over a dim wash. Consecutive lamps peak one after another, so together
+  they read as a comet dragging a tail.
 
 Both classes only compute brightness in ``[0, 1]``; ``main.py`` applies the
 colour and 16-bit scaling.
@@ -24,48 +26,66 @@ HUE_16BIT_MAX = 65535
 class RedAlertChase:
     """Comet running continuously around the channels, dragging a tail.
 
-    ``sweep_seconds`` is the time for **one full loop** past every channel. The
-    head position advances at constant speed and wraps, so the motion is even
-    with no turn-around dwell. Brightness for a channel depends on its signed
-    circular distance ``d`` from the head:
+    ``sweep_seconds`` is the time for **one full loop** past every channel, so a
+    given lamp is passed by the head once every ``sweep_seconds``. Its brightness
+    is a pure function of ``phase`` – the fraction of that cycle elapsed since the
+    head last sat on it (``0`` = head on the lamp, rising toward ``1`` = about to
+    be hit again):
 
-    - ``d < 0`` (channel is behind the head): ``exp(d / tail_len)`` – the long
-      trailing comet tail;
-    - ``d > 0`` (ahead of the head): ``exp(-d / head_len)`` – a short glow so the
-      leading edge is soft, not a hard on/off.
+    Over one cycle a lamp does, in ``phase`` order:
+
+    - ``0 .. fade_frac``: an ``exp(-phase / decay_frac)`` fall, shifted so it
+      reaches **exactly 0** at ``fade_frac`` – the long fade after the head left;
+    - ``fade_frac .. 1 - attack_frac``: held at **0** – the lamp is fully dark;
+    - last ``attack_frac``: a raised-cosine rise from 0 back to the ``1.0`` peak
+      – the head arriving again.
+
+    The peak is exactly ``1.0`` every pass (no sub-frame sampling jitter), and a
+    single lamp pulses just the same. ``fade_frac`` / ``decay_frac`` /
+    ``attack_frac`` are fractions of ``sweep_seconds``: small ``attack_frac`` for
+    a sharp onset, ``fade_frac`` < ``1 - attack_frac`` so there is a real dark
+    gap, ``decay_frac`` sets how front-loaded the fall is. ``base_glow`` > 0
+    lifts the whole pattern off 0 (a dim wash); the default 0 lets every lamp
+    reach true black between pulses.
     """
 
     def __init__(
         self,
         num_lights: int,
         sweep_seconds: float = 1.4,
-        tail_len: float = 1.7,
-        head_len: float = 0.45,
-        base_glow: float = 0.05,
+        decay_frac: float = 0.22,
+        attack_frac: float = 0.07,
+        fade_frac: float = 0.6,
+        base_glow: float = 0.0,
     ) -> None:
         self.num_lights = max(1, num_lights)
         self.sweep_seconds = max(0.1, sweep_seconds)
-        self.tail_len = max(0.1, tail_len)
-        self.head_len = max(0.05, head_len)
+        self.decay_frac = max(0.02, decay_frac)
+        self.attack_frac = min(max(attack_frac, 0.01), 0.5)
+        self.fade_frac = min(max(fade_frac, 0.05), 1.0 - self.attack_frac - 1e-3)
         self.base_glow = min(max(base_glow, 0.0), 1.0)
 
-    def _head(self, t: float) -> float:
-        """Continuous head position 0..n, one full loop per ``sweep_seconds``."""
-        n = self.num_lights
-        return (t / self.sweep_seconds) * n % n
+    def _envelope(self, phase: float) -> float:
+        """Pulse over one lamp cycle: 1.0 at ``phase`` 0 / 1, a dark gap between."""
+        rise_start = 1.0 - self.attack_frac
+        if phase >= rise_start:
+            x = (phase - rise_start) / self.attack_frac  # 0 -> 1 over the attack
+            return 0.5 - 0.5 * math.cos(math.pi * x)  # 0 -> 1, raised cosine
+        if phase >= self.fade_frac:
+            return 0.0  # dark gap
+        # exp decay shifted/scaled to hit exactly 0.0 at fade_frac
+        floor = math.exp(-self.fade_frac / self.decay_frac)
+        return (math.exp(-phase / self.decay_frac) - floor) / (1.0 - floor)
 
     def brightness_for(self, t: float) -> list[float]:
         """Per-light brightness in [0, 1] at time t (seconds since start)."""
         n = self.num_lights
-        if n == 1:
-            return [1.0]
-        head = self._head(t)
+        turns = t / self.sweep_seconds
         levels = []
         for i in range(n):
-            # signed distance head->channel, wrapped to (-n/2, n/2]
-            d = (i - head + n / 2) % n - n / 2
-            glow = math.exp(d / self.tail_len) if d <= 0 else math.exp(-d / self.head_len)
-            levels.append(min(1.0, self.base_glow + (1.0 - self.base_glow) * glow))
+            phase = (turns - i / n) % 1.0
+            e = self._envelope(phase)
+            levels.append(min(1.0, self.base_glow + (1.0 - self.base_glow) * e))
         return levels
 
     def frame(self, t: float) -> list[dict]:

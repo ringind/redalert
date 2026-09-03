@@ -97,10 +97,35 @@
       <div><label for="sweep">sweep_seconds</label><input type="number" id="sweep" min="0.3" max="5" step="0.1"></div>
       <div><label for="color">Farbe</label><input type="color" id="color" value="#ff0000"></div>
       <div><label><input type="checkbox" id="usecue" checked> Cue nutzen</label></div>
+      <div style="flex:1 1 100%"><label for="chanorder">channel_order (leer = Bereichs-Standard)</label>
+        <input type="text" id="chanorder" placeholder="z. B. 2,3,1,0,5,4" style="width:100%"></div>
     </div>
+    <p class="muted" style="margin:.5rem 0 0">
+      Reihenfolge der <code>channel_id</code>s, in der der Komet (<code>chase</code>) physisch
+      durchlaufen soll. Der Bereich unten hat die Kanäle 0–N; trage genau diese Zahlen in der
+      gewünschten Reihenfolge ein, z. B. <code>2,3,1,0,5,4</code>. Mit „4 · Lampen zuordnen“
+      findest du heraus, welcher Kanal welche Lampe ist.
+    </p>
     <div class="row" style="margin-top:.9rem">
       <button id="btn-start">▶ Start</button>
       <button class="secondary" id="btn-stop">■ Stop</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>4 · Lampen zuordnen</h2>
+    <p class="muted" style="margin-top:0">
+      Leuchtet Kanäle einzeln rot auf, damit du siehst, welche Lampe an welcher Position sitzt.
+      Nutzt kurz den Entertainment-Stream – pro Klick ein DTLS-Handshake (~3–9 s), dann leuchtet
+      der Kanal. Zuerst oben einen Bereich wählen und „Bereiche laden“.
+    </p>
+    <div class="row" style="margin-bottom:.6rem">
+      <div><label for="idsecs">Sekunden je Kanal</label>
+        <input type="number" id="idsecs" min="1" max="15" step="1" placeholder="3"></div>
+      <button class="secondary" id="btn-identify-all">Alle Kanäle nacheinander</button>
+    </div>
+    <div class="row" id="identify-buttons">
+      <span class="muted">Noch kein Bereich geladen.</span>
     </div>
   </section>
 
@@ -161,6 +186,36 @@
     if (data.fps && !$("fps").value) $("fps").value = data.fps;
     if (data.sweep_seconds && !$("sweep").value) $("sweep").value = data.sweep_seconds;
     if (data.color) $("color").value = data.color.toLowerCase();
+    if (data.channel_order && data.channel_order.length && !$("chanorder").value)
+      $("chanorder").value = data.channel_order.join(", ");
+    renderIdentify();
+  }
+
+  // Zuletzt per "Bereiche laden" geholte Bereichsliste – für die Kanal-Buttons.
+  let AREAS = [];
+  function renderIdentify() {
+    const box = $("identify-buttons");
+    const a = AREAS.find((x) => x.id === $("area").value.trim());
+    box.innerHTML = "";
+    if (!a) {
+      box.innerHTML = '<span class="muted">Bereich oben wählen und „Bereiche laden“.</span>';
+      return;
+    }
+    for (const c of a.channels) {
+      const b = document.createElement("button");
+      b.className = "secondary";
+      b.textContent = "Kanal " + c;
+      b.onclick = () => identify({ channel_id: c });
+      box.appendChild(b);
+    }
+  }
+  async function identify(extra) {
+    const body = Object.assign({}, extra);
+    if ($("area").value.trim()) body.area_id = $("area").value.trim();
+    if ($("idsecs").value !== "") body.seconds = Number($("idsecs").value);
+    if ($("color").value) body.color = $("color").value;
+    await api("identify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    refresh();
   }
   $("btn-refresh").onclick = refresh;
   $("btn-pair").onclick = async () => {
@@ -173,23 +228,29 @@
     const { ok, data } = await api("areas");
     const box = $("areas"); box.innerHTML = "";
     if (!ok || !Array.isArray(data) || data.length === 0) {
+      AREAS = []; renderIdentify();
       box.innerHTML = '<span class="muted">Keine Bereiche gefunden.</span>'; return;
     }
+    AREAS = data;
     for (const a of data) {
       const el = document.createElement("div");
       el.className = "area";
       el.innerHTML = `<div><strong>${a.name || "(ohne Name)"}</strong><br><code>${a.id}</code> · Kanäle: ${a.channels.join(", ")}</div>`;
       const b = document.createElement("button");
       b.className = "secondary"; b.textContent = "übernehmen";
-      b.onclick = () => { $("area").value = a.id; logLine("area_id gesetzt: " + a.id); };
+      b.onclick = () => { $("area").value = a.id; logLine("area_id gesetzt: " + a.id); renderIdentify(); };
       el.appendChild(b);
       box.appendChild(el);
     }
+    renderIdentify();
   };
+  $("btn-identify-all").onclick = () => identify({});
+  $("area").addEventListener("input", renderIdentify);
   $("effect").onchange = () => { $("effect").dataset.touched = "1"; };
   $("btn-start").onclick = async () => {
     const body = { use_cue: $("usecue").checked, color: $("color").value, effect: $("effect").value };
     if ($("area").value.trim()) body.area_id = $("area").value.trim();
+    if ($("chanorder").value.trim()) body.channel_order = $("chanorder").value.trim();
     if ($("duration").value !== "") body.duration = Number($("duration").value);
     if ($("offset").value !== "") body.cue_offset = Number($("offset").value);
     if ($("fps").value !== "") body.fps = Number($("fps").value);

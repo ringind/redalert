@@ -46,7 +46,7 @@ redalert/                  the add-on
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.1.3**.
+No build system, linter, or test suite. Current version: **1.1.4**.
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
   after every code change — the only static check available.
@@ -93,14 +93,20 @@ Three layers under `redalert/rootfs/app/`:
 - **`main.py`** — aiohttp server. Endpoints: `/` (serves `panel.html`),
   `/health` (also the Docker HEALTHCHECK target), `/config` (effective config for the UI),
   `/pair` (one-time Bridge link-button pairing → `/data/credentials.json`),
-  `/areas`, `/start`, `/stop`, `/sync`. All mutable runtime state is one
-  module-level `state` dict (incl. `state["sync"]` for the live sync loop).
+  `/areas`, `/start`, `/stop`, `/sync`, `/identify`. All mutable runtime state is
+  one module-level `state` dict (incl. `state["sync"]` for the live sync loop).
   Options are read **once at import** from `/data/options.json`; the cue is
   loaded once at startup into `state["cue"]`. `REDALERT_LOG_LEVEL` (exported by
   the s6 `run` script from the `log_level` option) sets the logging level.
   `/start` body overrides per call: `area_id`, `effect`, `duration`,
   `cue_offset`, `fps`, `sweep_seconds`, `attack_ms`, `release_ms`, `color`,
-  `use_cue`, `restore_state`.
+  `use_cue`, `restore_state`, `channel_order` (list[int] or `"2,3,1,0"` string,
+  parsed by `_parse_channel_order`; must be exactly the area's channels reordered).
+  `/identify` (body `area_id?`, `channel_id?`, `seconds?`, `color?`,
+  `restore_state?`) lights one channel — or, with `channel_id` omitted, every
+  channel in turn (~`seconds`+0.4 s gap each) — over a single DTLS handshake, to
+  map channel_id → physical lamp. Shares the `state["task"]` slot with `/start`
+  (`already_running` guard, `/stop` cancels it).
 - **`chase.py`** — two generators, pure math, no I/O.
   - `RedAlertChase.brightness_for(t)` → per-light `[0,1]` list: a comet head
     running one-way around the channels (wrap-around, constant speed), with an
@@ -126,8 +132,10 @@ snapshot back (the Bridge also auto-restores after streaming; this is belt-and-
 suspenders and re-offs lights that were off).
 Each frame computes `cue_t = elapsed + cue_offset + state["sync"]["correction"]`,
 then for `effect == "pulse"` feeds `sample_gain(cue, cue_t)` (or `periodic`) into
-`RedAlertPulse.step`; for `"chase"` it's `chase.brightness_for(elapsed)`, then
-multiplied by `sample_gain(cue, cue_t)` only if a cue is active.
+`RedAlertPulse.step`; for `"chase"` it's `chase.brightness_for(elapsed)`, then —
+only if a cue is active — multiplied by `CHASE_CUE_FLOOR + (1-floor)*gate` where
+`gate` is `sample_gain` run through the **same** `pulse` gate+slew (the raw gain
+flickers the comet), so the cue dims the comet between `CHASE_CUE_FLOOR` and 1.0.
 Levels → per-channel `LightColorCommand` scaled by the colour
 (`value_8bit * 257 * level`). Frames are paced against an **absolute** clock
 (`start + n/fps`), not `sleep(1/fps)`, so the light timeline doesn't drift.
@@ -138,7 +146,10 @@ Concurrency is guarded by `state["task"]` still running (`/start` →
 
 **Web UI (`panel.html`):** vanilla JS, all `fetch` calls use **relative** URLs so
 it works both behind Ingress (path-prefixed) and via published port 8099. Polls
-`/config` every 5 s.
+`/config` every 5 s. Section 3 has a `channel_order` text field (sent on `/start`);
+section 4 "Lampen zuordnen" renders one button per channel of the currently
+selected area (from the last `/areas` fetch, kept in `AREAS`; `renderIdentify()`)
+plus "alle nacheinander" — each POSTs `/identify`.
 
 **Two Hue API surfaces:** the `hue_entertainment` lib (`EntertainmentSession`,
 `HueEntertainmentAPI`) does *only* DTLS streaming + pairing + area listing.

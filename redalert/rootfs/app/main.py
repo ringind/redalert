@@ -28,6 +28,12 @@ APP_DIR = Path(__file__).parent
 DEFAULT_CUE_PATH = APP_DIR / "redalert_cue.json"
 PANEL_HTML = (APP_DIR / "panel.html").read_text(encoding="utf-8")
 
+# ``chase`` mit aktiver Cue: der rohe Gain zappelt mehrfach pro Beat über einen
+# weiten Bereich und würde den Kometen flackern lassen. Er wird deshalb durch
+# dasselbe Beat-Gate + Slew wie ``pulse`` geglättet und dimmt den Kometen nur
+# zwischen ``CHASE_CUE_FLOOR`` (Beat aus) und 1.0 (Beat an) – nie ganz aus.
+CHASE_CUE_FLOOR = 0.12
+
 _LEVELS = {
     "trace": logging.DEBUG,
     "debug": logging.DEBUG,
@@ -75,6 +81,22 @@ cue = load_cue(Path(cue_option)) if cue_option else load_cue(DEFAULT_CUE_PATH)
 
 def _effect_name(value) -> str:
     return "chase" if str(value or "").lower() == "chase" else "pulse"
+
+
+def _parse_channel_order(value) -> list[int] | None:
+    """Kanalreihenfolge aus Option/Body: Liste[int] oder "3,1,0,2,5,4".
+
+    ``None`` / leer -> ``None`` (Bereichs-Standard). Ungültiges -> ``ValueError``.
+    """
+    if value is None:
+        return None
+    if isinstance(value, str):
+        parts = [p for p in value.replace(",", " ").split() if p]
+        value = parts
+    if not isinstance(value, (list, tuple)):
+        raise ValueError("channel_order muss eine Liste sein")
+    order = [int(x) for x in value]  # wirft ValueError bei Nicht-Zahlen
+    return order or None
 
 
 state = {
@@ -365,7 +387,10 @@ async def _run_effect(
             if effect == "chase":
                 levels = chase.brightness_for(elapsed)
                 if cue is not None:
-                    g = sample_gain(cue, cue_t)
+                    # Cue-Gain durchs Beat-Gate glätten (sonst flackert der Komet),
+                    # dann als Dimmfaktor CHASE_CUE_FLOOR..1.0 anlegen.
+                    gate = pulse.step(sample_gain(cue, cue_t), now - prev)[0]
+                    g = CHASE_CUE_FLOOR + (1.0 - CHASE_CUE_FLOOR) * gate
                     levels = [lvl * g for lvl in levels]
             else:  # pulse
                 if cue is not None:
@@ -405,6 +430,123 @@ async def _run_effect(
         await restore_light_state(bridge_host, app_key, snapshot)
 
 
+async def _run_identify(
+    session: EntertainmentSession,
+    area_id: str,
+    all_ids: list,
+    targets: list,
+    hold_s: float,
+    color: tuple[int, int, int],
+    bridge_host: str,
+    app_key: str,
+    restore: bool,
+) -> None:
+    """Kanäle nacheinander einzeln aufleuchten lassen (Zuordnungs-Hilfe).
+
+    Für jeden ``channel_id`` in ``targets``: diesen Kanal ``hold_s`` s voll an,
+    alle anderen aus, danach eine kurze Dunkelpause. Ein einziger DTLS-Handshake
+    für den ganzen Durchlauf.
+    """
+    cr, cg, cb = color
+    snapshot: list[dict] = []
+    try:
+        if restore:
+            snapshot = await capture_light_state(bridge_host, app_key, area_id)
+        await session.start(area_id)
+        loop = asyncio.get_event_loop()
+        for cid in targets:
+            log.info("Identify: Kanal %s an", cid)
+            for lit, until in ((True, hold_s), (False, 0.4 if len(targets) > 1 else 0.0)):
+                end = loop.time() + until
+                while loop.time() < end:
+                    session.send([
+                        LightColorCommand(
+                            channel_id=c,
+                            red=cr * 257 if (lit and c == cid) else 0,
+                            green=cg * 257 if (lit and c == cid) else 0,
+                            blue=cb * 257 if (lit and c == cid) else 0,
+                        )
+                        for c in all_ids
+                    ])
+                    await asyncio.sleep(0.05)
+        log.info("Identify beendet (%d Kanäle).", len(targets))
+    except asyncio.CancelledError:
+        pass
+    except Exception:  # noqa: BLE001
+        log.exception("Identify abgebrochen (DTLS-Start oder Senden fehlgeschlagen)")
+    finally:
+        await session.aclose()
+        await restore_light_state(bridge_host, app_key, snapshot)
+
+
+async def handle_identify(request: web.Request) -> web.Response:
+    """POST /identify – Lampen einzeln durchtesten.
+
+    Body: ``area_id`` (opt.), ``channel_id`` (opt.; fehlt = alle nacheinander),
+    ``seconds`` (opt.), ``color`` (opt.), ``restore_state`` (opt.).
+    """
+    existing = state["task"]
+    if existing and not existing.done():
+        return web.json_response({"status": "already_running"})
+
+    creds = state["credentials"]
+    if not creds:
+        return web.json_response({"error": "Noch nicht gepaart – zuerst POST /pair"}, status=400)
+
+    body = await _json_body(request)
+    area_id = body.get("area_id") or state["area_id"]
+    if not area_id:
+        return web.json_response(
+            {"error": "area_id fehlt (im Body oder als Add-on-Option area_id)"}, status=400
+        )
+    color = hex_to_rgb(body["color"]) if body.get("color") else state["color"]
+    restore = bool(body.get("restore_state", state["restore_state"]))
+    try:
+        seconds = float(body.get("seconds") or 0.0)
+    except (TypeError, ValueError):
+        seconds = 0.0
+
+    session = EntertainmentSession(creds["bridge_host"], creds["username"], creds["clientkey"])
+    try:
+        areas = await session.get_entertainment_areas()
+    except Exception as exc:  # noqa: BLE001
+        await session.aclose()
+        log.exception("Identify fehlgeschlagen: Bridge nicht erreichbar")
+        return web.json_response({"error": f"Bridge nicht erreichbar ({exc})"}, status=502)
+
+    area = next((a for a in areas if a.id == area_id), None)
+    if area is None:
+        await session.aclose()
+        return web.json_response({"error": f"area_id {area_id} nicht gefunden"}, status=404)
+
+    native_ids = [ch.channel_id for ch in area.channels]
+    if body.get("channel_id") is None:
+        targets, hold = native_ids, (seconds or 2.0)
+    else:
+        try:
+            cid = int(body["channel_id"])
+        except (TypeError, ValueError):
+            await session.aclose()
+            return web.json_response({"error": "channel_id muss eine Zahl sein"}, status=400)
+        if cid not in native_ids:
+            await session.aclose()
+            return web.json_response(
+                {"error": f"channel_id {cid} nicht im Bereich (verfügbar: {native_ids})"},
+                status=400,
+            )
+        targets, hold = [cid], (seconds or 3.0)
+
+    state["task"] = asyncio.create_task(
+        _run_identify(
+            session, area_id, native_ids, targets, hold, color,
+            creds["bridge_host"], creds["username"], restore,
+        )
+    )
+    result = {"status": "identify", "area_id": area_id, "channels": targets, "seconds": hold}
+    log.info("Identify angefordert: %s", result)
+    return web.json_response(result)
+
+
 async def handle_start(request: web.Request) -> web.Response:
     existing = state["task"]
     if existing and not existing.done():
@@ -431,6 +573,17 @@ async def handle_start(request: web.Request) -> web.Response:
     attack_s = float(body.get("attack_ms", state["attack_ms"])) / 1000.0
     release_s = float(body.get("release_ms", state["release_ms"])) / 1000.0
     restore = bool(body.get("restore_state", state["restore_state"]))
+    if "channel_order" in body:
+        try:
+            req_order = _parse_channel_order(body["channel_order"])
+        except (TypeError, ValueError):
+            return web.json_response(
+                {"error": "channel_order muss eine Liste von Kanal-Indizes sein, "
+                          "z. B. [2,3,1,0,5,4] oder \"2,3,1,0,5,4\""},
+                status=400,
+            )
+    else:
+        req_order = state["channel_order"]
     try:
         cue_offset = float(body.get("cue_offset", 0.0))
     except (TypeError, ValueError):
@@ -452,7 +605,19 @@ async def handle_start(request: web.Request) -> web.Response:
         await session.aclose()
         return web.json_response({"error": f"area_id {area_id} nicht gefunden"}, status=404)
 
-    channel_ids = state["channel_order"] or [ch.channel_id for ch in area.channels]
+    native_ids = [ch.channel_id for ch in area.channels]
+    if req_order:
+        if sorted(req_order) != sorted(native_ids):
+            await session.aclose()
+            return web.json_response(
+                {"error": f"channel_order {req_order} passt nicht zum Bereich – "
+                          f"genau die Kanäle {sorted(native_ids)} in gewünschter "
+                          f"Reihenfolge angeben"},
+                status=400,
+            )
+        channel_ids = list(req_order)
+    else:
+        channel_ids = native_ids
 
     # session.start() (DTLS-Handshake, ~einige Sekunden) passiert im Task,
     # damit die HTTP-Antwort nicht blockiert (HA rest_command-Timeout).
@@ -554,6 +719,7 @@ def create_app() -> web.Application:
     app.router.add_post("/start", handle_start)
     app.router.add_post("/stop", handle_stop)
     app.router.add_post("/sync", handle_sync)
+    app.router.add_post("/identify", handle_identify)
     return app
 
 
