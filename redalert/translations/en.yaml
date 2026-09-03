@@ -13,15 +13,28 @@ configuration:
     description: >-
       Optional explicit list of channel IDs defining the order the comet sweeps
       along. Leave empty to use the area's native channel order.
+  effect:
+    name: Effect
+    description: >-
+      pulse = all lamps fade up and down together in time with the music.
+      chase = original Larson-scanner comet sweeping across the channels.
   color:
     name: Colour
-    description: Hex colour of the chase effect (default #FF0000, Star Trek red).
+    description: Hex colour of the effect (default #FF0000, Star Trek red).
   fps:
     name: Frames per second
     description: DTLS stream rate. Higher = smoother, more network traffic (5–50).
   sweep_seconds:
     name: Sweep duration
-    description: Seconds for one pass of the comet across all lamps (0.3–5.0).
+    description: >-
+      chase: seconds for one pass of the comet across all lamps.
+      pulse without a cue: length of one full up/down cycle (0.3–5.0).
+  attack_ms:
+    name: Attack (ms)
+    description: pulse – how fast the light fades up on sound (smaller = snappier).
+  release_ms:
+    name: Release (ms)
+    description: pulse – how fast the light fades back down in the pauses.
   cue_file:
     name: Cue file path
     description: >-

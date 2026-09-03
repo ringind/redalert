@@ -1,8 +1,11 @@
 """Red Alert Entertainment – REST-API, Streaming-Loop und Ingress-Web-UI.
 
 Der Dienst hält einen DTLS-Stream (Hue Entertainment API) zur Bridge offen und
-schiebt ~25 Frames/s eines roten Larson-Scanner-Lauflichts über die Kanäle,
-optional gedämpft durch die Lautstärke-Hüllkurve einer Cue-Datei.
+schiebt ~25 Frames/s an die Kanäle: entweder ein gemeinsames Auf-/Ab-Blenden
+aller Lampen im Takt der Musik (``effect: pulse``, Standard) oder das originale
+Larson-Scanner-Lauflicht (``effect: chase``). Der Takt kommt aus der
+Lautstärke-Hüllkurve einer Cue-Datei; ``cue_offset`` und ``POST /sync`` richten
+ihn laufend an der echten Wiedergabeposition des media_player aus.
 """
 
 import asyncio
@@ -14,7 +17,7 @@ from pathlib import Path
 from aiohttp import web
 from hue_entertainment import EntertainmentSession, HueEntertainmentAPI, LightColorCommand
 
-from chase import RedAlertChase
+from chase import RedAlertChase, RedAlertPulse
 
 DATA_DIR = Path(os.environ.get("REDALERT_DATA_DIR", "/data"))
 CRED_FILE = DATA_DIR / "credentials.json"
@@ -69,26 +72,39 @@ options = load_json(OPTIONS_FILE, {})
 cue_option = options.get("cue_file")
 cue = load_cue(Path(cue_option)) if cue_option else load_cue(DEFAULT_CUE_PATH)
 
+def _effect_name(value) -> str:
+    return "chase" if str(value or "").lower() == "chase" else "pulse"
+
+
 state = {
     "credentials": load_json(CRED_FILE, None),
     "bridge_host": options.get("bridge_host") or None,
     "area_id": options.get("area_id") or None,
     "channel_order": options.get("channel_order") or None,
     "color": hex_to_rgb(options.get("color", "#FF0000")),
+    "effect": _effect_name(options.get("effect", "pulse")),
+    "attack_ms": int(options.get("attack_ms", 60)),
+    "release_ms": int(options.get("release_ms", 300)),
     "cue": cue,
     "cue_source": (cue_option or str(DEFAULT_CUE_PATH)) if cue else None,
     "task": None,
     "last_start": None,
+    # Laufende Synchronisation: von /sync gepflegt, vom Effekt-Loop gelesen.
+    "sync": {"active": False, "loop_start": 0.0, "cue_offset": 0.0, "correction": 0.0},
 }
 
 log.info(
-    "Konfiguration: bridge_host=%s area_id=%s channels=%s color=%s fps=%s sweep=%ss cue=%s",
+    "Konfiguration: bridge_host=%s area_id=%s channels=%s effect=%s color=%s fps=%s "
+    "sweep=%ss attack=%sms release=%sms cue=%s",
     state["bridge_host"],
     state["area_id"],
     state["channel_order"],
+    state["effect"],
     options.get("color", "#FF0000"),
     options.get("fps", 25),
     options.get("sweep_seconds", 1.4),
+    state["attack_ms"],
+    state["release_ms"],
     "geladen" if cue else "keine",
 )
 if state["credentials"]:
@@ -144,19 +160,24 @@ async def handle_health(request: web.Request) -> web.Response:
 async def handle_config(request: web.Request) -> web.Response:
     task = state["task"]
     r, g, b = state["color"]
+    sync = state["sync"]
     return web.json_response(
         {
             "paired": state["credentials"] is not None,
             "bridge_host": state["bridge_host"],
             "area_id": state["area_id"],
             "channel_order": state["channel_order"],
+            "effect": state["effect"],
             "color": f"#{r:02X}{g:02X}{b:02X}",
             "fps": int(options.get("fps", 25)),
             "sweep_seconds": float(options.get("sweep_seconds", 1.4)),
+            "attack_ms": state["attack_ms"],
+            "release_ms": state["release_ms"],
             "cue_loaded": state["cue"] is not None,
             "cue_source": state["cue_source"],
             "cue_duration_s": state["cue"]["duration_s"] if state["cue"] else None,
             "running": bool(task and not task.done()),
+            "sync_correction_s": round(sync["correction"], 3) if sync["active"] else None,
             "last_start": state["last_start"],
         }
     )
@@ -220,9 +241,9 @@ async def handle_areas(request: web.Request) -> web.Response:
 
 
 # --------------------------------------------------------------------------- #
-# Effekt starten / stoppen
+# Effekt starten / stoppen / synchronisieren
 # --------------------------------------------------------------------------- #
-async def _run_chase(
+async def _run_effect(
     session: EntertainmentSession,
     area_id: str,
     channel_ids: list,
@@ -231,44 +252,75 @@ async def _run_chase(
     sweep_seconds: float,
     cue: dict | None,
     color: tuple[int, int, int],
+    effect: str,
+    cue_offset: float,
+    attack_s: float,
+    release_s: float,
 ) -> None:
-    chase = RedAlertChase(num_lights=len(channel_ids), sweep_seconds=sweep_seconds)
+    n = len(channel_ids)
     cr, cg, cb = color
+    chase = RedAlertChase(num_lights=n, sweep_seconds=sweep_seconds)
+    pulse = RedAlertPulse(num_lights=n, attack_s=attack_s, release_s=release_s)
     frames = 0
     try:
         # DTLS-Handshake läuft hier im Hintergrund, damit /start sofort antwortet.
         await session.start(area_id)
-        log.info(
-            "Effekt läuft: area=%s channels=%s fps=%s duration=%s cue=%s",
-            area_id, channel_ids, fps, duration, cue is not None,
-        )
         loop = asyncio.get_event_loop()
         start = loop.time()
+        # Für /sync sichtbar machen, ab wann und mit welchem Versatz der Loop läuft.
+        state["sync"].update(
+            {"active": True, "loop_start": start, "cue_offset": cue_offset, "correction": 0.0}
+        )
+        log.info(
+            "Effekt läuft: effect=%s area=%s channels=%s fps=%s duration=%s cue=%s offset=%.3fs",
+            effect, area_id, channel_ids, fps, duration, cue is not None, cue_offset,
+        )
+        prev = start
         while True:
-            elapsed = loop.time() - start
+            now = loop.time()
+            elapsed = now - start
             if duration is not None and elapsed >= duration:
                 break
-            levels = chase.brightness_for(elapsed)
-            if cue is not None:
-                gain = sample_gain(cue, elapsed)
-                levels = [lvl * gain for lvl in levels]
-            commands = [
-                LightColorCommand(
-                    channel_id=cid,
-                    red=int(cr * 257 * lvl),
-                    green=int(cg * 257 * lvl),
-                    blue=int(cb * 257 * lvl),
-                )
-                for cid, lvl in zip(channel_ids, levels)
-            ]
-            session.send(commands)
+            # Zeitpunkt in der Cue = Loop-Zeit + Start-Versatz + Live-Korrektur (/sync).
+            cue_t = elapsed + cue_offset + state["sync"]["correction"]
+
+            if effect == "chase":
+                levels = chase.brightness_for(elapsed)
+                if cue is not None:
+                    g = sample_gain(cue, cue_t)
+                    levels = [lvl * g for lvl in levels]
+            else:  # pulse
+                if cue is not None:
+                    target = sample_gain(cue, cue_t)
+                else:
+                    target = RedAlertPulse.periodic(elapsed, sweep_seconds)
+                levels = pulse.step(target, now - prev)
+
+            prev = now
+            session.send(
+                [
+                    LightColorCommand(
+                        channel_id=cid,
+                        red=int(cr * 257 * lvl),
+                        green=int(cg * 257 * lvl),
+                        blue=int(cb * 257 * lvl),
+                    )
+                    for cid, lvl in zip(channel_ids, levels)
+                ]
+            )
             frames += 1
-            await asyncio.sleep(1 / fps)
+            # Frames gegen eine absolute Uhr planen, damit die Licht-Zeitachse
+            # nicht gegenüber der Wanduhr wegdriftet (sonst summiert sich der
+            # Fehler von asyncio.sleep auf).
+            sleep_for = (start + frames / fps) - loop.time()
+            if sleep_for > 0:
+                await asyncio.sleep(sleep_for)
     except asyncio.CancelledError:
         pass
     except Exception:  # noqa: BLE001
-        log.exception("Streaming-Loop abgebrochen (DTLS-Start oder Senden fehlgeschlagen)")
+        log.exception("Effekt-Loop abgebrochen (DTLS-Start oder Senden fehlgeschlagen)")
     finally:
+        state["sync"]["active"] = False
         log.info("Effekt beendet (%s Frames).", frames)
         await session.aclose()
 
@@ -292,12 +344,19 @@ async def handle_start(request: web.Request) -> web.Response:
     use_cue = bool(body.get("use_cue", True)) and state["cue"] is not None
     active_cue = state["cue"] if use_cue else None
 
+    effect = _effect_name(body.get("effect") or state["effect"])
     fps = int(body.get("fps") or options.get("fps", 25))
     sweep_seconds = float(body.get("sweep_seconds") or options.get("sweep_seconds", 1.4))
     color = hex_to_rgb(body["color"]) if body.get("color") else state["color"]
+    attack_s = float(body.get("attack_ms", state["attack_ms"])) / 1000.0
+    release_s = float(body.get("release_ms", state["release_ms"])) / 1000.0
+    try:
+        cue_offset = float(body.get("cue_offset", 0.0))
+    except (TypeError, ValueError):
+        cue_offset = 0.0
     duration = body.get("duration")  # weglassen = Cue-Dauer, sonst bis /stop
     if duration is None and active_cue is not None:
-        duration = active_cue["duration_s"]
+        duration = max(0.0, active_cue["duration_s"] - cue_offset)
 
     session = EntertainmentSession(creds["bridge_host"], creds["username"], creds["clientkey"])
     try:
@@ -316,11 +375,18 @@ async def handle_start(request: web.Request) -> web.Response:
 
     # session.start() (DTLS-Handshake, ~einige Sekunden) passiert im Task,
     # damit die HTTP-Antwort nicht blockiert (HA rest_command-Timeout).
+    state["sync"] = {
+        "active": False, "loop_start": 0.0, "cue_offset": cue_offset, "correction": 0.0,
+    }
     state["task"] = asyncio.create_task(
-        _run_chase(session, area_id, channel_ids, duration, fps, sweep_seconds, active_cue, color)
+        _run_effect(
+            session, area_id, channel_ids, duration, fps, sweep_seconds, active_cue, color,
+            effect, cue_offset, attack_s, release_s,
+        )
     )
     r, g, b = color
     state["last_start"] = {
+        "effect": effect,
         "area_id": area_id,
         "channels": channel_ids,
         "duration": duration,
@@ -328,6 +394,9 @@ async def handle_start(request: web.Request) -> web.Response:
         "sweep_seconds": sweep_seconds,
         "color": f"#{r:02X}{g:02X}{b:02X}",
         "cue_active": use_cue,
+        "cue_offset": cue_offset,
+        "attack_ms": round(attack_s * 1000),
+        "release_ms": round(release_s * 1000),
     }
     log.info("Start angefordert: %s", state["last_start"])
     return web.json_response({"status": "started", **state["last_start"]})
@@ -346,6 +415,52 @@ async def handle_stop(request: web.Request) -> web.Response:
     return web.json_response({"status": "stopped"})
 
 
+# Größte Einzelkorrektur pro /sync-Aufruf – hält Nachführungen unter der
+# Wahrnehmungsschwelle, wenn die Automation regelmäßig (alle paar Sekunden) synct.
+MAX_SYNC_STEP_S = 0.5
+
+
+async def handle_sync(request: web.Request) -> web.Response:
+    """Licht-Cue an die echte Wiedergabeposition angleichen.
+
+    Body: ``{"position": <sekunden im Track>}`` – die aktuelle Position des
+    media_player (aus ``media_position`` + Zeit seit ``media_position_updated_at``).
+    Die Differenz zur aktuellen Licht-Cue-Zeit wird auf ±MAX_SYNC_STEP_S begrenzt
+    aufaddiert, damit kein sichtbarer Sprung entsteht.
+    """
+    task = state["task"]
+    sync = state["sync"]
+    if not (task and not task.done()) or not sync["active"]:
+        return web.json_response({"status": "not_running"}, status=409)
+
+    body = await _json_body(request)
+    try:
+        position = float(body["position"])
+    except (KeyError, TypeError, ValueError):
+        return web.json_response({"error": "position (Sekunden) fehlt oder ungültig"}, status=400)
+
+    now = asyncio.get_event_loop().time()
+    elapsed = now - sync["loop_start"]
+    light_cue_t = elapsed + sync["cue_offset"] + sync["correction"]
+    delta = position - light_cue_t
+    step = max(-MAX_SYNC_STEP_S, min(MAX_SYNC_STEP_S, delta))
+    sync["correction"] += step
+    log.debug(
+        "sync: player=%.3fs licht=%.3fs delta=%+.3fs -> korrektur=%+.3fs%s",
+        position, light_cue_t, delta, sync["correction"],
+        " (begrenzt)" if step != delta else "",
+    )
+    return web.json_response(
+        {
+            "status": "synced",
+            "player_position_s": round(position, 3),
+            "light_cue_s": round(light_cue_t, 3),
+            "residual_s": round(delta - step, 3),
+            "correction_s": round(sync["correction"], 3),
+        }
+    )
+
+
 def create_app() -> web.Application:
     app = web.Application()
     app.router.add_get("/", handle_panel)
@@ -355,6 +470,7 @@ def create_app() -> web.Application:
     app.router.add_get("/areas", handle_areas)
     app.router.add_post("/start", handle_start)
     app.router.add_post("/stop", handle_stop)
+    app.router.add_post("/sync", handle_sync)
     return app
 
 

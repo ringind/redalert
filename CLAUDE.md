@@ -60,28 +60,39 @@ Three layers under `redalert/rootfs/app/`:
 - **`main.py`** — aiohttp server. Endpoints: `/` (serves `panel.html`),
   `/health` (also the Docker HEALTHCHECK target), `/config` (effective config for the UI),
   `/pair` (one-time Bridge link-button pairing → `/data/credentials.json`),
-  `/areas`, `/start`, `/stop`. All mutable runtime state is one module-level
-  `state` dict. Options are read **once at import** from `/data/options.json`;
-  the cue is loaded once at startup into `state["cue"]`. `REDALERT_LOG_LEVEL`
-  (exported by the s6 `run` script from the `log_level` option) sets the logging
-  level. `/start` body overrides per call: `area_id`, `duration`, `fps`,
-  `sweep_seconds`, `color`, `use_cue`.
-- **`chase.py`** — `RedAlertChase`, pure math, no I/O. `brightness_for(t)`
-  returns a per-light `[0,1]` list: triangle-wave "comet" position (Larson
-  scanner) with a `tail_width` falloff over a constant `base_glow` wash.
+  `/areas`, `/start`, `/stop`, `/sync`. All mutable runtime state is one
+  module-level `state` dict (incl. `state["sync"]` for the live sync loop).
+  Options are read **once at import** from `/data/options.json`; the cue is
+  loaded once at startup into `state["cue"]`. `REDALERT_LOG_LEVEL` (exported by
+  the s6 `run` script from the `log_level` option) sets the logging level.
+  `/start` body overrides per call: `area_id`, `effect`, `duration`,
+  `cue_offset`, `fps`, `sweep_seconds`, `attack_ms`, `release_ms`, `color`,
+  `use_cue`.
+- **`chase.py`** — two generators, pure math, no I/O.
+  - `RedAlertChase.brightness_for(t)` → per-light `[0,1]` list: triangle-wave
+    "comet" (Larson scanner) with `tail_width` falloff over a `base_glow` wash.
+  - `RedAlertPulse.step(target, dt)` → uniform level for all lights, an
+    exponential attack/release follower toward `target` over a `base_glow` wash;
+    `RedAlertPulse.periodic(t, period)` is the no-cue cosine fallback.
 - **`redalert_cue.json`** — `{fps, duration_s, gain: [0..1, ...]}`, one value per
   frame from an audio RMS envelope, **no audio data**. `sample_gain()` in
-  `main.py` linearly interpolates it by elapsed time.
+  `main.py` linearly interpolates it at an arbitrary time.
 
-**Streaming loop:** `handle_start` creates the `EntertainmentSession`, resolves
-the area (404/502 returned synchronously), then hands the session to a single
-`asyncio` task running `_run_chase` and returns immediately. The task does the
-DTLS handshake (`session.start(area_id)` — several seconds) itself, then owns the
-session lifecycle and `aclose()`s it in `finally`. Each frame: `chase.brightness_for` → multiply by `sample_gain` if a
-cue is active → per-channel `LightColorCommand` scaled by the `color` option
-(`value_8bit * 257 * level`) → `sleep(1/fps)`. Concurrency is guarded by checking
-whether `state["task"]` is still running (`/start` → `already_running`); `/stop`
-cancels and awaits it.
+**Effect loop (`_run_effect`):** `handle_start` creates the `EntertainmentSession`,
+resolves the area (404/502 returned synchronously), then hands the session to a
+single `asyncio` task and returns immediately. The task does the DTLS handshake
+(`session.start(area_id)` — several seconds) itself, publishes its start time to
+`state["sync"]`, then owns the session lifecycle and `aclose()`s it in `finally`.
+Each frame computes `cue_t = elapsed + cue_offset + state["sync"]["correction"]`,
+then for `effect == "pulse"` feeds `sample_gain(cue, cue_t)` (or `periodic`) into
+`RedAlertPulse.step`; for `"chase"` runs the sweep dimmed by `sample_gain`.
+Levels → per-channel `LightColorCommand` scaled by the colour
+(`value_8bit * 257 * level`). Frames are paced against an **absolute** clock
+(`start + n/fps`), not `sleep(1/fps)`, so the light timeline doesn't drift.
+`/sync` (body `{position}`) nudges `state["sync"]["correction"]` toward the
+player's real position, clamped to ±`MAX_SYNC_STEP_S` (0.5 s) per call.
+Concurrency is guarded by `state["task"]` still running (`/start` →
+`already_running`); `/stop` cancels and awaits it.
 
 **Web UI (`panel.html`):** vanilla JS, all `fetch` calls use **relative** URLs so
 it works both behind Ingress (path-prefixed) and via published port 8099. Polls
@@ -89,12 +100,15 @@ it works both behind Ingress (path-prefixed) and via published port 8099. Polls
 
 **Constraints to keep in mind:**
 - Effect color comes from the `color` option / `/start` body (default red);
-  `chase.py` still only computes brightness, `main.py` applies the color.
-- Channel order = `channel_order` option if set, else the area's native order;
-  that ordering is what the sweep walks along.
-- The Bridge allows only **one** active Entertainment stream at a time.
-- `duration` omitted + cue active → `cue["duration_s"]`; omitted + no cue → runs
-  until `/stop`.
+  `chase.py` only computes brightness, `main.py` applies the color.
+- `effect` default is `pulse` (all lamps together); `chase` is the old sweep.
+- Channel order = `channel_order` option if set, else the area's native order
+  (only meaningful for `chase`).
+- The Bridge allows only **one** active Entertainment stream at a time; the DTLS
+  handshake is 3–9 s and is the dominant music-sync error source — `/sync` +
+  `cue_offset` exist to correct for it (see `DOCS.md` "Synchronisation zur Musik").
+- `duration` omitted + cue active → `cue["duration_s"] - cue_offset`; omitted +
+  no cue → runs until `/stop`.
 - Keep in sync across files when adding an option: `config.yaml` (`options` +
   `schema`), `translations/{de,en}.yaml`, `main.py` (`options.get(...)` /
   `/config` / `/start`), and `panel.html` if it's user-facing.

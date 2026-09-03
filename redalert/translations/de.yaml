@@ -13,6 +13,11 @@ configuration:
     description: >-
       Optionale explizite Liste von channel_ids, die die Reihenfolge des
       Kometen-Sweeps bestimmt. Leer lassen = native Reihenfolge des Bereichs.
+  effect:
+    name: Effekt
+    description: >-
+      pulse = alle Lampen blenden gemeinsam im Takt der Musik auf und ab.
+      chase = originales Larson-Scanner-Lauflicht über die Kanäle.
   color:
     name: Farbe
     description: Hex-Farbe des Lauflichts (Standard #FF0000, Star-Trek-Rot).
@@ -21,7 +26,15 @@ configuration:
     description: Taktrate des DTLS-Streams. Höher = flüssiger, mehr Netzlast (5–50).
   sweep_seconds:
     name: Sweep-Dauer
-    description: Sekunden für einen Durchlauf des Kometen über alle Lampen (0.3–5.0).
+    description: >-
+      chase: Sekunden für einen Durchlauf des Kometen über alle Lampen.
+      pulse ohne Cue: Dauer eines vollständigen Auf-/Ab-Zyklus (0.3–5.0).
+  attack_ms:
+    name: Attack (ms)
+    description: pulse – wie schnell das Licht bei Ton aufblendet (kleiner = knackiger).
+  release_ms:
+    name: Release (ms)
+    description: pulse – wie schnell das Licht in der Pause wieder abblendet.
   cue_file:
     name: Pfad zur Cue-Datei
     description: >-
