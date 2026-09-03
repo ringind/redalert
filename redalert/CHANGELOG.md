@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.7
+
+- **`chase` nutzt die Cue standardmäßig nicht mehr.** Bisher war `use_cue` für
+  beide Effekte per Default an – im Add-on (Cue immer geladen) wurde der
+  `chase`-Komet dadurch im Klaxon-Takt auf ~12–19 % gedimmt und blitzte nur auf
+  den unregelmäßigen Beats hell auf, also ganz anders als der ruhige Komet in
+  den Tests. Jetzt: `use_cue` Default **`pulse` an, `chase` aus** (im `/start`-
+  Body bzw. per Checkbox „Cue nutzen" übersteuerbar; die Checkbox folgt jetzt
+  automatisch dem Effekt).
+- **`duration` ohne Wert nimmt weiter die Cue-Länge**, auch wenn die Cue den
+  Effekt nicht moduliert (`use_cue: false`) – so endet auch der cue-lose
+  `chase` von selbst, statt bis `/stop` zu laufen.
+
 ## 1.1.6
 
 - **Fix `chase`: Spitze flackerte unregelmäßig.** Das Puls-Maximum war nur ein

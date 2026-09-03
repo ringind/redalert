@@ -589,10 +589,12 @@ async def handle_start(request: web.Request) -> web.Response:
             {"error": "area_id fehlt (im Body oder als Add-on-Option area_id)"}, status=400
         )
 
-    use_cue = bool(body.get("use_cue", True)) and state["cue"] is not None
+    effect = _effect_name(body.get("effect") or state["effect"])
+    # Die Cue ist Beat-Sync und damit ein pulse-Feature; chase läuft standardmäßig
+    # nach seiner eigenen sweep_seconds-Uhr (use_cue: true im Body koppelt sie doch an).
+    use_cue = bool(body.get("use_cue", effect == "pulse")) and state["cue"] is not None
     active_cue = state["cue"] if use_cue else None
 
-    effect = _effect_name(body.get("effect") or state["effect"])
     fps = int(body.get("fps") or options.get("fps", 25))
     sweep_seconds = float(body.get("sweep_seconds") or options.get("sweep_seconds", 1.4))
     color = hex_to_rgb(body["color"]) if body.get("color") else state["color"]
@@ -620,8 +622,10 @@ async def handle_start(request: web.Request) -> web.Response:
     except (TypeError, ValueError):
         cue_offset = 0.0
     duration = body.get("duration")  # weglassen = Cue-Dauer, sonst bis /stop
-    if duration is None and active_cue is not None:
-        duration = max(0.0, active_cue["duration_s"] - cue_offset)
+    if duration is None and state["cue"] is not None:
+        # ohne duration die Länge der geladenen Cue nehmen (auch wenn sie den
+        # Effekt nicht moduliert), damit der Effekt von selbst endet.
+        duration = max(0.0, state["cue"]["duration_s"] - cue_offset)
 
     session = EntertainmentSession(creds["bridge_host"], creds["username"], creds["clientkey"])
     try:

@@ -46,7 +46,7 @@ redalert/                  the add-on
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.1.6**.
+No build system, linter, or test suite. Current version: **1.1.7**.
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
   after every code change — the only static check available.
@@ -105,7 +105,10 @@ Three layers under `redalert/rootfs/app/`:
   `cue_offset`, `fps`, `sweep_seconds`, `attack_ms`, `release_ms`, `glow_low`,
   `glow_high`, `color`, `use_cue`, `restore_state`, `channel_order` (list[int] or
   `"2,3,1,0"` string, parsed by `_parse_channel_order`; must be exactly the
-  area's channels reordered).
+  area's channels reordered). `use_cue` defaults per effect — **on for `pulse`,
+  off for `chase`** (`bool(body.get("use_cue", effect == "pulse"))`); the cue is
+  beat-sync and only a `pulse` feature. `effect` is resolved before `use_cue` for
+  this reason.
   `/identify` (body `area_id?`, `channel_id?`, `seconds?`, `color?`,
   `restore_state?`) lights one channel — or, with `channel_id` omitted, every
   channel in turn (~`seconds`+0.4 s gap each) — over a single DTLS handshake, to
@@ -143,7 +146,8 @@ suspenders and re-offs lights that were off).
 Each frame computes `cue_t = elapsed + cue_offset + state["sync"]["correction"]`,
 then for `effect == "pulse"` feeds `sample_gain(cue, cue_t)` (or `periodic`) into
 `RedAlertPulse.step`; for `"chase"` it's `chase.brightness_for(elapsed)`, then —
-only if a cue is active — multiplied by `CHASE_CUE_FLOOR + (1-floor)*gate` where
+only if `use_cue` was set true for this chase run (off by default) — multiplied by
+`CHASE_CUE_FLOOR + (1-floor)*gate` where
 `gate` is `sample_gain` run through the **same** `pulse` gate+slew (the raw gain
 flickers the comet), so the cue dims the comet between `CHASE_CUE_FLOOR` and 1.0.
 The resulting 0..1 levels are then mapped to `glow_low + (glow_high-glow_low)*lvl`
@@ -181,8 +185,9 @@ cert). See `_clip` / `capture_light_state` / `restore_light_state`.
 - The Bridge allows only **one** active Entertainment stream at a time; the DTLS
   handshake is 3–9 s and is the dominant music-sync error source — `/sync` +
   `cue_offset` exist to correct for it (see `DOCS.md` "Synchronisation zur Musik").
-- `duration` omitted + cue active → `cue["duration_s"] - cue_offset`; omitted +
-  no cue → runs until `/stop`.
+- `duration` omitted → `cue["duration_s"] - cue_offset` whenever a cue is
+  **loaded** (even with `use_cue` false, so the effect still self-terminates);
+  only runs until `/stop` if no cue file is loaded at all.
 - The s6 `run` script is `#!/command/with-contenv bashio`; the Dockerfile
   `chmod a+x`s `run` and `finish` (no reliable file mode without git).
 

@@ -57,7 +57,9 @@ REST-Variante: `curl http://<ha-ip>:8099/areas`
 
 Im Web-UI unter **„3 · Steuerung“**: `area_id`, **Effekt**, Dauer (leer = Länge
 der Cue-Datei), `cue_offset`, `fps`, `sweep_seconds`, Farbe, „Cue nutzen“ und
-**`channel_order`** setzen, dann **Start** / **Stop**.
+**`channel_order`** setzen, dann **Start** / **Stop**. „Cue nutzen“ folgt
+automatisch dem Effekt (an bei `pulse`, aus bei `chase`), bis du die Checkbox
+selbst anfasst.
 
 `channel_order` (leer = Bereichs-Standard) legt fest, in welcher Reihenfolge der
 `chase`-Komet die Lampen durchläuft – als kommagetrennte Liste der
@@ -79,7 +81,7 @@ Lampenzustand wiederhergestellt.
 | `effect` | Verhalten |
 |----------|-----------|
 | `pulse` (Standard) | Alle Lampen **gemeinsam**: von `glow_low` linear auf `glow_high` im Takt der Musik, zwischen den Pulsen zurück auf `glow_low`. Ein Schmitt-Trigger auf der Cue-Hüllkurve macht aus jedem Beat ein sauberes Ein/Aus, der Anstieg läuft dadurch ruckelfrei-monoton hoch. `attack_ms` = Aufblend-, `release_ms` = Abblendzeit; `release_ms` kleiner = schnelleres Abfallen als Aufblenden. Ohne Cue: gleichmäßiger Puls mit Periode `sweep_seconds`. |
-| `chase` | Ein Komet läuft **gleichmäßig in eine Richtung** um alle Kanäle (wraparound, konstante Geschwindigkeit). Jede Lampe für sich pulst dabei: **kurz hell (`glow_high`), langes exponentielles Ausblenden, dann eine Ruhephase auf `glow_low`**, dann wieder. Der Kopf ist etwas breiter als der Lampenabstand – zwei benachbarte Lampen stehen kurz gemeinsam auf 100 % und glühen dann nacheinander aus, sodass immer mindestens eine Lampe voll leuchtet. Optional durch die Cue gedimmt. |
+| `chase` | Ein Komet läuft **gleichmäßig in eine Richtung** um alle Kanäle (wraparound, konstante Geschwindigkeit). Jede Lampe für sich pulst dabei: **kurz hell (`glow_high`), langes exponentielles Ausblenden, dann eine Ruhephase auf `glow_low`**, dann wieder. Der Kopf ist etwas breiter als der Lampenabstand – zwei benachbarte Lampen stehen kurz gemeinsam auf 100 % und glühen dann nacheinander aus, sodass immer mindestens eine Lampe voll leuchtet. Läuft standardmäßig **ohne Cue** nach `sweep_seconds`; mit `"use_cue": true` wird der Komet zusätzlich im Takt der Cue gedimmt. |
 
 **Lichtzustand:** Vor dem Effekt sichert das Add-on an/aus, Helligkeit und Farbe
 aller Lampen des Bereichs (Hue CLIP v2) und schreibt sie nach dem Effekt zurück
@@ -123,7 +125,11 @@ Panel-Pfad).
 | `/sync`   | POST    | Laufende Feinsynchronisation. Body: `{"position": <Sekunden im Track>}` – die echte Wiedergabeposition des media_player. Der Licht-Cue wird um die Differenz nachgezogen (max. ±0,5 s pro Aufruf, damit nichts springt). `409`, wenn kein Effekt läuft. |
 | `/identify` | POST  | Lampen einzeln durchtesten (Zuordnung `channel_id` → Lampe). Body optional: `area_id`, `channel_id` (fehlt = alle Kanäle nacheinander), `seconds` (Standard 3 einzeln / 2 bei „alle“), `color`, `restore_state`. Ein DTLS-Handshake für den ganzen Durchlauf. Belegt denselben Slot wie `/start` (`already_running`, `/stop` bricht ab). |
 
-- `duration` weglassen → bei aktiver Cue-Datei deren Restlänge ab `cue_offset`,
+- `use_cue` – Beat-Sync über die Cue-Datei. **Standard: bei `pulse` an, bei
+  `chase` aus** (chase läuft nach seiner eigenen `sweep_seconds`-Uhr). Mit
+  `"use_cue": true` bzw. `false` im Body übersteuerbar.
+- `duration` weglassen → wenn eine Cue-Datei geladen ist, deren Restlänge ab
+  `cue_offset` (auch bei `use_cue: false`, damit der Effekt von selbst endet);
   sonst läuft der Effekt bis `/stop`.
 - `cue_offset` (Sekunden) = an welcher Stelle der Cue der Effekt beginnt. Damit
   richtest du das Licht auf die schon laufende Musik aus (siehe

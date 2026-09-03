@@ -193,8 +193,12 @@ Options-Änderung neu starten.
 | `/sync`   | POST    | Feinsynchronisation zur Musik. Body `{"position": <Sek. im Track>}`; zieht den Licht-Cue max. ±0,5 s/Aufruf nach. `409`, wenn nichts läuft. |
 | `/identify` | POST  | Lampen einzeln durchtesten (`channel_id` → Lampe). Body optional: `area_id`, `channel_id` (fehlt = alle nacheinander), `seconds`, `color`, `restore_state`. Ein DTLS-Handshake für den Durchlauf; belegt denselben Slot wie `/start`. |
 
-`duration` weglassen → bei aktiver Cue-Datei wird deren Restlänge ab `cue_offset`
-verwendet, sonst läuft der Effekt bis `/stop` aufgerufen wird.
+`use_cue` (Beat-Sync über die Cue-Datei) ist standardmäßig **bei `pulse` an, bei
+`chase` aus** – chase läuft nach seiner eigenen `sweep_seconds`-Uhr. Im Body von
+`/start` mit `"use_cue": true`/`false` übersteuerbar.
+`duration` weglassen → wenn eine Cue-Datei geladen ist, wird deren Restlänge ab
+`cue_offset` verwendet (auch bei `use_cue: false`), sonst läuft der Effekt bis
+`/stop` aufgerufen wird.
 `cue_offset` + `/sync`: siehe Abschnitt „Synchronisation zur Musik“ in
 [`redalert/DOCS.md`](redalert/DOCS.md#synchronisation-zur-musik).
 
@@ -263,9 +267,9 @@ in `redalert/DOCS.md`.
 
 Ein Cue liegt bereits als `redalert/rootfs/app/redalert_cue.json` bei, erzeugt aus dem
 hochgeladenen Alarm-Sound (Dauer 53,66 s, Alarm-Zyklus alle 1,906 s ± 5 ms).
-Er wird automatisch verwendet, wenn `/start` ohne `duration` aufgerufen wird.
-Mit `"use_cue": false` im Body von `/start` lässt sich der reine periodische
-Sweep ohne Audio-Gating erzwingen.
+Bei `pulse` moduliert er standardmäßig den Takt; bei `chase` ist er standardmäßig
+**aus** (`"use_cue": true` schaltet ihn dazu). Er legt ausserdem – sofern geladen –
+die Standard-`duration` fest, wenn `/start` ohne `duration` aufgerufen wird.
 
 Für einen anderen oder neuen Sound-Clip erzeugst du selbst eine neue Cue-Datei:
 

@@ -98,7 +98,7 @@
       <div><label for="glowlow">glow_low (0–1)</label><input type="number" id="glowlow" min="0" max="1" step="0.01" placeholder="0.08"></div>
       <div><label for="glowhigh">glow_high (0–1)</label><input type="number" id="glowhigh" min="0" max="1" step="0.01" placeholder="1"></div>
       <div><label for="color">Farbe</label><input type="color" id="color" value="#ff0000"></div>
-      <div><label><input type="checkbox" id="usecue" checked> Cue nutzen</label></div>
+      <div><label><input type="checkbox" id="usecue" checked> Cue nutzen (Beat-Sync; Standard: pulse an, chase aus)</label></div>
       <div style="flex:1 1 100%"><label for="chanorder">channel_order (leer = Bereichs-Standard)</label>
         <input type="text" id="chanorder" placeholder="z. B. 2,3,1,0,5,4" style="width:100%"></div>
     </div>
@@ -190,6 +190,7 @@
     }
     if (data.area_id && !$("area").value) $("area").value = data.area_id;
     if (data.effect && !$("effect").dataset.touched) $("effect").value = data.effect;
+    syncCueToEffect();
     if (data.fps && !$("fps").value) $("fps").value = data.fps;
     if (data.sweep_seconds && !$("sweep").value) $("sweep").value = data.sweep_seconds;
     if (data.glow_low != null && !$("glowlow").value) $("glowlow").value = data.glow_low;
@@ -255,7 +256,13 @@
   };
   $("btn-identify-all").onclick = () => identify({});
   $("area").addEventListener("input", renderIdentify);
-  $("effect").onchange = () => { $("effect").dataset.touched = "1"; };
+  // "Cue nutzen" folgt dem Effekt (an bei pulse, aus bei chase), bis der Nutzer
+  // die Checkbox selbst anfasst.
+  $("usecue").onchange = () => { $("usecue").dataset.touched = "1"; };
+  function syncCueToEffect() {
+    if (!$("usecue").dataset.touched) $("usecue").checked = $("effect").value === "pulse";
+  }
+  $("effect").onchange = () => { $("effect").dataset.touched = "1"; syncCueToEffect(); };
   $("btn-start").onclick = async () => {
     const body = { use_cue: $("usecue").checked, color: $("color").value, effect: $("effect").value };
     if ($("area").value.trim()) body.area_id = $("area").value.trim();
