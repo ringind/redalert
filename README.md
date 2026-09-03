@@ -1,5 +1,6 @@
 # Red Alert Entertainment Add-on
 
+[![Build](https://github.com/ringind/redalert/actions/workflows/build.yaml/badge.svg)](https://github.com/ringind/redalert/actions/workflows/build.yaml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Home-Assistant-Add-on für eine Star-Trek-„Alarmstufe Rot“-Szene: ein rotes
