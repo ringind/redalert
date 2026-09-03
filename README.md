@@ -1,5 +1,7 @@
 # Red Alert Entertainment Add-on
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Home-Assistant-Add-on für eine Star-Trek-„Alarmstufe Rot“-Szene: ein rotes
 Lauflicht über mehrere Philips-Hue-Lampen, gesteuert über das echte
 **Hue Entertainment API** (DTLS-Streaming, nicht die normale Bridge-Szene),
