@@ -16,6 +16,9 @@ Nutzt die Bibliothek [`hue-entertainment`](https://github.com/music-assistant/hu
 > Ein Web-UI zur Steuerung (Pairing, Bereiche, Start/Stop) erscheint nach der
 > Installation als Seitenleisten-Eintrag **Red Alert** (Ingress).
 
+Getestet mit Hue Bridge V2 (BSB002, API 1.78): Pairing, Bereichsabruf,
+DTLS-Streaming und Start/Stop laufen end-to-end.
+
 ---
 
 ## Inhalt
@@ -117,7 +120,8 @@ und starten. Empfohlen: „Watchdog“ und „Start beim Booten“ aktivieren.
 ## 3. Einmalig mit der Bridge pairen
 
 Physischen Link-Button auf der Hue Bridge drücken, dann **innerhalb von
-~30 Sekunden**:
+~30 Sekunden** pairen – entweder im Web-UI (Seitenleiste **Red Alert** →
+„1 · Mit Bridge pairen“) oder per REST:
 
 ```bash
 curl -X POST http://<home-assistant-ip>:8099/pair \
@@ -170,7 +174,7 @@ Add-on danach neu starten.
 | `/config` | GET     | Effektive Konfiguration (für das Web-UI)                                                |
 | `/pair`   | POST    | Einmalige Kopplung mit der Bridge. Body: `{"bridge_ip": "..."}` (optional, falls Option gesetzt) |
 | `/areas`  | GET     | Verfügbare Entertainment-Bereiche + Kanäle auflisten                                    |
-| `/start`  | POST    | Lauflicht starten. Body optional: `area_id`, `duration` (Sek.), `fps`, `sweep_seconds`, `color`, `use_cue` |
+| `/start`  | POST    | Lauflicht starten (antwortet sofort; DTLS-Handshake läuft im Hintergrund). Body optional: `area_id`, `duration` (Sek.), `fps`, `sweep_seconds`, `color`, `use_cue` |
 | `/stop`   | POST    | Lauflicht sofort stoppen                                                                |
 
 `duration` weglassen → bei aktiver Cue-Datei wird deren Länge automatisch

@@ -1,5 +1,26 @@
+# Python
 __pycache__/
-*.pyc
-.DS_Store
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtualenvs
 .venv/
+venv/
+
+# Local dev data (contains real bridge credentials)
 devdata/
+
+# Audio sources – nicht mitliefern (siehe Rechtlicher Hinweis in der README);
+# nur die abgeleitete redalert_cue.json wird versioniert.
+*.mp3
+*.wav
+*.flac
+*.m4a
+
+# OS / editors
+.DS_Store
+**/.DS_Store
+.idea/
+.vscode/
+*.log
