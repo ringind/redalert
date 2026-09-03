@@ -7,16 +7,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 A **Home Assistant add-on store repository**. `repository.yaml` at the root makes
 it addable in HA under *Settings → Add-ons → Add-on Store → ⋮ → Repositories*;
 the add-on itself lives in `redalert/`. The add-on drives a Star Trek "Red Alert"
-running light across ~6 Philips Hue lamps via the **Hue Entertainment API**
-(persistent DTLS stream, ~25 Hz) rather than normal Bridge scenes, optionally
-gated by an audio loudness envelope so the light pulses with a locally-provided
-alarm sound. It ships an aiohttp REST service **and** an Ingress web UI for
-control. HA builds the image locally from `redalert/Dockerfile` (no `image:` key,
-no prebuilt registry). Primary docs are German: repo overview in `README.md`,
-in-HA docs in `redalert/DOCS.md`. Remote: `github.com/ringind/redalert` (branch
-`main`). CI in `.github/workflows/build.yaml` runs `frenck/action-addon-linter`
-(strict: it rejects any config.yaml/build.yaml key set to its default value) plus
-a `home-assistant/builder --test` build for aarch64 + amd64.
+scene across ~6 Philips Hue lamps via the **Hue Entertainment API** (persistent
+DTLS stream, ~25 Hz) rather than normal Bridge scenes — two effects, `pulse`
+(default: all lamps together on the beat) and `chase` (a comet with a tail) —
+timed to a locally-provided alarm sound via a precomputed loudness envelope. It
+ships an aiohttp REST service **and** an Ingress web UI for control. HA builds the
+image locally from `redalert/Dockerfile` (no `image:` key, no prebuilt registry).
+Primary docs are German: repo overview in `README.md`, in-HA docs in
+`redalert/DOCS.md`.
+
+**Remote & CI:** `github.com/ringind/redalert` (branch `main`).
+`.github/workflows/build.yaml` = `frenck/action-addon-linter` (strict: rejects any
+*known HA* config.yaml/build.yaml key left at its default) + a `docker buildx`
+test build for amd64 and (emulated) aarch64. Green in ~4 min. After every push,
+watch it: `RUN=$(gh run list --workflow=build.yaml --branch main -L1 --json databaseId -q '.[0].databaseId'); until [ "$(gh run view $RUN --json status -q .status)" = completed ]; do sleep 30; done; gh run view $RUN --json conclusion,jobs -q '.conclusion, (.jobs[]|"\(.name)=\(.conclusion)")'`
+(run it backgrounded). Releases are tags `vX.Y.Z` on a green commit — see the
+`release` skill.
 
 ## Layout
 
@@ -40,18 +46,45 @@ redalert/                  the add-on
 
 ## Commands
 
-No build system, linter, or test suite. This code only fully runs inside the HA
-add-on container (it reads `/data/options.json`, `/data/credentials.json`).
+No build system, linter, or test suite. Current version: **1.1.3**.
 
-- Local smoke run: `cd redalert/rootfs/app && REDALERT_LOG_LEVEL=debug python3 main.py`
-  — serves `0.0.0.0:8099`; unpaired with empty options since `/data/*` is absent.
-  Needs `pip install -r redalert/requirements.txt` (`hue-entertainment`, `aiohttp`).
+- `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
+  after every code change — the only static check available.
 - Container build (normally the HA Supervisor does this):
   `docker build --build-arg BUILD_FROM=ghcr.io/home-assistant/amd64-base-python:3.12-alpine3.20 -t redalert redalert/`
 - Regenerate the audio cue: `python3 tools/generate_cue.py input.mp3 redalert/rootfs/app/redalert_cue.json --fps 25`
   — needs `ffmpeg` + `numpy` (`scipy` optional). Keep `--fps` equal to the runtime `fps`.
 - Regenerate store graphics: the generator lives in the scratchpad
   (`mkpng.py`); `icon.png`/`logo.png` are a solid-red beacon on near-black.
+- Cut a versioned release: see the **`release`** skill.
+
+## Local testing (real Hue bridge)
+
+`main.py` only fully runs outside the container because `DATA_DIR` is overridable:
+`REDALERT_DATA_DIR` (default `/data`). The dev setup is a venv at `.venv` and a
+`devdata/` dir — **both gitignored; do not `rm -rf devdata`**, it holds
+`credentials.json` and deleting it forces a physical re-pair (link button).
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r redalert/requirements.txt   # once
+mkdir -p devdata
+REDALERT_DATA_DIR=./devdata REDALERT_LOG_LEVEL=debug .venv/bin/python redalert/rootfs/app/main.py &
+B=http://localhost:8099
+until curl -sf -o /dev/null $B/health; do sleep 0.5; done          # bind race: ~3 s, always gate
+# pair only if devdata/credentials.json is missing (needs a fresh link-button press):
+#   curl -s -X POST $B/pair -H 'Content-Type: application/json' -d '{"bridge_ip":"<ip>"}'
+curl -s -X POST $B/start -H 'Content-Type: application/json' \
+  -d '{"area_id":"<area>","effect":"pulse","duration":20,"use_cue":true}'
+```
+
+- The maintainer's test rig (may change): bridge `192.168.178.50`, area **Flur** =
+  `18aa512d-62f9-4dd3-a390-247a87d3deed` (BSB002 / API 1.78). `GET /areas` lists current ones.
+- The DTLS handshake logs a `ServerHello timeout … resending` retry almost every
+  time and takes ~3–9 s — **normal**, not a failure. `/start` returns *before* it
+  (`_run_effect` does the handshake), so poll `/health` `running` for real state.
+- `_run_effect` runs the effect for `duration` s at exactly `fps` (absolute-clock
+  pacing) — verify with the `Effekt beendet (N Frames)` log line: `N ≈ duration*fps`.
+- See the **`smoke-test`** skill for the full loop (start server, run, wait, report, stop).
 
 ## Architecture
 
@@ -93,7 +126,8 @@ snapshot back (the Bridge also auto-restores after streaming; this is belt-and-
 suspenders and re-offs lights that were off).
 Each frame computes `cue_t = elapsed + cue_offset + state["sync"]["correction"]`,
 then for `effect == "pulse"` feeds `sample_gain(cue, cue_t)` (or `periodic`) into
-`RedAlertPulse.step`; for `"chase"` runs the sweep dimmed by `sample_gain`.
+`RedAlertPulse.step`; for `"chase"` it's `chase.brightness_for(elapsed)`, then
+multiplied by `sample_gain(cue, cue_t)` only if a cue is active.
 Levels → per-channel `LightColorCommand` scaled by the colour
 (`value_8bit * 257 * level`). Frames are paced against an **absolute** clock
 (`start + n/fps`), not `sleep(1/fps)`, so the light timeline doesn't drift.
@@ -106,13 +140,19 @@ Concurrency is guarded by `state["task"]` still running (`/start` →
 it works both behind Ingress (path-prefixed) and via published port 8099. Polls
 `/config` every 5 s.
 
+**Two Hue API surfaces:** the `hue_entertainment` lib (`EntertainmentSession`,
+`HueEntertainmentAPI`) does *only* DTLS streaming + pairing + area listing.
+Anything else — reading/writing individual light state, `entertainment_configuration`
+details — is a raw `aiohttp` call to `https://<bridge>/clip/v2/resource/...` with
+header `hue-application-key: creds["username"]` and `ssl=False` (self-signed
+cert). See `_clip` / `capture_light_state` / `restore_light_state`.
+
 **Constraints to keep in mind:**
 - Effect color comes from the `color` option / `/start` body (default red);
   `chase.py` only computes brightness, `main.py` applies the color.
 - `effect` default is `pulse` (all lamps together); `chase` is the comet.
-- `restore_state` (default true) uses CLIP v2 with `hue-application-key:
-  creds["username"]` — the same key pairing returns; independent of the DTLS
-  session.
+- `restore_state` (default true) snapshots + restores every area lamp via CLIP v2;
+  runs in `_run_effect` before the handshake / in `finally` after `aclose()`.
 - Channel order = `channel_order` option if set, else the area's native order
   (only meaningful for `chase`).
 - The Bridge allows only **one** active Entertainment stream at a time; the DTLS
@@ -120,8 +160,21 @@ it works both behind Ingress (path-prefixed) and via published port 8099. Polls
   `cue_offset` exist to correct for it (see `DOCS.md` "Synchronisation zur Musik").
 - `duration` omitted + cue active → `cue["duration_s"] - cue_offset`; omitted +
   no cue → runs until `/stop`.
-- Keep in sync across files when adding an option: `config.yaml` (`options` +
-  `schema`), `translations/{de,en}.yaml`, `main.py` (`options.get(...)` /
-  `/config` / `/start`), and `panel.html` if it's user-facing.
 - The s6 `run` script is `#!/command/with-contenv bashio`; the Dockerfile
   `chmod a+x`s `run` and `finish` (no reliable file mode without git).
+
+**Adding a config option — touch every one of these (proven by every option so far):**
+1. `redalert/config.yaml` — `options:` default **and** `schema:` entry. The
+   linter rejects a `schema` type without `?` if it duplicates a HA default, and
+   rejects any *known HA key* left at its default — but custom option keys are free.
+2. `redalert/translations/de.yaml` **and** `en.yaml` — `configuration:` name +
+   description (missing one is a lint failure).
+3. `redalert/rootfs/app/main.py` — `state[...]` default from `options.get(...)`;
+   the startup config `log.info(...)` line; `handle_start` body parse
+   (`body.get(..., state[...])`); the `/config` JSON; the `state["last_start"]` dict.
+4. `redalert/rootfs/app/panel.html` — if user-facing: an input in section 3, the
+   `body.*` in `btn-start`, the status-grid field, and the prefill in `refresh()`.
+5. `redalert/DOCS.md` (options table + `/start` body list) and `README.md`
+   (§5 options table + §6 `/start` row + §9 "Effekt anpassen" if it tunes an effect).
+6. `redalert/CHANGELOG.md` + version bump (see the `release` skill).
+7. Live-test on the real bridge (`smoke-test` skill) before committing.
