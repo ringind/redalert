@@ -14,6 +14,7 @@ import logging
 import os
 from pathlib import Path
 
+import aiohttp
 from aiohttp import web
 from hue_entertainment import EntertainmentSession, HueEntertainmentAPI, LightColorCommand
 
@@ -85,6 +86,7 @@ state = {
     "effect": _effect_name(options.get("effect", "pulse")),
     "attack_ms": int(options.get("attack_ms", 140)),
     "release_ms": int(options.get("release_ms", 70)),
+    "restore_state": bool(options.get("restore_state", True)),
     "cue": cue,
     "cue_source": (cue_option or str(DEFAULT_CUE_PATH)) if cue else None,
     "task": None,
@@ -134,6 +136,74 @@ async def _json_body(request: web.Request) -> dict:
         return {}
 
 
+# --------------------------------------------------------------------------- #
+# Lichtzustand sichern / wiederherstellen (Hue CLIP v2, neben dem DTLS-Stream)
+# --------------------------------------------------------------------------- #
+async def _clip(sess, host: str, key: str, method: str, path: str, body: dict | None = None):
+    url = f"https://{host}/clip/v2/resource/{path}"
+    async with sess.request(
+        method, url, headers={"hue-application-key": key}, json=body, ssl=False
+    ) as resp:
+        return await resp.json()
+
+
+async def capture_light_state(host: str, key: str, area_id: str) -> list[dict]:
+    """on/Helligkeit/Farbe aller Lampen des Entertainment-Bereichs als Snapshot."""
+    snap: list[dict] = []
+    try:
+        async with aiohttp.ClientSession() as sess:
+            cfg = await _clip(sess, host, key, "GET", f"entertainment_configuration/{area_id}")
+            data = (cfg.get("data") or [{}])[0]
+            light_ids = [
+                ls["rid"] for ls in data.get("light_services", []) if ls.get("rtype") == "light"
+            ]
+            for lid in light_ids:
+                d = (await _clip(sess, host, key, "GET", f"light/{lid}")).get("data") or [{}]
+                d = d[0]
+                snap.append(
+                    {
+                        "id": lid,
+                        "on": d.get("on", {}).get("on", True),
+                        "brightness": d.get("dimming", {}).get("brightness"),
+                        "mirek": d.get("color_temperature", {}).get("mirek"),
+                        "xy": d.get("color", {}).get("xy"),
+                    }
+                )
+        log.info("Lichtzustand gesichert (%d Lampen).", len(snap))
+    except Exception:  # noqa: BLE001
+        log.exception("Lichtzustand konnte nicht gesichert werden – wird nicht wiederhergestellt")
+        return []
+    return snap
+
+
+async def restore_light_state(host: str, key: str, snap: list[dict]) -> None:
+    if not snap:
+        return
+    # Die Bridge stellt nach dem Ende des Entertainment-Streams von sich aus
+    # wieder her; kurz warten, damit dieses PUT das letzte Wort hat.
+    await asyncio.sleep(0.4)
+    ok = 0
+    try:
+        async with aiohttp.ClientSession() as sess:
+            for st in snap:
+                body: dict = {"on": {"on": bool(st["on"])}}
+                if st["brightness"] is not None:
+                    body["dimming"] = {"brightness": st["brightness"]}
+                if st["xy"] is not None:
+                    body["color"] = {"xy": st["xy"]}
+                elif st["mirek"] is not None:
+                    body["color_temperature"] = {"mirek": st["mirek"]}
+                try:
+                    await _clip(sess, host, key, "PUT", f"light/{st['id']}", body)
+                    ok += 1
+                except Exception:  # noqa: BLE001
+                    log.exception("Lampe %s konnte nicht wiederhergestellt werden", st["id"])
+                await asyncio.sleep(0.06)  # Bridge nicht überfahren
+        log.info("Lichtzustand wiederhergestellt (%d/%d Lampen).", ok, len(snap))
+    except Exception:  # noqa: BLE001
+        log.exception("Wiederherstellung fehlgeschlagen")
+
+
 def _save_credentials(creds: dict) -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     CRED_FILE.write_text(json.dumps(creds))
@@ -173,6 +243,7 @@ async def handle_config(request: web.Request) -> web.Response:
             "sweep_seconds": float(options.get("sweep_seconds", 1.4)),
             "attack_ms": state["attack_ms"],
             "release_ms": state["release_ms"],
+            "restore_state": state["restore_state"],
             "cue_loaded": state["cue"] is not None,
             "cue_source": state["cue_source"],
             "cue_duration_s": state["cue"]["duration_s"] if state["cue"] else None,
@@ -256,13 +327,20 @@ async def _run_effect(
     cue_offset: float,
     attack_s: float,
     release_s: float,
+    bridge_host: str,
+    app_key: str,
+    restore: bool,
 ) -> None:
     n = len(channel_ids)
     cr, cg, cb = color
     chase = RedAlertChase(num_lights=n, sweep_seconds=sweep_seconds)
     pulse = RedAlertPulse(num_lights=n, attack_s=attack_s, release_s=release_s)
     frames = 0
+    snapshot: list[dict] = []
     try:
+        # Vor dem Streaming den aktuellen Lichtzustand sichern.
+        if restore:
+            snapshot = await capture_light_state(bridge_host, app_key, area_id)
         # DTLS-Handshake läuft hier im Hintergrund, damit /start sofort antwortet.
         await session.start(area_id)
         loop = asyncio.get_event_loop()
@@ -323,6 +401,8 @@ async def _run_effect(
         state["sync"]["active"] = False
         log.info("Effekt beendet (%s Frames).", frames)
         await session.aclose()
+        # Nach dem Ende des Streams den gesicherten Lichtzustand zurückschreiben.
+        await restore_light_state(bridge_host, app_key, snapshot)
 
 
 async def handle_start(request: web.Request) -> web.Response:
@@ -350,6 +430,7 @@ async def handle_start(request: web.Request) -> web.Response:
     color = hex_to_rgb(body["color"]) if body.get("color") else state["color"]
     attack_s = float(body.get("attack_ms", state["attack_ms"])) / 1000.0
     release_s = float(body.get("release_ms", state["release_ms"])) / 1000.0
+    restore = bool(body.get("restore_state", state["restore_state"]))
     try:
         cue_offset = float(body.get("cue_offset", 0.0))
     except (TypeError, ValueError):
@@ -382,6 +463,7 @@ async def handle_start(request: web.Request) -> web.Response:
         _run_effect(
             session, area_id, channel_ids, duration, fps, sweep_seconds, active_cue, color,
             effect, cue_offset, attack_s, release_s,
+            creds["bridge_host"], creds["username"], restore,
         )
     )
     r, g, b = color
@@ -397,6 +479,7 @@ async def handle_start(request: web.Request) -> web.Response:
         "cue_offset": cue_offset,
         "attack_ms": round(attack_s * 1000),
         "release_ms": round(release_s * 1000),
+        "restore_state": restore,
     }
     log.info("Start angefordert: %s", state["last_start"])
     return web.json_response({"status": "started", **state["last_start"]})

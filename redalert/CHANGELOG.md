@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.1.3
+
+- **`chase` überarbeitet:** Der Komet läuft jetzt **gleichmäßig in eine
+  Richtung** um alle Kanäle (wraparound, konstante Geschwindigkeit, kein
+  Umkehr-Stocken) und zieht einen **exponentiell auslaufenden Schweif** hinter
+  sich her – heller Kopf, kurzer Vorglanz, langer Nachlauf. `sweep_seconds` ist
+  jetzt die Dauer **einer vollen Umrundung** (vorher: ein Durchlauf hin).
+  Neue Feinparameter in `chase.py`: `tail_len`, `head_len`.
+- **Lichtzustand sichern/wiederherstellen:** vor dem Effekt werden an/aus,
+  Helligkeit und Farbe aller Bereichs-Lampen per Hue CLIP v2 gesichert und nach
+  dem Effekt zurückgeschrieben. Option/Body `restore_state` (Standard `true`).
+
 ## 1.1.2
 
 - **Fix `pulse`: der anschwellende Puls hatte Helligkeitssprünge.** Die rohe

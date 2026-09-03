@@ -6,8 +6,9 @@ Two effects, selected by the ``effect`` option / ``/start`` body:
   sound, dim in the pauses. Driven by the audio cue envelope (or a periodic
   cosine when no cue is active), with an asymmetric attack/release so the
   transitions read as fades rather than steps.
-- ``chase``: the original Larson-scanner comet sweeping across the channels on
-  top of a dim constant wash.
+- ``chase``: a comet running **continuously in one direction** around the
+  channels (wraps at the end, constant speed), with a bright head, a short glow
+  ahead of it and a long exponential tail trailing behind, over a dim wash.
 
 Both classes only compute brightness in ``[0, 1]``; ``main.py`` applies the
 colour and 16-bit scaling.
@@ -21,37 +22,50 @@ HUE_16BIT_MAX = 65535
 
 
 class RedAlertChase:
+    """Comet running continuously around the channels, dragging a tail.
+
+    ``sweep_seconds`` is the time for **one full loop** past every channel. The
+    head position advances at constant speed and wraps, so the motion is even
+    with no turn-around dwell. Brightness for a channel depends on its signed
+    circular distance ``d`` from the head:
+
+    - ``d < 0`` (channel is behind the head): ``exp(d / tail_len)`` – the long
+      trailing comet tail;
+    - ``d > 0`` (ahead of the head): ``exp(-d / head_len)`` – a short glow so the
+      leading edge is soft, not a hard on/off.
+    """
+
     def __init__(
         self,
         num_lights: int,
         sweep_seconds: float = 1.4,
-        tail_width: float = 1.3,
-        base_glow: float = 0.06,
+        tail_len: float = 1.7,
+        head_len: float = 0.45,
+        base_glow: float = 0.05,
     ) -> None:
         self.num_lights = max(1, num_lights)
         self.sweep_seconds = max(0.1, sweep_seconds)
-        self.tail_width = max(0.3, tail_width)
+        self.tail_len = max(0.1, tail_len)
+        self.head_len = max(0.05, head_len)
         self.base_glow = min(max(base_glow, 0.0), 1.0)
 
-    def _position(self, t: float) -> float:
-        """Triangle wave 0 -> (n-1) -> 0 over one full sweep cycle."""
-        if self.num_lights <= 1:
-            return 0.0
-        period = 2 * self.sweep_seconds
-        phase = (t % period) / self.sweep_seconds  # 0..2
-        span = self.num_lights - 1
-        if phase <= 1:
-            return phase * span
-        return (2 - phase) * span
+    def _head(self, t: float) -> float:
+        """Continuous head position 0..n, one full loop per ``sweep_seconds``."""
+        n = self.num_lights
+        return (t / self.sweep_seconds) * n % n
 
     def brightness_for(self, t: float) -> list[float]:
         """Per-light brightness in [0, 1] at time t (seconds since start)."""
-        pos = self._position(t)
+        n = self.num_lights
+        if n == 1:
+            return [1.0]
+        head = self._head(t)
         levels = []
-        for i in range(self.num_lights):
-            dist = abs(i - pos)
-            comet = max(0.0, 1.0 - dist / self.tail_width)
-            levels.append(min(1.0, self.base_glow + comet))
+        for i in range(n):
+            # signed distance head->channel, wrapped to (-n/2, n/2]
+            d = (i - head + n / 2) % n - n / 2
+            glow = math.exp(d / self.tail_len) if d <= 0 else math.exp(-d / self.head_len)
+            levels.append(min(1.0, self.base_glow + (1.0 - self.base_glow) * glow))
         return levels
 
     def frame(self, t: float) -> list[dict]:

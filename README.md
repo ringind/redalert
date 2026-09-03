@@ -7,7 +7,7 @@ Home-Assistant-Add-on für eine Star-Trek-„Alarmstufe Rot“-Szene über mehre
 Philips-Hue-Lampen, gesteuert über das echte **Hue Entertainment API**
 (DTLS-Streaming, nicht die normale Bridge-Szene), synchron zu deinem eigenen
 Alarm-Sound. Zwei Effekte: `pulse` – alle Lampen blenden gemeinsam im Takt der
-Musik auf und ab (Standard) – und `chase` – das klassische Larson-Lauflicht.
+Musik auf und ab (Standard) – und `chase` – ein umlaufender Komet, der einen Schweif hinter sich herzieht.
 
 Nutzt die Bibliothek [`hue-entertainment`](https://github.com/music-assistant/hue-entertainment)
 (dieselbe, die auch das Hue-Entertainment-Plugin von Music Assistant antreibt).
@@ -62,7 +62,7 @@ HA-Automation ──┬──> media_player.play_media (dein Sound, z. B. Sonos)
                          Add-on (Python, aiohttp)
                          hält DTLS-Stream offen (~25 Hz)
                          pulse: alle Lampen × Audio-Hüllkurve
-                         (chase: Comet-Sweep × Hüllkurve)
+                         (chase: umlaufender Komet mit Schweif)
                                         │
                                         ▼
                               Hue Bridge (Entertainment API)
@@ -164,12 +164,13 @@ Add-on danach neu starten.
 | `bridge_host`     | String        | leer     | IP der Hue Bridge. Kann auch pro `/pair`-Aufruf übergeben werden. |
 | `area_id`         | String        | leer     | ID des Entertainment-Bereichs (siehe Schritt 4).                  |
 | `channel_order`   | Liste[int]    | leer     | Optionale explizite Kanalreihenfolge (für `chase`).               |
-| `effect`          | `pulse`\|`chase` | `pulse` | `pulse` = alle Lampen zusammen 0 → 100 % → 0 im Musiktakt. `chase` = Larson-Lauflicht. |
+| `effect`          | `pulse`\|`chase` | `pulse` | `pulse` = alle Lampen zusammen 0 → 100 % → 0 im Musiktakt. `chase` = umlaufender Komet mit Schweif. |
 | `color`           | Hex-String    | `#FF0000`| Farbe des Effekts.                                                |
 | `fps`             | int (5–50)    | 25       | Frames/Sekunde des DTLS-Streams.                                   |
-| `sweep_seconds`   | float (0.3–5) | 1.4      | `chase`: Durchlaufdauer. `pulse` ohne Cue: Zyklusdauer.           |
+| `sweep_seconds`   | float (0.3–5) | 1.4      | `chase`: Dauer einer vollen Umrundung. `pulse` ohne Cue: Zyklusdauer. |
 | `attack_ms`       | int (0–2000)  | 140      | `pulse`: Aufblendzeit 0 → 100 %.                                  |
 | `release_ms`      | int (0–5000)  | 70       | `pulse`: Abblendzeit → 0 (kleiner als `attack_ms`).               |
+| `restore_state`   | bool          | `true`   | Lampenzustand vor dem Effekt sichern und danach wiederherstellen.  |
 | `cue_file`        | String        | leer     | Pfad zu einer alternativen `redalert_cue.json` (z. B. `/share/...`). |
 | `log_level`       | Liste         | `info`   | Ausführlichkeit des Add-on-Protokolls (`trace`…`fatal`).           |
 
@@ -182,7 +183,7 @@ Add-on danach neu starten.
 | `/config` | GET     | Effektive Konfiguration (für das Web-UI)                                                |
 | `/pair`   | POST    | Einmalige Kopplung mit der Bridge. Body: `{"bridge_ip": "..."}` (optional, falls Option gesetzt) |
 | `/areas`  | GET     | Verfügbare Entertainment-Bereiche + Kanäle auflisten                                    |
-| `/start`  | POST    | Effekt starten (antwortet sofort; DTLS-Handshake läuft im Hintergrund). Body optional: `area_id`, `effect`, `duration` (Sek.), `cue_offset` (Sek.), `fps`, `sweep_seconds`, `attack_ms`, `release_ms`, `color`, `use_cue` |
+| `/start`  | POST    | Effekt starten (antwortet sofort; DTLS-Handshake läuft im Hintergrund). Body optional: `area_id`, `effect`, `duration` (Sek.), `cue_offset` (Sek.), `fps`, `sweep_seconds`, `attack_ms`, `release_ms`, `color`, `use_cue`, `restore_state` |
 | `/stop`   | POST    | Effekt sofort stoppen                                                                   |
 | `/sync`   | POST    | Feinsynchronisation zur Musik. Body `{"position": <Sek. im Track>}`; zieht den Licht-Cue max. ±0,5 s/Aufruf nach. `409`, wenn nichts läuft. |
 
@@ -284,10 +285,11 @@ Effekt wählen: Option `effect` bzw. `"effect": "pulse"|"chase"` im `/start`-Bod
   Beat-Gate (Schmitt-Trigger): ab `hi` an, wieder aus, wenn der Pegel `hold_s`
   lang unter `lo` bleibt.
 
-`chase` – Larson-Scanner-Lauflicht (`RedAlertChase` in `chase.py`):
-- `sweep_seconds` – Dauer eines Durchlaufs über alle Lampen (Standard 1.4 s).
-- `tail_width` – Länge des „Kometenschweifs“ in Lampen-Einheiten.
-- `base_glow` – Grundhelligkeit (0–1) zwischen den Sweeps.
+`chase` – umlaufender Komet mit Schweif (`RedAlertChase` in `chase.py`):
+- `sweep_seconds` – Dauer einer vollen Umrundung aller Lampen (Standard 1.4 s).
+- `tail_len` – Länge des nachlaufenden Schweifs in Lampen-Einheiten.
+- `head_len` – Länge des Vorglanzes vor dem Kopf (klein = harte Vorderkante).
+- `base_glow` – Grundhelligkeit (0–1) zwischen Kopf und Schweif.
 
 Farbe ist aktuell fest auf Rot (`green=0, blue=0`) gesetzt; über
 `LightColorCommand` lassen sich bei Bedarf auch andere Farbverläufe fahren.
@@ -333,7 +335,7 @@ selbst im Unterordner `redalert/`.
 │       ├── etc/s6-overlay/…      Service-Definition (Start, bashio-Logging)
 │       └── app/
 │           ├── main.py           REST-Server + Streaming-Loop + Ingress-Panel
-│           ├── chase.py          Comet-Sweep-Berechnung (Larson-Scanner)
+│           ├── chase.py          Kometen-Effekt (umlaufend, mit Schweif)
 │           ├── panel.html        Web-UI (Steuerung)
 │           └── redalert_cue.json Vorgefertigte Helligkeits-Hüllkurve (kein Audio)
 └── tools/

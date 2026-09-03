@@ -18,7 +18,8 @@ configuration:
     description: >-
       pulse = alle Lampen zusammen: von 0 auf 100 % im Takt der Musik, zwischen
       den Pulsen wieder auf 0 (Abfallen schneller als Aufblenden).
-      chase = originales Larson-Scanner-Lauflicht über die Kanäle.
+      chase = ein Komet läuft gleichmäßig umlaufend über die Kanäle und zieht
+      einen Schweif hinter sich her.
   color:
     name: Farbe
     description: Hex-Farbe des Lauflichts (Standard #FF0000, Star-Trek-Rot).
@@ -28,7 +29,7 @@ configuration:
   sweep_seconds:
     name: Sweep-Dauer
     description: >-
-      chase: Sekunden für einen Durchlauf des Kometen über alle Lampen.
+      chase: Sekunden für eine volle Umrundung aller Lampen.
       pulse ohne Cue: Dauer eines vollständigen Auf-/Ab-Zyklus (0.3–5.0).
   attack_ms:
     name: Attack (ms)
@@ -39,6 +40,11 @@ configuration:
     description: >-
       pulse – wie schnell das Licht zwischen den Pulsen auf 0 abfällt.
       Für den typischen Look kleiner als Attack wählen (schnelleres Abfallen).
+  restore_state:
+    name: Lichtzustand wiederherstellen
+    description: >-
+      Vor dem Effekt den aktuellen Zustand der Lampen (an/aus, Helligkeit, Farbe)
+      sichern und danach wiederherstellen.
   cue_file:
     name: Pfad zur Cue-Datei
     description: >-

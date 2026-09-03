@@ -64,7 +64,13 @@ setzen, dann **Start** / **Stop**.
 | `effect` | Verhalten |
 |----------|-----------|
 | `pulse` (Standard) | Alle Lampen **gemeinsam**: von **0** linear auf **100 %** im Takt der Musik, zwischen den Pulsen zurück auf **0**. Ein Schmitt-Trigger auf der Cue-Hüllkurve macht aus jedem Beat ein sauberes Ein/Aus, der Anstieg läuft dadurch ruckelfrei-monoton hoch. `attack_ms` = Aufblend-, `release_ms` = Abblendzeit; `release_ms` kleiner = schnelleres Abfallen als Aufblenden. Ohne Cue: gleichmäßiger Puls mit Periode `sweep_seconds`. |
-| `chase` | Originales Larson-Scanner-Lauflicht: ein Komet wandert über die Kanäle, auf einem schwachen Dauerglühen, optional durch die Cue gedimmt. |
+| `chase` | Ein Komet läuft **gleichmäßig in eine Richtung** um alle Kanäle (wraparound, konstante Geschwindigkeit) und zieht einen **exponentiell auslaufenden Schweif** hinter sich her – heller Kopf, kurzer Vorglanz, langer Nachlauf, über einem schwachen Dauerglühen. Optional durch die Cue gedimmt. |
+
+**Lichtzustand:** Vor dem Effekt sichert das Add-on an/aus, Helligkeit und Farbe
+aller Lampen des Bereichs (Hue CLIP v2) und schreibt sie nach dem Effekt zurück
+– auch Lampen, die vorher aus waren, gehen wieder aus. Abschaltbar mit
+`restore_state: false` (dann greift nur die automatische Wiederherstellung der
+Bridge nach dem Stream-Ende).
 
 ## Konfiguration
 
@@ -76,9 +82,10 @@ setzen, dann **Start** / **Stop**.
 | `effect`        | `pulse` \| `chase` | `pulse`    | Lichteffekt, siehe oben. |
 | `color`         | Hex-String         | `#FF0000`  | Farbe des Effekts. |
 | `fps`           | int (5–50)         | `25`       | Frames/Sekunde des DTLS-Streams. |
-| `sweep_seconds` | float (0.3–5.0)    | `1.4`      | `chase`: Dauer eines Durchlaufs. `pulse` ohne Cue: Zyklusdauer. |
+| `sweep_seconds` | float (0.3–5.0)    | `1.4`      | `chase`: Dauer einer vollen Umrundung. `pulse` ohne Cue: Zyklusdauer. |
 | `attack_ms`     | int (0–2000)       | `140`      | `pulse`: Aufblendzeit 0 → 100 %. |
 | `release_ms`    | int (0–5000)       | `70`       | `pulse`: Abblendzeit → 0 zwischen den Pulsen (kleiner als `attack_ms` = schnelleres Abfallen). |
+| `restore_state` | bool               | `true`     | Lampenzustand (an/aus, Helligkeit, Farbe) vor dem Effekt sichern und danach wiederherstellen. |
 | `cue_file`      | String             | `""`       | Pfad zu alternativer `redalert_cue.json` (z. B. `/share/…`). |
 | `log_level`     | Liste              | `info`     | `trace`,`debug`,`info`,`notice`,`warning`,`error`,`fatal`. |
 
@@ -94,7 +101,7 @@ Panel-Pfad).
 | `/config` | GET     | Effektive Konfiguration (für das Web-UI). |
 | `/pair`   | POST    | Einmalige Kopplung. Body: `{"bridge_ip": "..."}` (optional bei gesetzter Option). |
 | `/areas`  | GET     | Entertainment-Bereiche + Kanäle auflisten. |
-| `/start`  | POST    | Effekt starten (antwortet sofort; DTLS-Handshake läuft im Hintergrund). Body optional: `area_id`, `effect`, `duration`, `cue_offset`, `fps`, `sweep_seconds`, `attack_ms`, `release_ms`, `color`, `use_cue`. |
+| `/start`  | POST    | Effekt starten (antwortet sofort; DTLS-Handshake läuft im Hintergrund). Body optional: `area_id`, `effect`, `duration`, `cue_offset`, `fps`, `sweep_seconds`, `attack_ms`, `release_ms`, `color`, `use_cue`, `restore_state`. |
 | `/stop`   | POST    | Effekt sofort stoppen. |
 | `/sync`   | POST    | Laufende Feinsynchronisation. Body: `{"position": <Sekunden im Track>}` – die echte Wiedergabeposition des media_player. Der Licht-Cue wird um die Differenz nachgezogen (max. ±0,5 s pro Aufruf, damit nichts springt). `409`, wenn kein Effekt läuft. |
 

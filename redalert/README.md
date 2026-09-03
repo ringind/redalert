@@ -3,7 +3,7 @@
 Star-Trek-„Alarmstufe Rot“-Effekt über Philips-Hue-Lampen via **Hue
 Entertainment API** (DTLS-Streaming), mit Ingress-Web-UI und Audio-Sync per
 Cue-Datei. Effekte: `pulse` (alle Lampen gemeinsam im Takt, Standard) und
-`chase` (Larson-Lauflicht).
+`chase` (umlaufender Komet mit Schweif).
 
 Vollständige Anleitung: siehe **[DOCS.md](DOCS.md)** (wird in HA als Tab
 „Dokumentation“ angezeigt), inkl. Abschnitt
@@ -28,6 +28,6 @@ Vollständige Anleitung: siehe **[DOCS.md](DOCS.md)** (wird in HA als Tab
 | `translations/` | Beschriftung der Konfigurationsoberfläche (de/en). |
 | `rootfs/etc/s6-overlay/…` | Service-Definition (Start/Logging). |
 | `rootfs/app/main.py` | REST-Server, Effekt-Loop, `/sync`, Ingress-Panel. |
-| `rootfs/app/chase.py` | Effekt-Berechnung: `RedAlertPulse` (Takt) + `RedAlertChase` (Larson). |
+| `rootfs/app/chase.py` | Effekt-Berechnung: `RedAlertPulse` (Takt) + `RedAlertChase` (Komet+Schweif). |
 | `rootfs/app/panel.html` | Web-UI. |
 | `rootfs/app/redalert_cue.json` | Vorgefertigte Helligkeits-Hüllkurve (kein Audio). |

@@ -18,7 +18,7 @@ configuration:
     description: >-
       pulse = all lamps together: 0 to 100 % on the beat, back to 0 between
       pulses (fall faster than rise).
-      chase = original Larson-scanner comet sweeping across the channels.
+      chase = a comet runs evenly around the channels, dragging a tail behind it.
   color:
     name: Colour
     description: Hex colour of the effect (default #FF0000, Star Trek red).
@@ -28,7 +28,7 @@ configuration:
   sweep_seconds:
     name: Sweep duration
     description: >-
-      chase: seconds for one pass of the comet across all lamps.
+      chase: seconds for one full loop of the comet around all lamps.
       pulse without a cue: length of one full up/down cycle (0.3–5.0).
   attack_ms:
     name: Attack (ms)
@@ -38,6 +38,11 @@ configuration:
     description: >-
       pulse – how fast the light drops back to 0 between pulses. Keep it smaller
       than attack for the intended look (faster fall than rise).
+  restore_state:
+    name: Restore light state
+    description: >-
+      Snapshot the lamps' current state (on/off, brightness, colour) before the
+      effect and put it back afterwards.
   cue_file:
     name: Cue file path
     description: >-
