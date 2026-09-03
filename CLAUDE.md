@@ -13,7 +13,10 @@ gated by an audio loudness envelope so the light pulses with a locally-provided
 alarm sound. It ships an aiohttp REST service **and** an Ingress web UI for
 control. HA builds the image locally from `redalert/Dockerfile` (no `image:` key,
 no prebuilt registry). Primary docs are German: repo overview in `README.md`,
-in-HA docs in `redalert/DOCS.md`. Not a git repository yet.
+in-HA docs in `redalert/DOCS.md`. Remote: `github.com/ringind/redalert` (branch
+`main`). CI in `.github/workflows/build.yaml` runs `frenck/action-addon-linter`
+(strict: it rejects any config.yaml/build.yaml key set to its default value) plus
+a `home-assistant/builder --test` build for aarch64 + amd64.
 
 ## Layout
 
@@ -22,7 +25,7 @@ repository.yaml            store metadata
 README.md                  repo overview (German)
 tools/generate_cue.py      standalone cue generator (dev tool, not in the image)
 redalert/                  the add-on
-  config.yaml              manifest: options schema, ingress, ports, watchdog
+  config.yaml              manifest: options schema, ingress, ports
   build.yaml               base images: ghcr.io/home-assistant/{arch}-base-python
   Dockerfile               installs requirements, copies rootfs, chmods s6 scripts
   DOCS.md / CHANGELOG.md   "Documentation" / "Changelog" tabs in HA
@@ -56,7 +59,7 @@ add-on container (it reads `/data/options.json`, `/data/credentials.json`).
 Three layers under `redalert/rootfs/app/`:
 
 - **`main.py`** — aiohttp server. Endpoints: `/` (serves `panel.html`),
-  `/health` (also the watchdog target), `/config` (effective config for the UI),
+  `/health` (also the Docker HEALTHCHECK target), `/config` (effective config for the UI),
   `/pair` (one-time Bridge link-button pairing → `/data/credentials.json`),
   `/areas`, `/start`, `/stop`. All mutable runtime state is one module-level
   `state` dict. Options are read **once at import** from `/data/options.json`;
@@ -72,9 +75,10 @@ Three layers under `redalert/rootfs/app/`:
   `main.py` linearly interpolates it by elapsed time.
 
 **Streaming loop:** `handle_start` creates the `EntertainmentSession`, resolves
-the area, `session.start(area_id)`, then hands the session to a single `asyncio`
-task running `_run_chase`, which owns the session lifecycle and `aclose()`s it in
-`finally`. Each frame: `chase.brightness_for` → multiply by `sample_gain` if a
+the area (404/502 returned synchronously), then hands the session to a single
+`asyncio` task running `_run_chase` and returns immediately. The task does the
+DTLS handshake (`session.start(area_id)` — several seconds) itself, then owns the
+session lifecycle and `aclose()`s it in `finally`. Each frame: `chase.brightness_for` → multiply by `sample_gain` if a
 cue is active → per-channel `LightColorCommand` scaled by the `color` option
 (`value_8bit * 257 * level`) → `sleep(1/fps)`. Concurrency is guarded by checking
 whether `state["task"]` is still running (`/start` → `already_running`); `/stop`

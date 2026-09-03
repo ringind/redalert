@@ -20,15 +20,14 @@ nicht die träge Bridge-Szene), optional synchron zu deinem eigenen Alarm-Sound.
 1. **Einstellungen → Add-ons → Add-on Store → ⋮ (oben rechts) → Repositories**
    und die URL dieses GitHub-Repositories hinzufügen.
 2. Das Add-on **Red Alert Entertainment** aus dem Store installieren.
-3. Optional „Start beim Booten“ und „Watchdog“ aktivieren (empfohlen).
+3. Optional „Start beim Booten“ aktivieren (empfohlen).
 4. Add-on **starten**.
 
 ## Einrichtung
 
 ### 1 · Mit der Bridge pairen (einmalig)
 
-Öffne das Web-UI (Seitenleisten-Eintrag **Red Alert** oder „Web-UI öffnen“ auf
-der Info-Seite des Add-ons).
+Öffne das Web-UI (Seitenleisten-Eintrag **Red Alert**).
 
 1. Physischen **Link-Button** auf der Hue Bridge drücken.
 2. Innerhalb von ~30 s im Web-UI unter **„1 · Mit Bridge pairen“** die Bridge-IP
@@ -81,7 +80,7 @@ Panel-Pfad).
 | Endpoint  | Methode | Zweck |
 |-----------|---------|-------|
 | `/`       | GET     | Web-UI (Ingress-Panel). |
-| `/health` | GET     | `{status, paired, running}` – auch Watchdog-Ziel. |
+| `/health` | GET     | `{status, paired, running}` – auch Ziel des Container-HEALTHCHECK. |
 | `/config` | GET     | Effektive Konfiguration (für das Web-UI). |
 | `/pair`   | POST    | Einmalige Kopplung. Body: `{"bridge_ip": "..."}` (optional bei gesetzter Option). |
 | `/areas`  | GET     | Entertainment-Bereiche + Kanäle auflisten. |

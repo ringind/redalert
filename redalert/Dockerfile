@@ -11,7 +11,7 @@ WORKDIR /app
 # musl u. U. aus dem Quelltext gebaut werden müssen. Build-Toolchain nur für
 # die Installation einspielen und danach wieder entfernen; die Runtime-Libs
 # (libffi, openssl, mbedtls) bleiben.
-RUN apk add --no-cache libffi openssl mbedtls \
+RUN apk add --no-cache libffi openssl mbedtls curl \
     && apk add --no-cache --virtual .build-deps \
         build-base python3-dev libffi-dev openssl-dev mbedtls-dev cargo
 
@@ -30,5 +30,10 @@ LABEL \
     io.hass.description="Hue-Entertainment-Lauflicht (Star Trek Alarmstufe Rot)" \
     io.hass.type="addon" \
     io.hass.version="1.0.0"
+
+# Ersetzt die (obsolete) config.yaml-Option `watchdog`: Supervisor wertet den
+# Container-Health-Status aus und startet bei Bedarf neu.
+HEALTHCHECK --start-period=30s --interval=30s --timeout=10s --retries=3 \
+    CMD curl -fsS http://localhost:8099/health || exit 1
 
 # Kein CMD: s6-overlay der HA-Basis startet den Dienst über den redalert-Service.

@@ -14,13 +14,13 @@ Vollständige Anleitung: siehe **[DOCS.md](DOCS.md)** (wird in HA als Tab
   laden, Start/Stop, Farbe/Dauer/fps/sweep.
 - **REST-API** auf Port `8099`: `/health`, `/config`, `/pair`, `/areas`,
   `/start`, `/stop` – für `rest_command`-Automationen.
-- **Watchdog** auf `/health`, s6-Supervision, DE/EN-Übersetzung.
+- Container-HEALTHCHECK auf `/health`, s6-Supervision, DE/EN-Übersetzung.
 
 ## Dateien
 
 | Datei | Zweck |
 |-------|-------|
-| `config.yaml` | Add-on-Manifest (Optionen, Ingress, Ports, Watchdog). |
+| `config.yaml` | Add-on-Manifest (Optionen, Ingress, Ports). |
 | `build.yaml` | Basis-Images (`home-assistant/base-python`). |
 | `Dockerfile` | Image-Build. |
 | `translations/` | Beschriftung der Konfigurationsoberfläche (de/en). |

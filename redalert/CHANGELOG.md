@@ -8,7 +8,7 @@ Erstes vollständiges Add-on-Release.
   Dauer, fps, sweep) – erreichbar über den Seitenleisten-Eintrag „Red Alert“.
 - **s6-Overlay-Supervision** auf Basis der offiziellen `home-assistant/base-python`-Images
   inkl. bashio-Logging.
-- **Watchdog** auf `/health` – Supervisor startet den Dienst bei Hängern neu.
+- **Container-HEALTHCHECK** auf `/health` – Supervisor startet den Dienst bei Hängern neu.
 - `POST /start` antwortet sofort; der DTLS-Handshake (mehrere Sekunden) läuft
   im Hintergrund-Task – vermeidet Timeouts bei HA-`rest_command`.
 - `REDALERT_DATA_DIR` überschreibt den Datenordner (`/data`) für lokale Tests.

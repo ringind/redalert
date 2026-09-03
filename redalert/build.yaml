@@ -6,4 +6,3 @@ labels:
   org.opencontainers.image.description: "Hue-Entertainment-Lauflicht (Star Trek Alarmstufe Rot) für Home Assistant"
   org.opencontainers.image.source: "https://github.com/ringind/redalert"
   org.opencontainers.image.licenses: "MIT"
-args: {}

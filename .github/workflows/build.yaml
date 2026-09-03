@@ -20,24 +20,26 @@ jobs:
           path: "./redalert"
 
   build:
-    name: Build ${{ matrix.arch }}
+    name: Docker build (amd64)
     runs-on: ubuntu-latest
     needs: lint
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [aarch64, amd64]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Test-build image (${{ matrix.arch }})
-        uses: home-assistant/builder@2024.03.5
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Exercises redalert/Dockerfile against the real HA base image.
+      # aarch64 uses the same Dockerfile (see redalert/build.yaml); it is not
+      # built here because emulated arm64 wheel/Rust compiles are slow/flaky.
+      - name: Build image (no push)
+        uses: docker/build-push-action@v6
         with:
-          args: |
-            --${{ matrix.arch }} \
-            --target /data/redalert \
-            --image "local/{arch}-addon-redalert" \
-            --docker-hub-check false \
-            --test \
-            --addon
+          context: ./redalert
+          build-args: |
+            BUILD_FROM=ghcr.io/home-assistant/amd64-base-python:3.12-alpine3.20
+          push: false
+          load: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

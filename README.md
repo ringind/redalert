@@ -115,7 +115,7 @@ Automationen ansprichst.
 **Einstellungen → Add-ons → Add-on Store → oben rechts „⋮“ → Repositories**,
 dann die URL dieses GitHub-Repositories eintragen und hinzufügen. Das Add-on
 erscheint anschließend im Store als **Red Alert Entertainment** – installieren
-und starten. Empfohlen: „Watchdog“ und „Start beim Booten“ aktivieren.
+und starten. Empfohlen: „Start beim Booten“ aktivieren.
 
 (Alternativ als lokales Add-on: den Unterordner `redalert/` nach
 `/addons/redalert` auf den HA-Host kopieren und Repositories neu laden.)
@@ -173,7 +173,7 @@ Add-on danach neu starten.
 | Endpoint  | Methode | Zweck                                                                                 |
 |-----------|---------|-----------------------------------------------------------------------------------------|
 | `/`       | GET     | Web-UI (Ingress-Panel „Red Alert“)                                                      |
-| `/health` | GET     | Status (gepaart? läuft der Effekt gerade?) – auch Watchdog-Ziel                         |
+| `/health` | GET     | Status (gepaart? läuft der Effekt gerade?) – auch Ziel des Container-HEALTHCHECK                         |
 | `/config` | GET     | Effektive Konfiguration (für das Web-UI)                                                |
 | `/pair`   | POST    | Einmalige Kopplung mit der Bridge. Body: `{"bridge_ip": "..."}` (optional, falls Option gesetzt) |
 | `/areas`  | GET     | Verfügbare Entertainment-Bereiche + Kanäle auflisten                                    |
@@ -300,7 +300,7 @@ selbst im Unterordner `redalert/`.
 ├── repository.yaml              Add-on-Store-Metadaten (name, url, maintainer)
 ├── README.md                   Diese Datei (Repo-Überblick)
 ├── redalert/                   >>> das eigentliche Add-on <<<
-│   ├── config.yaml              Manifest: Optionen, Ingress, Ports, Watchdog
+│   ├── config.yaml              Manifest: Optionen, Ingress, Ports
 │   ├── build.yaml               Basis-Images (home-assistant/base-python)
 │   ├── Dockerfile               Image-Build
 │   ├── requirements.txt         Python-Abhängigkeiten (hue-entertainment, aiohttp)
