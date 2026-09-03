@@ -85,7 +85,7 @@ Panel-Pfad).
 | `/config` | GET     | Effektive Konfiguration (für das Web-UI). |
 | `/pair`   | POST    | Einmalige Kopplung. Body: `{"bridge_ip": "..."}` (optional bei gesetzter Option). |
 | `/areas`  | GET     | Entertainment-Bereiche + Kanäle auflisten. |
-| `/start`  | POST    | Lauflicht starten. Body optional: `area_id`, `duration`, `fps`, `sweep_seconds`, `color`, `use_cue`. |
+| `/start`  | POST    | Lauflicht starten (antwortet sofort; DTLS-Handshake läuft im Hintergrund). Body optional: `area_id`, `duration`, `fps`, `sweep_seconds`, `color`, `use_cue`. |
 | `/stop`   | POST    | Lauflicht sofort stoppen. |
 
 `duration` weglassen → bei aktiver Cue-Datei deren Länge, sonst läuft der Effekt
@@ -166,6 +166,7 @@ zeigt zusätzlich die letzten API-Antworten im Abschnitt „Protokoll (Antworten
 | `/start` → `already_running` | Erst `/stop` aufrufen. |
 | `/start` → 404 `area_id nicht gefunden` | `/areas` prüfen – Bereich evtl. umbenannt/gelöscht. |
 | `/start` → 502 `Bridge nicht erreichbar` | Bridge-IP geändert? Netzwerk/VLAN zwischen HA-Host und Bridge (UDP 2100). |
+| Licht startet erst nach einigen Sekunden | Normaler DTLS-Handshake; bei WLAN-Bridges teils ein `ServerHello timeout`-Retry im Protokoll. `/start` selbst antwortet trotzdem sofort. |
 | Lampen reagieren nicht | V1-Bridge (kein Entertainment) oder UDP-Port 2100 zur Bridge blockiert. |
 | Streaming bricht ab | Die Bridge erlaubt nur **einen** aktiven Entertainment-Stream – Hue-Sync-App/andere Clients schließen. |
 | Lauflicht ruckelt | `fps` erhöhen oder Netzlast zur Bridge prüfen. |

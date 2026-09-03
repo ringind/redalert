@@ -16,7 +16,7 @@ from hue_entertainment import EntertainmentSession, HueEntertainmentAPI, LightCo
 
 from chase import RedAlertChase
 
-DATA_DIR = Path("/data")
+DATA_DIR = Path(os.environ.get("REDALERT_DATA_DIR", "/data"))
 CRED_FILE = DATA_DIR / "credentials.json"
 OPTIONS_FILE = DATA_DIR / "options.json"
 
@@ -224,6 +224,7 @@ async def handle_areas(request: web.Request) -> web.Response:
 # --------------------------------------------------------------------------- #
 async def _run_chase(
     session: EntertainmentSession,
+    area_id: str,
     channel_ids: list,
     duration,
     fps: int,
@@ -233,10 +234,16 @@ async def _run_chase(
 ) -> None:
     chase = RedAlertChase(num_lights=len(channel_ids), sweep_seconds=sweep_seconds)
     cr, cg, cb = color
-    loop = asyncio.get_event_loop()
-    start = loop.time()
     frames = 0
     try:
+        # DTLS-Handshake läuft hier im Hintergrund, damit /start sofort antwortet.
+        await session.start(area_id)
+        log.info(
+            "Effekt läuft: area=%s channels=%s fps=%s duration=%s cue=%s",
+            area_id, channel_ids, fps, duration, cue is not None,
+        )
+        loop = asyncio.get_event_loop()
+        start = loop.time()
         while True:
             elapsed = loop.time() - start
             if duration is not None and elapsed >= duration:
@@ -260,7 +267,7 @@ async def _run_chase(
     except asyncio.CancelledError:
         pass
     except Exception:  # noqa: BLE001
-        log.exception("Streaming-Loop abgebrochen")
+        log.exception("Streaming-Loop abgebrochen (DTLS-Start oder Senden fehlgeschlagen)")
     finally:
         log.info("Effekt beendet (%s Frames).", frames)
         await session.aclose()
@@ -307,9 +314,10 @@ async def handle_start(request: web.Request) -> web.Response:
 
     channel_ids = state["channel_order"] or [ch.channel_id for ch in area.channels]
 
-    await session.start(area_id)
+    # session.start() (DTLS-Handshake, ~einige Sekunden) passiert im Task,
+    # damit die HTTP-Antwort nicht blockiert (HA rest_command-Timeout).
     state["task"] = asyncio.create_task(
-        _run_chase(session, channel_ids, duration, fps, sweep_seconds, active_cue, color)
+        _run_chase(session, area_id, channel_ids, duration, fps, sweep_seconds, active_cue, color)
     )
     r, g, b = color
     state["last_start"] = {
@@ -321,7 +329,7 @@ async def handle_start(request: web.Request) -> web.Response:
         "color": f"#{r:02X}{g:02X}{b:02X}",
         "cue_active": use_cue,
     }
-    log.info("Effekt gestartet: %s", state["last_start"])
+    log.info("Start angefordert: %s", state["last_start"])
     return web.json_response({"status": "started", **state["last_start"]})
 
 

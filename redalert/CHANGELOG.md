@@ -9,6 +9,9 @@ Erstes vollständiges Add-on-Release.
 - **s6-Overlay-Supervision** auf Basis der offiziellen `home-assistant/base-python`-Images
   inkl. bashio-Logging.
 - **Watchdog** auf `/health` – Supervisor startet den Dienst bei Hängern neu.
+- `POST /start` antwortet sofort; der DTLS-Handshake (mehrere Sekunden) läuft
+  im Hintergrund-Task – vermeidet Timeouts bei HA-`rest_command`.
+- `REDALERT_DATA_DIR` überschreibt den Datenordner (`/data`) für lokale Tests.
 - Neue Optionen `color` (Effektfarbe) und `log_level` (Protokoll-Ausführlichkeit).
 - Neuer Endpoint `GET /config` (effektive Konfiguration für das Web-UI).
 - `/start` akzeptiert zusätzlich `color` im Request-Body.
