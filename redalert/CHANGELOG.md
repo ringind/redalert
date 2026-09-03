@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.2
+
+- **Fix `pulse`: der anschwellende Puls hatte Helligkeitssprünge.** Die rohe
+  Cue-Hüllkurve zappelt beim Beat-Einsatz mehrfach über die Schwelle, wodurch
+  der schnelle Release den Anstieg immer wieder zurückriss. Jetzt formt ein
+  Schmitt-Trigger mit Off-Entprellung (`hi` ein, `lo` + `hold_s` aus) den Beat
+  zu einem sauberen 0/1-Signal; der lineare Slew läuft dadurch **monoton** hoch
+  und wieder runter – keine Sprünge mehr.
+
 ## 1.1.1
 
 - **`pulse` geht jetzt voll von 0 auf 100 % und wieder auf 0.** Kein

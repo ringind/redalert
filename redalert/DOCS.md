@@ -63,7 +63,7 @@ setzen, dann **Start** / **Stop**.
 
 | `effect` | Verhalten |
 |----------|-----------|
-| `pulse` (Standard) | Alle Lampen **gemeinsam**: von **0** auf **100 %** im Takt der Musik, zwischen den Pulsen zurück auf **0**. Der Takt kommt aus der Lautstärke-Hüllkurve der Cue-Datei (leise → 0, lauter Beat → volle Helligkeit). `attack_ms` = Aufblend-, `release_ms` = Abblendzeit; für den typischen Look ist `release_ms` kleiner (schnelleres Abfallen als Aufblenden). Ohne Cue: gleichmäßiger Puls mit Periode `sweep_seconds`. |
+| `pulse` (Standard) | Alle Lampen **gemeinsam**: von **0** linear auf **100 %** im Takt der Musik, zwischen den Pulsen zurück auf **0**. Ein Schmitt-Trigger auf der Cue-Hüllkurve macht aus jedem Beat ein sauberes Ein/Aus, der Anstieg läuft dadurch ruckelfrei-monoton hoch. `attack_ms` = Aufblend-, `release_ms` = Abblendzeit; `release_ms` kleiner = schnelleres Abfallen als Aufblenden. Ohne Cue: gleichmäßiger Puls mit Periode `sweep_seconds`. |
 | `chase` | Originales Larson-Scanner-Lauflicht: ein Komet wandert über die Kanäle, auf einem schwachen Dauerglühen, optional durch die Cue gedimmt. |
 
 ## Konfiguration

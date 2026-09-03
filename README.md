@@ -280,8 +280,9 @@ Effekt wählen: Option `effect` bzw. `"effect": "pulse"|"chase"` im `/start`-Bod
 - `attack_ms` / `release_ms` – Aufblend- bzw. Abblendzeit; `release_ms` kleiner
   wählen für schnelleres Abfallen als Aufblenden.
 - `sweep_seconds` – Zyklusdauer, wenn keine Cue aktiv ist.
-- `RedAlertPulse` `lo` / `hi` / `gamma` in `redalert/rootfs/app/chase.py` –
-  Kontrastkurve: unter `lo` = 0, ab `hi` = 100 %.
+- `RedAlertPulse` `lo` / `hi` / `hold_s` in `redalert/rootfs/app/chase.py` –
+  Beat-Gate (Schmitt-Trigger): ab `hi` an, wieder aus, wenn der Pegel `hold_s`
+  lang unter `lo` bleibt.
 
 `chase` – Larson-Scanner-Lauflicht (`RedAlertChase` in `chase.py`):
 - `sweep_seconds` – Dauer eines Durchlaufs über alle Lampen (Standard 1.4 s).
