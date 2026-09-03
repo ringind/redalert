@@ -171,6 +171,7 @@ Options-Änderung neu starten.
 | `color`           | Hex-String    | `#FF0000`| Farbe des Effekts.                                                |
 | `fps`             | int (5–50)    | 25       | Frames/Sekunde des DTLS-Streams.                                   |
 | `sweep_seconds`   | float (0.3–5) | 1.4      | `chase`: Dauer einer vollen Umrundung. `pulse` ohne Cue: Zyklusdauer. |
+| `chase_pause`     | float (0–60)  | 0        | `chase`: Pause (s) zwischen zwei Durchläufen. `0` = durchgehend; `> 0` = ein Durchlauf, dann alle Lampen `chase_pause` s auf `glow_low`. |
 | `attack_ms`       | int (0–2000)  | 140      | `pulse`: Aufblendzeit `glow_low` → `glow_high`.                   |
 | `release_ms`      | int (0–5000)  | 70       | `pulse`: Abblendzeit → `glow_low` (kleiner als `attack_ms`).       |
 | `glow_low`        | float (0–1)   | 0.08     | **Beide Effekte:** Ruhe-Helligkeit zwischen den Pulsen (`0` = ganz aus). |
@@ -188,7 +189,7 @@ Options-Änderung neu starten.
 | `/config` | GET     | Effektive Konfiguration (für das Web-UI)                                                |
 | `/pair`   | POST    | Einmalige Kopplung mit der Bridge. Body: `{"bridge_ip": "..."}` (optional, falls Option gesetzt) |
 | `/areas`  | GET     | Verfügbare Entertainment-Bereiche + Kanäle auflisten                                    |
-| `/start`  | POST    | Effekt starten (antwortet sofort; DTLS-Handshake läuft im Hintergrund). Body optional: `area_id`, `effect`, `duration` (Sek.), `cue_offset` (Sek.), `fps`, `sweep_seconds`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `color`, `use_cue`, `restore_state`, `channel_order` (`[2,3,1,0,5,4]` oder `"2,3,1,0,5,4"`) |
+| `/start`  | POST    | Effekt starten (antwortet sofort; DTLS-Handshake läuft im Hintergrund). Body optional: `area_id`, `effect`, `duration` (Sek.), `cue_offset` (Sek.), `fps`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `color`, `use_cue`, `restore_state`, `channel_order` (`[2,3,1,0,5,4]` oder `"2,3,1,0,5,4"`) |
 | `/stop`   | POST    | Effekt sofort stoppen                                                                   |
 | `/sync`   | POST    | Feinsynchronisation zur Musik. Body `{"position": <Sek. im Track>}`; zieht den Licht-Cue max. ±0,5 s/Aufruf nach. `409`, wenn nichts läuft. |
 | `/identify` | POST  | Lampen einzeln durchtesten (`channel_id` → Lampe). Body optional: `area_id`, `channel_id` (fehlt = alle nacheinander), `seconds`, `color`, `restore_state`. Ein DTLS-Handshake für den Durchlauf; belegt denselben Slot wie `/start`. |
@@ -308,6 +309,10 @@ gemeinsam auf 100 % stehen und dann nacheinander ausglühen (`RedAlertChase` in
 `chase.py`):
 - `sweep_seconds` – Dauer einer vollen Umrundung aller Lampen (Standard 1.4 s);
   zugleich der Abstand zwischen zwei Pulsen derselben Lampe.
+- `chase_pause` – Pause in Sekunden zwischen zwei Durchläufen (Option **oder**
+  `/start`-Body, Standard 0). `0` = nahtlos umlaufender Komet wie bisher; `> 0` =
+  ein Durchlauf (jede Lampe pulst einmal, die letzte glüht aus), dann alle Lampen
+  `chase_pause` s auf `glow_low`, dann der nächste Durchlauf.
 - `attack_frac` – Anstiegszeit als Bruchteil von `sweep_seconds` (klein =
   schlagartig hell, Standard 0.07).
 - `peak_frac` – Mindestbreite des flachen 100-%-Kopfes (Standard 0.08); hält die

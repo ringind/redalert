@@ -32,6 +32,12 @@ configuration:
     description: >-
       chase: Sekunden für eine volle Umrundung aller Lampen.
       pulse ohne Cue: Dauer eines vollständigen Auf-/Ab-Zyklus (0.3–5.0).
+  chase_pause:
+    name: chase-Pause (Sekunden)
+    description: >-
+      Pause zwischen zwei chase-Durchläufen. 0 = durchgehend umlaufender Komet
+      (Standard). > 0 = ein kompletter Durchlauf, dann alle Lampen für so viele
+      Sekunden auf dem Grund-Glühwert, dann der nächste Durchlauf.
   attack_ms:
     name: Attack (ms)
     description: >-

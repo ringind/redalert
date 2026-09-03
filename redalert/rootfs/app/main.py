@@ -122,6 +122,7 @@ state = {
     "release_ms": int(options.get("release_ms", 70)),
     "glow_low": float(options.get("glow_low", 0.08)),
     "glow_high": float(options.get("glow_high", 1.0)),
+    "chase_pause": float(options.get("chase_pause", 0.0)),
     "restore_state": bool(options.get("restore_state", True)),
     "cue": cue,
     "cue_source": (cue_option or str(DEFAULT_CUE_PATH)) if cue else None,
@@ -133,7 +134,7 @@ state = {
 
 log.info(
     "Konfiguration: bridge_host=%s area_id=%s channels=%s effect=%s color=%s fps=%s "
-    "sweep=%ss attack=%sms release=%sms glow=%s..%s cue=%s",
+    "sweep=%ss chase_pause=%ss attack=%sms release=%sms glow=%s..%s cue=%s",
     state["bridge_host"],
     state["area_id"],
     state["channel_order"],
@@ -141,6 +142,7 @@ log.info(
     options.get("color", "#FF0000"),
     options.get("fps", 25),
     options.get("sweep_seconds", 1.4),
+    state["chase_pause"],
     state["attack_ms"],
     state["release_ms"],
     state["glow_low"],
@@ -279,6 +281,7 @@ async def handle_config(request: web.Request) -> web.Response:
             "color": f"#{r:02X}{g:02X}{b:02X}",
             "fps": int(options.get("fps", 25)),
             "sweep_seconds": float(options.get("sweep_seconds", 1.4)),
+            "chase_pause": state["chase_pause"],
             "attack_ms": state["attack_ms"],
             "release_ms": state["release_ms"],
             "glow_low": state["glow_low"],
@@ -361,6 +364,7 @@ async def _run_effect(
     duration,
     fps: int,
     sweep_seconds: float,
+    chase_pause: float,
     cue: dict | None,
     color: tuple[int, int, int],
     effect: str,
@@ -378,7 +382,9 @@ async def _run_effect(
     glow_low = min(max(glow_low, 0.0), 1.0)
     glow_high = min(max(glow_high, glow_low), 1.0)
     glow_span = glow_high - glow_low
-    chase = RedAlertChase(num_lights=n, sweep_seconds=sweep_seconds)
+    chase = RedAlertChase(
+        num_lights=n, sweep_seconds=sweep_seconds, pause_seconds=chase_pause
+    )
     pulse = RedAlertPulse(num_lights=n, attack_s=attack_s, release_s=release_s)
     frames = 0
     snapshot: list[dict] = []
@@ -597,6 +603,10 @@ async def handle_start(request: web.Request) -> web.Response:
 
     fps = int(body.get("fps") or options.get("fps", 25))
     sweep_seconds = float(body.get("sweep_seconds") or options.get("sweep_seconds", 1.4))
+    try:
+        chase_pause = max(0.0, float(body.get("chase_pause", state["chase_pause"])))
+    except (TypeError, ValueError):
+        chase_pause = state["chase_pause"]
     color = hex_to_rgb(body["color"]) if body.get("color") else state["color"]
     attack_s = float(body.get("attack_ms", state["attack_ms"])) / 1000.0
     release_s = float(body.get("release_ms", state["release_ms"])) / 1000.0
@@ -661,8 +671,8 @@ async def handle_start(request: web.Request) -> web.Response:
     }
     state["task"] = asyncio.create_task(
         _run_effect(
-            session, area_id, channel_ids, duration, fps, sweep_seconds, active_cue, color,
-            effect, cue_offset, attack_s, release_s, glow_low, glow_high,
+            session, area_id, channel_ids, duration, fps, sweep_seconds, chase_pause,
+            active_cue, color, effect, cue_offset, attack_s, release_s, glow_low, glow_high,
             creds["bridge_host"], creds["username"], restore,
         )
     )
@@ -674,6 +684,7 @@ async def handle_start(request: web.Request) -> web.Response:
         "duration": duration,
         "fps": fps,
         "sweep_seconds": sweep_seconds,
+        "chase_pause": chase_pause,
         "color": f"#{r:02X}{g:02X}{b:02X}",
         "cue_active": use_cue,
         "cue_offset": cue_offset,

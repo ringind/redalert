@@ -55,6 +55,7 @@ class RedAlertChase:
         self,
         num_lights: int,
         sweep_seconds: float = 1.4,
+        pause_seconds: float = 0.0,
         decay_frac: float = 0.22,
         attack_frac: float = 0.07,
         peak_frac: float = 0.08,
@@ -63,6 +64,7 @@ class RedAlertChase:
     ) -> None:
         self.num_lights = max(1, num_lights)
         self.sweep_seconds = max(0.1, sweep_seconds)
+        self.pause_seconds = max(0.0, pause_seconds)
         self.decay_frac = max(0.02, decay_frac)
         self.attack_frac = min(max(attack_frac, 0.01), 0.5)
         peak_frac = min(max(peak_frac, 0.01), 0.3)
@@ -92,18 +94,42 @@ class RedAlertChase:
         floor = math.exp(-(self.fade_frac - self.top) / self.decay_frac)
         return (math.exp(-p / self.decay_frac) - floor) / (1.0 - floor)
 
+    def _pulse_s(self, s: float, attack_s: float) -> float:
+        """One lamp's 0..1 pulse, ``s`` seconds after its rise began (< 0 = idle)."""
+        if s < 0.0:
+            return 0.0
+        if s < attack_s:
+            # rise: reuse the envelope's raised-cosine attack band
+            return self._envelope((1.0 - self.attack_frac) + s / self.sweep_seconds)
+        phase = (s - attack_s) / self.sweep_seconds  # 0 at the flat top
+        if phase >= self.fade_frac:
+            return 0.0  # faded out – stays here through the pause
+        return self._envelope(phase)
+
     def brightness_for(self, t: float) -> list[float]:
         """Per-light 0..1 pulse shape at time t (seconds since start).
 
-        ``main.py`` maps this onto ``[glow_low, glow_high]``.
+        ``main.py`` maps this onto ``[glow_low, glow_high]``. With
+        ``pause_seconds == 0`` the comet loops seamlessly; with a pause it makes
+        **one** full traversal (every lamp pulses once, last one fades out), then
+        all lamps sit at 0 for ``pause_seconds`` before the next traversal.
         """
         n = self.num_lights
-        turns = t / self.sweep_seconds
-        levels = []
-        for i in range(n):
-            phase = (turns - i / n) % 1.0
-            levels.append(min(1.0, max(0.0, self._envelope(phase))))
-        return levels
+        if self.pause_seconds <= 0.0:
+            turns = t / self.sweep_seconds
+            return [
+                min(1.0, max(0.0, self._envelope((turns - i / n) % 1.0)))
+                for i in range(n)
+            ]
+        sweep = self.sweep_seconds
+        attack_s = self.attack_frac * sweep
+        head_step = sweep / n  # time between one lamp's rise and the next
+        active_s = attack_s + (n - 1) * head_step + self.fade_frac * sweep
+        u = t % (active_s + self.pause_seconds)
+        return [
+            min(1.0, max(0.0, self._pulse_s(u - i * head_step, attack_s)))
+            for i in range(n)
+        ]
 
     def frame(self, t: float) -> list[dict]:
         """Return per-light 16-bit red-channel commands (green/blue = 0)."""

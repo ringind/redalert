@@ -46,7 +46,7 @@ redalert/                  the add-on
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.1.7**.
+No build system, linter, or test suite. Current version: **1.1.8**.
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
   after every code change — the only static check available.
@@ -102,8 +102,8 @@ Three layers under `redalert/rootfs/app/`:
   loaded once at startup into `state["cue"]`. `REDALERT_LOG_LEVEL` (exported by
   the s6 `run` script from the `log_level` option) sets the logging level.
   `/start` body overrides per call: `area_id`, `effect`, `duration`,
-  `cue_offset`, `fps`, `sweep_seconds`, `attack_ms`, `release_ms`, `glow_low`,
-  `glow_high`, `color`, `use_cue`, `restore_state`, `channel_order` (list[int] or
+  `cue_offset`, `fps`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`,
+  `glow_low`, `glow_high`, `color`, `use_cue`, `restore_state`, `channel_order` (list[int] or
   `"2,3,1,0"` string, parsed by `_parse_channel_order`; must be exactly the
   area's channels reordered). `use_cue` defaults per effect — **on for `pulse`,
   off for `chase`** (`bool(body.get("use_cue", effect == "pulse"))`); the cue is
@@ -125,6 +125,10 @@ Three layers under `redalert/rootfs/app/`:
     for `overlap_frac` of a sweep), then `exp(-·/decay_frac)` fall shifted to hit
     0 at `fade_frac`, held at 0 (resting glow) until the raised-cosine `attack_frac`
     rise. Flat top ⇒ peak is sampling-proof (no shimmer). `sweep_seconds` = one loop.
+    With `pause_seconds > 0` (`chase_pause` option / body) it branches to a
+    non-looping model: one traversal via `_pulse_s` (absolute-time per-lamp pulse,
+    rise leading in so lamp 0 doesn't snap), then all lamps at 0 for
+    `pause_seconds`. `pause_seconds == 0` keeps the exact seamless loop above.
   - `RedAlertPulse.step(level, dt)` → uniform level for all lights. A Schmitt gate
     (on above `hi`, off after `hold_s` below `lo`) turns the noisy cue into a
     stable 0/1, then a **linear** slew hits exactly 1.0 in `attack_s` / 0.0 in

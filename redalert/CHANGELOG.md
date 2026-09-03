@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.8
+
+- **Neue Option `chase_pause` (Sekunden).** Steuert die Pause zwischen zwei
+  `chase`-Durchläufen – in der Add-on-Konfiguration, im Web-UI („3 · Steuerung“)
+  und per `/start`-Body. `0` (Standard) = nahtlos umlaufender Komet wie bisher.
+  `> 0` = der Komet macht **einen** vollständigen Durchlauf (jede Lampe pulst
+  einmal, die letzte glüht sauber aus), dann ruhen alle Lampen `chase_pause`
+  Sekunden auf `glow_low`, dann der nächste Durchlauf.
+
 ## 1.1.7
 
 - **`chase` nutzt die Cue standardmäßig nicht mehr.** Bisher war `use_cue` für

@@ -30,6 +30,12 @@ configuration:
     description: >-
       chase: seconds for one full loop of the comet around all lamps.
       pulse without a cue: length of one full up/down cycle (0.3–5.0).
+  chase_pause:
+    name: chase pause (seconds)
+    description: >-
+      Pause between two chase runs. 0 = one continuous looping comet (default).
+      > 0 = one full run, then all lamps rest at the low glow for that many
+      seconds, then the next run.
   attack_ms:
     name: Attack (ms)
     description: pulse – how slowly the light ramps from glow_low to glow_high.
