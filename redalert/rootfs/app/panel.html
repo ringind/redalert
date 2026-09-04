@@ -40,9 +40,12 @@
   button.secondary { background: transparent; color: var(--fg); border: 1px solid var(--line);
     box-shadow: none; }
   button:disabled { opacity: .5; cursor: not-allowed; }
-  button.pressed { transform: translateY(1px); filter: brightness(.85);
-    box-shadow: inset 0 2px 4px rgba(0,0,0,.4); }
-  button.secondary.pressed { filter: none; background: var(--line); }
+  /* Sichtbarer Klickeffekt für alle Buttons (Mausklick, Touch, Tastatur). */
+  button:not(:disabled):active, button.pressed {
+    transform: translateY(1px); filter: brightness(.85);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,.4);
+  }
+  button.secondary:not(:disabled):active, button.secondary.pressed { filter: none; background: var(--line); }
   .pill { display: inline-flex; align-items: center; gap: .4rem; font-size: .8rem;
     padding: .2rem .55rem; border-radius: 999px; border: 1px solid var(--line); }
   .pill .led { width: 8px; height: 8px; border-radius: 50%; background: var(--off); }
@@ -104,6 +107,8 @@
       <div><label for="fps">fps</label><input type="number" id="fps" min="5" max="50" step="1"></div>
       <div><label for="sweep">sweep_seconds</label><input type="number" id="sweep" min="0.3" max="5" step="0.1"></div>
       <div><label for="chpause">chase-Pause (s)</label><input type="number" id="chpause" min="0" max="60" step="0.5" placeholder="0"></div>
+      <div><label for="attack">Attack (ms)</label><input type="number" id="attack" min="0" max="2000" step="10" placeholder="140"></div>
+      <div><label for="release">Release (ms)</label><input type="number" id="release" min="0" max="5000" step="10" placeholder="70"></div>
       <div><label for="glowlow">glow_low (0–1)</label><input type="number" id="glowlow" min="0" max="1" step="0.01" placeholder="0.08"></div>
       <div><label for="glowhigh">glow_high (0–1)</label><input type="number" id="glowhigh" min="0" max="1" step="0.01" placeholder="1"></div>
       <div><label for="color">Farbe</label><input type="color" id="color" value="#ff0000"></div>
@@ -118,6 +123,9 @@
       <strong>Dauer</strong> (leer = Standard aus der Add-on-Option <code>duration</code>):
       wie lange der Effekt läuft, bevor er von selbst endet (oder vorher per „Stop“).
       <code>0</code> = unbegrenzt, läuft bis „Stop“.<br>
+      <strong>Attack / Release</strong> (nur <code>effect: pulse</code>): Auf- bzw.
+      Abblendzeit zwischen <code>glow_low</code> und <code>glow_high</code>; Release
+      kleiner als Attack wählen für schnelleres Abfallen als Aufblenden.<br>
       <strong>glow_low / glow_high</strong> (alle Effekte): Ruhe-Helligkeit zwischen den
       Pulsen bzw. Helligkeit im Puls-Maximum. Zwischen den Pulsen gehen die Lampen auf
       <code>glow_low</code> zurück (nicht auf 0), im Maximum auf <code>glow_high</code>.<br>
@@ -419,6 +427,8 @@
     if (data.fps && !$("fps").value) $("fps").value = data.fps;
     if (data.sweep_seconds && !$("sweep").value) $("sweep").value = data.sweep_seconds;
     if (data.chase_pause != null && !$("chpause").value && data.chase_pause > 0) $("chpause").value = data.chase_pause;
+    if (data.attack_ms != null && !$("attack").value) $("attack").value = data.attack_ms;
+    if (data.release_ms != null && !$("release").value) $("release").value = data.release_ms;
     if (data.glow_low != null && !$("glowlow").value) $("glowlow").value = data.glow_low;
     if (data.glow_high != null && !$("glowhigh").value) $("glowhigh").value = data.glow_high;
     if (data.glitter_interval_ms != null && !$("ginterval").value) $("ginterval").value = data.glitter_interval_ms;
@@ -434,9 +444,10 @@
 
   // Formular (Bridges + Steuerung) -> /start-Body. Basis für Start und Set-Speichern.
   function collectBody() {
-    // Geteilte Felder aus „2 · Steuerung“ (kein attack/release – die gibt es nur je Bridge).
+    // Geteilte Felder aus „2 · Steuerung“.
     const sharedNum = [
       ["sweep", "sweep_seconds"], ["chpause", "chase_pause"],
+      ["attack", "attack_ms"], ["release", "release_ms"],
       ["glowlow", "glow_low"], ["glowhigh", "glow_high"],
       ["ginterval", "glitter_interval_ms"], ["gflash", "glitter_flash_ms"],
     ];
@@ -485,6 +496,8 @@
     setVal("fps", b.fps);
     setVal("sweep", b.sweep_seconds);
     setVal("chpause", b.chase_pause);
+    setVal("attack", b.attack_ms);
+    setVal("release", b.release_ms);
     setVal("glowlow", b.glow_low);
     setVal("glowhigh", b.glow_high);
     setVal("ginterval", b.glitter_interval_ms);

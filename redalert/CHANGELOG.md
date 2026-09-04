@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.6.1
+
+- **Web-UI, „2 · Steuerung“: `attack_ms`/`release_ms` jetzt auch als
+  gemeinsamer Standard einstellbar.** Bisher gab es die beiden `pulse`-Timing-
+  Felder nur je Bridge-Karte („Effekt für diese Bridge anpassen“) – der
+  Standardwert für Bridges ohne eigene Einstellung ließ sich im Web-UI nicht
+  setzen (nur über die Add-on-Option bzw. direkt per `/start`-Body). Neue
+  Felder **Attack (ms)** / **Release (ms)** neben `sweep_seconds`/`chase-
+  Pause`.
+- **Web-UI: sichtbarer Klickeffekt auf allen Buttons.** Bisher hatten nur
+  Start/Stop eine gedrückte Optik (an den laufenden Zustand gekoppelt); jetzt
+  gibt jeder Button (Pairen, Bereiche laden, Lampen zuordnen, Effektsets,
+  Protokoll, Aktualisieren, …) beim Anklicken/Antippen kurz sichtbar nach.
+
 ## 1.6.0
 
 - **Neuer Effekt-Wert `neutral`.** `effect: neutral` (in der Regel je Bridge in

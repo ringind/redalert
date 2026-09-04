@@ -53,7 +53,7 @@ redalert/                  the add-on
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.6.0**.
+No build system, linter, or test suite. Current version: **1.6.1**.
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
   after every code change — the only static check available.
