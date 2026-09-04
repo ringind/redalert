@@ -6,10 +6,11 @@
 Home-Assistant-Add-on für eine Star-Trek-„Alarmstufe Rot“-Szene über mehrere
 Philips-Hue-Lampen, gesteuert über das echte **Hue Entertainment API**
 (DTLS-Streaming, nicht die normale Bridge-Szene). Unterstützt **bis zu 3 Hue
-Bridges**, die den Effekt gleichzeitig abspielen. Zwei Effekte: `pulse` –
-alle Lampen blenden gemeinsam auf und ab (Standard) – und `chase` – ein
-umlaufender Komet, der einen Schweif hinter sich herzieht. Läuft für eine
-konfigurierbare Dauer (Standard 30 s).
+Bridges**, die gleichzeitig loslegen – jede mit ihrem eigenen Effekt, ihrer
+eigenen Farbe und eigenem Timing. Zwei Effekte: `pulse` – alle Lampen einer
+Bridge blenden gemeinsam auf und ab (Standard) – und `chase` – ein umlaufender
+Komet, der einen Schweif hinter sich herzieht. Läuft für eine konfigurierbare
+Dauer (Standard 30 s, gilt für alle Bridges gemeinsam).
 
 Nutzt die Bibliothek [`hue-entertainment`](https://github.com/music-assistant/hue-entertainment)
 (dieselbe, die auch das Hue-Entertainment-Plugin von Music Assistant antreibt).
@@ -62,9 +63,10 @@ HA-Automation ──┬──> media_player.play_media (dein Sound, z. B. Sonos)
                                         ▼
                          Add-on (Python, aiohttp)
                          hält je Bridge (bis zu 3) einen
-                         eigenen DTLS-Stream offen (~25 Hz)
-                         pulse: alle Lampen gemeinsam im Takt
-                         (chase: umlaufender Komet mit Schweif)
+                         eigenen DTLS-Stream offen (~25 Hz),
+                         jede mit eigenem Effekt/Farbe/Timing
+                         (pulse: alle Lampen im Takt;
+                          chase: umlaufender Komet mit Schweif)
                                         │
                               ┌─────────┼─────────┐
                               ▼         ▼         ▼
@@ -170,17 +172,17 @@ Add-on nach einer Options-Änderung neu starten.
 
 | Option           | Typ           | Standard | Bedeutung                                                       |
 |-------------------|--------------|----------|-------------------------------------------------------------------|
-| `bridges`         | Liste (max. 3) | leer   | Eine Zeile pro Bridge: `bridge_host` (IP), `area_id` (siehe Schritt 4), optional `channel_order`. |
-| `effect`          | `pulse`\|`chase` | `pulse` | `pulse` = alle Lampen zusammen `glow_low` → `glow_high` → `glow_low` im Takt. `chase` = umlaufender Komet mit Schweif. |
-| `color`           | Hex-String    | `#FF0000`| Farbe des Effekts.                                                |
-| `fps`             | int (5–50)    | 25       | Frames/Sekunde des DTLS-Streams.                                   |
-| `sweep_seconds`   | float (0.3–5) | 1.4      | `chase`: Dauer einer vollen Umrundung. `pulse`: Zyklusdauer. |
-| `chase_pause`     | float (0–60)  | 0        | `chase`: Pause (s) zwischen zwei Durchläufen. `0` = durchgehend; `> 0` = ein Durchlauf, dann alle Lampen `chase_pause` s auf `glow_low`. |
-| `attack_ms`       | int (0–2000)  | 140      | `pulse`: Aufblendzeit `glow_low` → `glow_high`.                   |
-| `release_ms`      | int (0–5000)  | 70       | `pulse`: Abblendzeit → `glow_low` (kleiner als `attack_ms`).       |
-| `glow_low`        | float (0–1)   | 0.08     | **Beide Effekte:** Ruhe-Helligkeit zwischen den Pulsen (`0` = ganz aus). |
-| `glow_high`       | float (0–1)   | 1.0      | **Beide Effekte:** Helligkeit im Puls-Maximum (über `glow_low`).   |
-| `restore_state`   | bool          | `true`   | Lampenzustand vor dem Effekt sichern und danach wiederherstellen.  |
+| `bridges`         | Liste (max. 3) | leer   | Eine Zeile pro Bridge: `bridge_host` (IP), `area_id` (siehe Schritt 4), optional `channel_order` sowie je Bridge optional `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high` (überschreiben die gleichnamige Option unten nur für diese Bridge). |
+| `effect`          | `pulse`\|`chase` | `pulse` | Standard für Bridges ohne eigene Einstellung. `pulse` = alle Lampen zusammen `glow_low` → `glow_high` → `glow_low` im Takt. `chase` = umlaufender Komet mit Schweif. |
+| `color`           | Hex-String    | `#FF0000`| Standard-Farbe für Bridges ohne eigene Einstellung.                |
+| `fps`             | int (5–50)    | 25       | Frames/Sekunde des DTLS-Streams (für alle Bridges gleich).         |
+| `sweep_seconds`   | float (0.3–5) | 1.4      | Standard für Bridges ohne eigene Einstellung. `chase`: Dauer einer vollen Umrundung. `pulse`: Zyklusdauer. |
+| `chase_pause`     | float (0–60)  | 0        | Standard für Bridges ohne eigene Einstellung. `chase`: Pause (s) zwischen zwei Durchläufen. `0` = durchgehend; `> 0` = ein Durchlauf, dann alle Lampen `chase_pause` s auf `glow_low`. |
+| `attack_ms`       | int (0–2000)  | 140      | Standard für Bridges ohne eigene Einstellung. `pulse`: Aufblendzeit `glow_low` → `glow_high`. |
+| `release_ms`      | int (0–5000)  | 70       | Standard für Bridges ohne eigene Einstellung. `pulse`: Abblendzeit → `glow_low` (kleiner als `attack_ms`). |
+| `glow_low`        | float (0–1)   | 0.08     | Standard für Bridges ohne eigene Einstellung. **Beide Effekte:** Ruhe-Helligkeit zwischen den Pulsen (`0` = ganz aus). |
+| `glow_high`       | float (0–1)   | 1.0      | Standard für Bridges ohne eigene Einstellung. **Beide Effekte:** Helligkeit im Puls-Maximum (über `glow_low`). |
+| `restore_state`   | bool          | `true`   | Lampenzustand vor dem Effekt sichern und danach wiederherstellen (für alle Bridges gleich). |
 | `log_level`       | Liste         | `info`   | Ausführlichkeit des Add-on-Protokolls (`trace`…`fatal`).           |
 
 ## 6. REST-API
@@ -192,7 +194,7 @@ Add-on nach einer Options-Änderung neu starten.
 | `/config` | GET     | Effektive Konfiguration inkl. `bridges` (für das Web-UI)                                |
 | `/pair`   | POST    | Einmalige Kopplung mit einer Bridge. Body: `{"bridge_host": "..."}` (Pflicht bei mehr als einer konfigurierten Bridge) |
 | `/areas`  | GET     | Entertainment-Bereiche + Kanäle einer Bridge auflisten. Query `?bridge_host=...` (Pflicht bei mehr als einer gepaarten Bridge) |
-| `/start`  | POST    | Effekt auf allen konfigurierten (oder im Body übergebenen) Bridges gleichzeitig starten (antwortet sofort; DTLS-Handshakes laufen parallel im Hintergrund). Body optional: `effect`, `duration` (Sek., Standard 30), `fps`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `color`, `restore_state` (für alle Bridges); `bridges` (Liste von `{bridge_host, area_id, channel_order}`, `channel_order` als `[2,3,1,0,5,4]` oder `"2,3,1,0,5,4"`) übersteuert für diesen Aufruf die Option `bridges`. Antwort enthält `bridges` (gestartet) + `failed_bridges` (übersprungen); `502` nur wenn keine Bridge startet. |
+| `/start`  | POST    | Effekt auf allen konfigurierten (oder im Body übergebenen) Bridges gleichzeitig starten (antwortet sofort; DTLS-Handshakes laufen parallel im Hintergrund). Body optional: `duration` (Sek., Standard 30), `fps`, `restore_state` (für alle Bridges gemeinsam); `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high` sind die Standardwerte für Bridges ohne eigene Einstellung. `bridges` (Liste von `{bridge_host, area_id, channel_order, effect?, color?, sweep_seconds?, chase_pause?, attack_ms?, release_ms?, glow_low?, glow_high?}`, `channel_order` als `[2,3,1,0,5,4]` oder `"2,3,1,0,5,4"`) übersteuert für diesen Aufruf die Option `bridges` – jede Bridge kann ihre eigenen Effekt-Parameter setzen. Antwort enthält `bridges` (gestartet, je mit aufgelösten Parametern) + `failed_bridges` (übersprungen); `502` nur wenn keine Bridge startet. |
 | `/stop`   | POST    | Effekt auf allen laufenden Bridges sofort stoppen                                       |
 | `/identify` | POST  | Lampen einer Bridge einzeln durchtesten (`channel_id` → Lampe). Body: `bridge_host` (Pflicht bei mehr als einer konfigurierten Bridge), `area_id` (optional, sonst aus der bridges-Konfiguration), `channel_id` (fehlt = alle nacheinander), `seconds`, `color`, `restore_state`. Ein DTLS-Handshake für den Durchlauf; belegt denselben Slot wie `/start`. |
 
@@ -251,12 +253,14 @@ per Sprachbefehl schalten.
 
 ## 8. Effekt anpassen
 
-Effekt wählen: Option `effect` bzw. `"effect": "pulse"|"chase"` im `/start`-Body.
+Effekt wählen: Option `effect` bzw. `"effect": "pulse"|"chase"` im `/start`-Body
+(Standard für Bridges ohne eigene Einstellung), oder `effect` in der jeweiligen
+Zeile der `bridges`-Option/-Liste für nur eine Bridge.
 
-**Beide Effekte:** `glow_low` / `glow_high` (Optionen **oder** `/start`-Body,
-`0`–`1`) legen fest, worauf die Lampen zwischen den Pulsen zurückgehen bzw. wie
-hell das Puls-Maximum ist. Standard `0.08` / `1.0`; `glow_low: 0` = geht ganz
-aus.
+**Beide Effekte:** `glow_low` / `glow_high` (Optionen, `/start`-Body **oder**
+je Bridge in `bridges`, `0`–`1`) legen fest, worauf die Lampen zwischen den
+Pulsen zurückgehen bzw. wie hell das Puls-Maximum ist. Standard `0.08` / `1.0`;
+`glow_low: 0` = geht ganz aus.
 
 `pulse` (Standard) – alle Lampen gemeinsam von `glow_low` auf `glow_high` und
 zurück:
@@ -274,8 +278,9 @@ gemeinsam auf 100 % stehen und dann nacheinander ausglühen (`RedAlertChase` in
 `chase.py`):
 - `sweep_seconds` – Dauer einer vollen Umrundung aller Lampen (Standard 1.4 s);
   zugleich der Abstand zwischen zwei Pulsen derselben Lampe.
-- `chase_pause` – Pause in Sekunden zwischen zwei Durchläufen (Option **oder**
-  `/start`-Body, Standard 0). `0` = nahtlos umlaufender Komet wie bisher; `> 0` =
+- `chase_pause` – Pause in Sekunden zwischen zwei Durchläufen (Option,
+  `/start`-Body **oder** je Bridge in `bridges`, Standard 0). `0` = nahtlos
+  umlaufender Komet wie bisher; `> 0` =
   ein Durchlauf (jede Lampe pulst einmal, die letzte glüht aus), dann alle Lampen
   `chase_pause` s auf `glow_low`, dann der nächste Durchlauf.
 - `attack_frac` – Anstiegszeit als Bruchteil von `sweep_seconds` (klein =

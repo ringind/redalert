@@ -2,8 +2,10 @@ configuration:
   bridges:
     name: Hue Bridges
     description: >-
-      Bis zu 3 Hue Bridges, die den Effekt gleichzeitig abspielen. Pro Bridge
-      Zeile hinzufügen und ausfüllen.
+      Bis zu 3 Hue Bridges, die gleichzeitig abspielen. Pro Bridge Zeile
+      hinzufügen; effect/color/sweep_seconds/chase_pause/attack_ms/release_ms/
+      glow_low/glow_high sind je Bridge optional – leer gelassen gilt der
+      gleichnamige Wert weiter unten als Standard für diese Bridge.
     bridge_host:
       name: Hue-Bridge-IP
       description: >-
@@ -19,49 +21,99 @@ configuration:
         Optionale Reihenfolge der channel_ids dieser Bridge für den
         Kometen-Sweep, als kommagetrennte Liste, z. B. 2,3,1,0,5,4. Leer
         lassen = native Reihenfolge des Bereichs.
+    effect:
+      name: Effekt (diese Bridge)
+      description: >-
+        Überschreibt die Options effect für diese eine Bridge. Leer = Standard
+        weiter unten.
+    color:
+      name: Farbe (diese Bridge)
+      description: >-
+        Überschreibt die Option color für diese eine Bridge. Leer = Standard
+        weiter unten.
+    sweep_seconds:
+      name: Sweep-Dauer (diese Bridge)
+      description: >-
+        Überschreibt die Option sweep_seconds für diese eine Bridge. Leer =
+        Standard weiter unten.
+    chase_pause:
+      name: chase-Pause (diese Bridge)
+      description: >-
+        Überschreibt die Option chase_pause für diese eine Bridge. Leer =
+        Standard weiter unten.
+    attack_ms:
+      name: Attack ms (diese Bridge)
+      description: >-
+        Überschreibt die Option attack_ms für diese eine Bridge. Leer =
+        Standard weiter unten.
+    release_ms:
+      name: Release ms (diese Bridge)
+      description: >-
+        Überschreibt die Option release_ms für diese eine Bridge. Leer =
+        Standard weiter unten.
+    glow_low:
+      name: Grund-Glühwert (diese Bridge)
+      description: >-
+        Überschreibt die Option glow_low für diese eine Bridge. Leer =
+        Standard weiter unten.
+    glow_high:
+      name: Spitzen-Wert (diese Bridge)
+      description: >-
+        Überschreibt die Option glow_high für diese eine Bridge. Leer =
+        Standard weiter unten.
   effect:
-    name: Effekt
+    name: Effekt (Standard)
     description: >-
-      pulse = alle Lampen zusammen: von 0 auf 100 % im Takt der Musik, zwischen
-      den Pulsen wieder auf 0 (Abfallen schneller als Aufblenden).
-      chase = ein Komet läuft gleichmäßig umlaufend über die Kanäle und zieht
-      einen Schweif hinter sich her.
+      Standard-Effekt für Bridges ohne eigene Einstellung. pulse = alle Lampen
+      zusammen: von 0 auf 100 % im Takt, zwischen den Pulsen wieder auf 0
+      (Abfallen schneller als Aufblenden). chase = ein Komet läuft gleichmäßig
+      umlaufend über die Kanäle und zieht einen Schweif hinter sich her.
   color:
-    name: Farbe
-    description: Hex-Farbe des Lauflichts (Standard #FF0000, Star-Trek-Rot).
+    name: Farbe (Standard)
+    description: >-
+      Standard-Hex-Farbe für Bridges ohne eigene Einstellung (Vorgabe
+      #FF0000, Star-Trek-Rot).
   fps:
     name: Frames pro Sekunde
-    description: Taktrate des DTLS-Streams. Höher = flüssiger, mehr Netzlast (5–50).
+    description: >-
+      Taktrate des DTLS-Streams (für alle Bridges gleich). Höher = flüssiger,
+      mehr Netzlast (5–50).
   sweep_seconds:
-    name: Sweep-Dauer
+    name: Sweep-Dauer (Standard)
     description: >-
-      chase: Sekunden für eine volle Umrundung aller Lampen.
-      pulse: Dauer eines vollständigen Auf-/Ab-Zyklus (0.3–5.0).
+      Standard für Bridges ohne eigene Einstellung. chase: Sekunden für eine
+      volle Umrundung aller Lampen. pulse: Dauer eines vollständigen
+      Auf-/Ab-Zyklus (0.3–5.0).
   chase_pause:
-    name: chase-Pause (Sekunden)
+    name: chase-Pause in Sekunden (Standard)
     description: >-
-      Pause zwischen zwei chase-Durchläufen. 0 = durchgehend umlaufender Komet
-      (Standard). > 0 = ein kompletter Durchlauf, dann alle Lampen für so viele
-      Sekunden auf dem Grund-Glühwert, dann der nächste Durchlauf.
+      Standard für Bridges ohne eigene Einstellung. Pause zwischen zwei
+      chase-Durchläufen. 0 = durchgehend umlaufender Komet (Standard). > 0 =
+      ein kompletter Durchlauf, dann alle Lampen für so viele Sekunden auf dem
+      Grund-Glühwert, dann der nächste Durchlauf.
   attack_ms:
-    name: Attack (ms)
+    name: Attack ms (Standard)
     description: >-
-      pulse – wie langsam das Licht von glow_low auf glow_high aufblendet.
+      Standard für Bridges ohne eigene Einstellung. pulse – wie langsam das
+      Licht von glow_low auf glow_high aufblendet.
   release_ms:
-    name: Release (ms)
+    name: Release ms (Standard)
     description: >-
-      pulse – wie schnell das Licht zwischen den Pulsen auf glow_low abfällt.
-      Für den typischen Look kleiner als Attack wählen (schnelleres Abfallen).
+      Standard für Bridges ohne eigene Einstellung. pulse – wie schnell das
+      Licht zwischen den Pulsen auf glow_low abfällt. Für den typischen Look
+      kleiner als Attack wählen (schnelleres Abfallen).
   glow_low:
-    name: Grund-Glühwert
+    name: Grund-Glühwert (Standard)
     description: >-
-      Helligkeit (0–1), auf die die Lampen zwischen den Pulsen zurückgehen –
-      bei beiden Effekten. 0 = ganz aus, z. B. 0.08 = schwaches Dauerglühen.
+      Standard für Bridges ohne eigene Einstellung. Helligkeit (0–1), auf die
+      die Lampen zwischen den Pulsen zurückgehen – bei beiden Effekten. 0 =
+      ganz aus, z. B. 0.08 = schwaches Dauerglühen.
   glow_high:
-    name: Spitzen-Wert
+    name: Spitzen-Wert (Standard)
     description: >-
-      Helligkeit (0–1) im Puls-Maximum (beide Effekte). Standard 1.0 = volle
-      Helligkeit. Muss über dem Grund-Glühwert liegen.
+      Standard für Bridges ohne eigene Einstellung. Helligkeit (0–1) im
+      Puls-Maximum (beide Effekte). Standard 1.0 = volle Helligkeit. Muss über
+      dem Grund-Glühwert liegen.
   restore_state:
     name: Lichtzustand wiederherstellen
     description: >-

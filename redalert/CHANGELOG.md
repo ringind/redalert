@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.3.0
+
+- **Effekt je Bridge einzeln konfigurierbar.** Jede Zeile der Option
+  `bridges` (und jeder Eintrag im `/start`-Body `bridges`) kann jetzt
+  zusätzlich zu `bridge_host`/`area_id`/`channel_order` optional `effect`,
+  `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`,
+  `glow_low`, `glow_high` setzen – **inklusive der Effekt-Art** (`pulse` oder
+  `chase`). Nicht gesetzte Werte fallen weiter auf die gleichnamige Option
+  bzw. den `/start`-Body-Wert zurück, der damit zum **Standard für Bridges
+  ohne eigene Einstellung** wird. `duration`, `fps` und `restore_state`
+  bleiben für alle Bridges gemeinsam (nicht pro Bridge). Alle Bridges starten
+  weiterhin gleichzeitig (parallele DTLS-Handshakes, gemeinsame Start-Uhr) –
+  auch wenn sie unterschiedliche Effekte zeigen.
+- **Web-UI:** jede Bridge-Karte hat jetzt einen aufklappbaren Abschnitt
+  „Effekt für diese Bridge anpassen“ (Effekt, Farbe, sweep_seconds,
+  chase_pause, Attack/Release, glow_low/glow_high) – leer gelassen gilt der
+  Standard aus „2 · Steuerung“.
+
 ## 1.2.0
 
 - **Bis zu 3 Hue Bridges gleichzeitig.** Die Optionen `bridge_host`/`area_id`/

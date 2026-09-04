@@ -2,8 +2,10 @@ configuration:
   bridges:
     name: Hue Bridges
     description: >-
-      Up to 3 Hue Bridges that play the effect simultaneously. Add one row
-      per bridge and fill it in.
+      Up to 3 Hue Bridges that play simultaneously. Add one row per bridge;
+      effect/color/sweep_seconds/chase_pause/attack_ms/release_ms/glow_low/
+      glow_high are optional per bridge – leave empty and the like-named
+      option below is used as this bridge's default.
     bridge_host:
       name: Hue Bridge IP
       description: >-
@@ -19,47 +21,99 @@ configuration:
         Optional order of this bridge's channel IDs for the comet sweep, as a
         comma-separated list, e.g. 2,3,1,0,5,4. Leave empty to use the area's
         native channel order.
+    effect:
+      name: Effect (this bridge)
+      description: >-
+        Overrides the effect option for this one bridge. Empty = use the
+        default below.
+    color:
+      name: Colour (this bridge)
+      description: >-
+        Overrides the color option for this one bridge. Empty = use the
+        default below.
+    sweep_seconds:
+      name: Sweep duration (this bridge)
+      description: >-
+        Overrides the sweep_seconds option for this one bridge. Empty = use
+        the default below.
+    chase_pause:
+      name: chase pause (this bridge)
+      description: >-
+        Overrides the chase_pause option for this one bridge. Empty = use the
+        default below.
+    attack_ms:
+      name: Attack ms (this bridge)
+      description: >-
+        Overrides the attack_ms option for this one bridge. Empty = use the
+        default below.
+    release_ms:
+      name: Release ms (this bridge)
+      description: >-
+        Overrides the release_ms option for this one bridge. Empty = use the
+        default below.
+    glow_low:
+      name: Resting glow level (this bridge)
+      description: >-
+        Overrides the glow_low option for this one bridge. Empty = use the
+        default below.
+    glow_high:
+      name: Peak level (this bridge)
+      description: >-
+        Overrides the glow_high option for this one bridge. Empty = use the
+        default below.
   effect:
-    name: Effect
+    name: Effect (default)
     description: >-
-      pulse = all lamps together: 0 to 100 % on the beat, back to 0 between
-      pulses (fall faster than rise).
-      chase = a comet runs evenly around the channels, dragging a tail behind it.
+      Default effect for bridges without their own setting. pulse = all lamps
+      together: 0 to 100 % on the beat, back to 0 between pulses (fall faster
+      than rise). chase = a comet runs evenly around the channels, dragging a
+      tail behind it.
   color:
-    name: Colour
-    description: Hex colour of the effect (default #FF0000, Star Trek red).
+    name: Colour (default)
+    description: >-
+      Default hex colour for bridges without their own setting (default
+      #FF0000, Star Trek red).
   fps:
     name: Frames per second
-    description: DTLS stream rate. Higher = smoother, more network traffic (5–50).
+    description: >-
+      DTLS stream rate (same for every bridge). Higher = smoother, more
+      network traffic (5–50).
   sweep_seconds:
-    name: Sweep duration
+    name: Sweep duration (default)
     description: >-
-      chase: seconds for one full loop of the comet around all lamps.
-      pulse: length of one full up/down cycle (0.3–5.0).
+      Default for bridges without their own setting. chase: seconds for one
+      full loop of the comet around all lamps. pulse: length of one full
+      up/down cycle (0.3–5.0).
   chase_pause:
-    name: chase pause (seconds)
+    name: chase pause in seconds (default)
     description: >-
-      Pause between two chase runs. 0 = one continuous looping comet (default).
-      > 0 = one full run, then all lamps rest at the low glow for that many
-      seconds, then the next run.
+      Default for bridges without their own setting. Pause between two chase
+      runs. 0 = one continuous looping comet (default). > 0 = one full run,
+      then all lamps rest at the low glow for that many seconds, then the
+      next run.
   attack_ms:
-    name: Attack (ms)
-    description: pulse – how slowly the light ramps from glow_low to glow_high.
+    name: Attack ms (default)
+    description: >-
+      Default for bridges without their own setting. pulse – how slowly the
+      light ramps from glow_low to glow_high.
   release_ms:
-    name: Release (ms)
+    name: Release ms (default)
     description: >-
-      pulse – how fast the light drops back to glow_low between pulses. Keep it
-      smaller than attack for the intended look (faster fall than rise).
+      Default for bridges without their own setting. pulse – how fast the
+      light drops back to glow_low between pulses. Keep it smaller than
+      attack for the intended look (faster fall than rise).
   glow_low:
-    name: Resting glow level
+    name: Resting glow level (default)
     description: >-
-      Brightness (0–1) the lamps return to between pulses – for both effects.
-      0 = fully off, e.g. 0.08 = a faint constant glow.
+      Default for bridges without their own setting. Brightness (0–1) the
+      lamps return to between pulses – for both effects. 0 = fully off,
+      e.g. 0.08 = a faint constant glow.
   glow_high:
-    name: Peak level
+    name: Peak level (default)
     description: >-
-      Brightness (0–1) at the pulse peak (both effects). Default 1.0 = full
-      brightness. Must be above the resting glow level.
+      Default for bridges without their own setting. Brightness (0–1) at the
+      pulse peak (both effects). Default 1.0 = full brightness. Must be above
+      the resting glow level.
   restore_state:
     name: Restore light state
     description: >-

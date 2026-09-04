@@ -1,11 +1,13 @@
 """Red Alert Entertainment – REST-API, Streaming-Loop und Ingress-Web-UI.
 
-Der Dienst hält pro konfigurierter Hue Bridge (bis zu 3) einen DTLS-Stream
-offen und schiebt ~25 Frames/s an die Kanäle: entweder ein gemeinsames
-Auf-/Ab-Blenden aller Lampen (``effect: pulse``, Standard) oder das originale
-Larson-Scanner-Lauflicht (``effect: chase``). Mehrere Bridges spielen dabei
-denselben Effekt synchron ab. Läuft für ``duration`` Sekunden (Standard 30)
-oder bis ``POST /stop``.
+Der Dienst hält pro konfigurierter Hue Bridge (bis zu 3) einen eigenen
+DTLS-Stream offen und schiebt ~25 Frames/s an die Kanäle: entweder ein
+gemeinsames Auf-/Ab-Blenden aller Lampen einer Bridge (``effect: pulse``,
+Standard) oder das originale Larson-Scanner-Lauflicht (``effect: chase``).
+Effekt, Farbe und Timing sind pro Bridge einzeln einstellbar; alle Bridges
+starten trotzdem gleichzeitig (gemeinsame Start-Uhr nach parallelen
+DTLS-Handshakes). Läuft für ``duration`` Sekunden (Standard 30, für alle
+Bridges gemeinsam) oder bis ``POST /stop``.
 """
 
 import asyncio
@@ -89,12 +91,29 @@ def _parse_channel_order(value) -> list[int] | None:
     return order or None
 
 
+# Pro-Bridge überschreibbare Effekt-Parameter: Name im bridges-Eintrag -> Cast.
+# Fehlt der Schlüssel (oder ist er leer) in einem Eintrag, gilt der gleichnamige
+# Wert aus dem /start-Body bzw. den Add-on-Optionen als Standard für diese Bridge.
+_BRIDGE_NUMERIC_OVERRIDES = (
+    ("sweep_seconds", float),
+    ("chase_pause", float),
+    ("attack_ms", float),
+    ("release_ms", float),
+    ("glow_low", float),
+    ("glow_high", float),
+)
+
+
 def _parse_bridges_option(value) -> list[dict]:
     """``bridges``-Option/Body in normalisierte Einträge parsen.
 
-    Jeder Eintrag braucht ``bridge_host`` + ``area_id``; ``channel_order`` ist
-    optional. Unvollständige Einträge werden mit einer Warnung übersprungen,
-    mehr als ``MAX_BRIDGES`` Einträge werden abgeschnitten.
+    Jeder Eintrag braucht ``bridge_host`` + ``area_id``; ``channel_order`` und
+    die Effekt-Parameter (``effect``, ``color``, ``sweep_seconds``,
+    ``chase_pause``, ``attack_ms``, ``release_ms``, ``glow_low``, ``glow_high``)
+    sind optional und überschreiben nur für diese eine Bridge den sonst
+    gültigen Standard (Body bzw. Add-on-Option). Unvollständige Einträge werden
+    mit einer Warnung übersprungen, mehr als ``MAX_BRIDGES`` Einträge werden
+    abgeschnitten.
     """
     if not isinstance(value, list):
         return []
@@ -113,7 +132,20 @@ def _parse_bridges_option(value) -> list[dict]:
         except (TypeError, ValueError):
             log.warning("channel_order für Bridge %s ungültig – ignoriert", host)
             order = None
-        result.append({"bridge_host": host, "area_id": area_id, "channel_order": order})
+        norm = {"bridge_host": host, "area_id": area_id, "channel_order": order}
+        if entry.get("effect"):
+            norm["effect"] = _effect_name(entry["effect"])
+        if entry.get("color"):
+            norm["color"] = hex_to_rgb(entry["color"])
+        for key, cast in _BRIDGE_NUMERIC_OVERRIDES:
+            raw = entry.get(key)
+            if raw is None or raw == "":
+                continue
+            try:
+                norm[key] = cast(raw)
+            except (TypeError, ValueError):
+                log.warning("Bridge %s: %s ungültig – ignoriert", host, key)
+        result.append(norm)
     if len(result) > MAX_BRIDGES:
         log.warning(
             "%d bridges konfiguriert, nur die ersten %d werden genutzt.", len(result), MAX_BRIDGES
@@ -156,9 +188,14 @@ state = {
 }
 
 log.info(
-    "Konfiguration: bridges=%s effect=%s color=%s fps=%s sweep=%ss chase_pause=%ss "
+    "Konfiguration: bridges=%s (Standard) effect=%s color=%s fps=%s sweep=%ss chase_pause=%ss "
     "attack=%sms release=%sms glow=%s..%s",
-    [(b["bridge_host"], b["area_id"], b["channel_order"]) for b in state["bridges"]],
+    [
+        {"bridge_host": b["bridge_host"], "area_id": b["area_id"], "channel_order": b["channel_order"],
+         **{k: b[k] for k in ("effect", "color", "sweep_seconds", "chase_pause",
+                               "attack_ms", "release_ms", "glow_low", "glow_high") if k in b}}
+        for b in state["bridges"]
+    ],
     state["effect"],
     options.get("color", "#FF0000"),
     options.get("fps", 25),
@@ -272,6 +309,13 @@ async def handle_health(request: web.Request) -> web.Response:
     )
 
 
+def _bridge_color_hex(b: dict) -> str | None:
+    if "color" not in b:
+        return None
+    cr, cg, cb = b["color"]
+    return f"#{cr:02X}{cg:02X}{cb:02X}"
+
+
 async def handle_config(request: web.Request) -> web.Response:
     task = state["task"]
     r, g, b = state["color"]
@@ -279,12 +323,20 @@ async def handle_config(request: web.Request) -> web.Response:
         {
             "bridges": [
                 {
-                    "bridge_host": b["bridge_host"],
-                    "area_id": b["area_id"],
-                    "channel_order": b["channel_order"],
-                    "paired": b["bridge_host"] in state["credentials"],
+                    "bridge_host": bg["bridge_host"],
+                    "area_id": bg["area_id"],
+                    "channel_order": bg["channel_order"],
+                    "paired": bg["bridge_host"] in state["credentials"],
+                    "effect": bg.get("effect"),
+                    "color": _bridge_color_hex(bg),
+                    "sweep_seconds": bg.get("sweep_seconds"),
+                    "chase_pause": bg.get("chase_pause"),
+                    "attack_ms": bg.get("attack_ms"),
+                    "release_ms": bg.get("release_ms"),
+                    "glow_low": bg.get("glow_low"),
+                    "glow_high": bg.get("glow_high"),
                 }
-                for b in state["bridges"]
+                for bg in state["bridges"]
             ],
             "effect": state["effect"],
             "color": f"#{r:02X}{g:02X}{b:02X}",
@@ -385,36 +437,24 @@ async def _run_effect(
     bridge_ctxs: list[dict],
     duration: float,
     fps: int,
-    sweep_seconds: float,
-    chase_pause: float,
-    color: tuple[int, int, int],
-    effect: str,
-    attack_s: float,
-    release_s: float,
-    glow_low: float,
-    glow_high: float,
     restore: bool,
 ) -> None:
-    """Effekt auf mehreren Bridges gleichzeitig fahren.
+    """Effekt auf mehreren Bridges gleichzeitig fahren, jede mit ihrem eigenen
+    Effekt/Farbe/Timing (siehe ``handle_start._resolve``).
 
-    Jede Bridge bekommt ihren eigenen ``RedAlertChase`` (Kanalzahl kann pro
-    Bridge unterschiedlich sein), ``pulse`` teilt sich dagegen einen einzigen
-    Level-Wert über alle Bridges – so sind alle Lampen aller Bridges exakt
-    gleich hell. Beide Effekte werden von derselben ``elapsed``-Uhr getrieben,
-    die erst startet, nachdem **alle** DTLS-Handshakes (parallel gestartet)
-    fertig sind, damit die Bridges synchron loslegen statt nacheinander.
+    Jede Bridge bekommt ihre eigenen ``RedAlertChase``/``RedAlertPulse``-
+    Instanzen (Kanalzahl, Timing und Effekt-Art können pro Bridge
+    unterschiedlich sein). Damit sie trotzdem **gleichzeitig** loslegen statt
+    nacheinander, starten alle DTLS-Handshakes parallel, und die gemeinsame
+    ``elapsed``-Uhr beginnt erst, wenn alle fertig sind (oder fehlgeschlagen
+    sind – eine fehlschlagende Bridge fliegt best-effort raus).
     """
-    cr, cg, cb = color
-    glow_low = min(max(glow_low, 0.0), 1.0)
-    glow_high = min(max(glow_high, glow_low), 1.0)
-    glow_span = glow_high - glow_low
-    pulse = RedAlertPulse(num_lights=1, attack_s=attack_s, release_s=release_s)
-    chases = {
-        ctx["bridge_host"]: RedAlertChase(
-            num_lights=len(ctx["channel_ids"]), sweep_seconds=sweep_seconds, pause_seconds=chase_pause
+    for ctx in bridge_ctxs:
+        n = len(ctx["channel_ids"])
+        ctx["pulse"] = RedAlertPulse(num_lights=n, attack_s=ctx["attack_s"], release_s=ctx["release_s"])
+        ctx["chase"] = RedAlertChase(
+            num_lights=n, sweep_seconds=ctx["sweep_seconds"], pause_seconds=ctx["chase_pause"]
         )
-        for ctx in bridge_ctxs
-    }
     frames = 0
     snapshots: dict[str, list[dict]] = {}
     loop = asyncio.get_event_loop()
@@ -445,8 +485,8 @@ async def _run_effect(
 
         start = loop.time()
         log.info(
-            "Effekt läuft: effect=%s bridges=%s fps=%s duration=%s",
-            effect, [c["bridge_host"] for c in active], fps, duration,
+            "Effekt läuft: bridges=%s fps=%s duration=%s",
+            [(c["bridge_host"], c["effect"]) for c in active], fps, duration,
         )
         prev = start
         while True:
@@ -454,18 +494,19 @@ async def _run_effect(
             elapsed = now - start
             if elapsed >= duration:
                 break
-
-            if effect == "pulse":
-                target = RedAlertPulse.periodic(elapsed, sweep_seconds)
-                level = glow_low + glow_span * pulse.step(target, now - prev)[0]
+            dt = now - prev
             prev = now
 
             for ctx in active:
-                if effect == "chase":
-                    levels = chases[ctx["bridge_host"]].brightness_for(elapsed)
-                    levels = [glow_low + glow_span * lvl for lvl in levels]
-                else:  # pulse – derselbe Level für alle Kanäle aller Bridges
-                    levels = [level] * len(ctx["channel_ids"])
+                glow_low, glow_high = ctx["glow_low"], ctx["glow_high"]
+                glow_span = glow_high - glow_low
+                if ctx["effect"] == "chase":
+                    levels = ctx["chase"].brightness_for(elapsed)
+                else:  # pulse
+                    target = RedAlertPulse.periodic(elapsed, ctx["sweep_seconds"])
+                    levels = ctx["pulse"].step(target, dt)
+                levels = [glow_low + glow_span * lvl for lvl in levels]
+                cr, cg, cb = ctx["color"]
                 ctx["session"].send(
                     [
                         LightColorCommand(
@@ -639,11 +680,14 @@ async def handle_start(request: web.Request) -> web.Response:
     """POST /start – Effekt auf allen konfigurierten (oder im Body übergebenen)
     Bridges gleichzeitig starten.
 
-    Body optional: ``effect``, ``duration``, ``fps``, ``sweep_seconds``,
-    ``chase_pause``, ``attack_ms``, ``release_ms``, ``glow_low``, ``glow_high``,
-    ``color``, ``restore_state`` gelten für **alle** Bridges gemeinsam.
-    ``bridges`` (Liste von ``{bridge_host, area_id, channel_order}``)
-    übersteuert für diesen Aufruf die Option ``bridges``.
+    Body optional: ``duration``, ``fps``, ``restore_state`` gelten für **alle**
+    Bridges gemeinsam. ``effect``, ``color``, ``sweep_seconds``, ``chase_pause``,
+    ``attack_ms``, ``release_ms``, ``glow_low``, ``glow_high`` im Body sind die
+    **Standardwerte** für Bridges, die diese Parameter nicht selbst setzen.
+    ``bridges`` (Liste von ``{bridge_host, area_id, channel_order, effect?,
+    color?, sweep_seconds?, chase_pause?, attack_ms?, release_ms?, glow_low?,
+    glow_high?}``) übersteuert für diesen Aufruf die Option ``bridges`` – jede
+    Bridge kann ihren eigenen Effekt/Farbe/Timing haben.
     """
     existing = state["task"]
     if existing and not existing.done():
@@ -665,29 +709,35 @@ async def handle_start(request: web.Request) -> web.Response:
             status=400,
         )
 
-    effect = _effect_name(body.get("effect") or state["effect"])
     fps = int(body.get("fps") or options.get("fps", 25))
-    sweep_seconds = float(body.get("sweep_seconds") or options.get("sweep_seconds", 1.4))
-    try:
-        chase_pause = max(0.0, float(body.get("chase_pause", state["chase_pause"])))
-    except (TypeError, ValueError):
-        chase_pause = state["chase_pause"]
-    color = hex_to_rgb(body["color"]) if body.get("color") else state["color"]
-    attack_s = float(body.get("attack_ms", state["attack_ms"])) / 1000.0
-    release_s = float(body.get("release_ms", state["release_ms"])) / 1000.0
-    try:
-        glow_low = min(max(float(body.get("glow_low", state["glow_low"])), 0.0), 1.0)
-        glow_high = min(max(float(body.get("glow_high", state["glow_high"])), 0.0), 1.0)
-    except (TypeError, ValueError):
-        glow_low, glow_high = state["glow_low"], state["glow_high"]
     restore = bool(body.get("restore_state", state["restore_state"]))
     try:
         duration = max(0.0, float(body.get("duration", DEFAULT_DURATION_S)))
     except (TypeError, ValueError):
         duration = DEFAULT_DURATION_S
 
+    # Standardwerte für Bridges, die diese Effekt-Parameter nicht selbst setzen.
+    defaults = {"effect": _effect_name(body.get("effect") or state["effect"])}
+    defaults["color"] = hex_to_rgb(body["color"]) if body.get("color") else state["color"]
+    defaults["sweep_seconds"] = float(body.get("sweep_seconds") or options.get("sweep_seconds", 1.4))
+    try:
+        defaults["chase_pause"] = max(0.0, float(body.get("chase_pause", state["chase_pause"])))
+    except (TypeError, ValueError):
+        defaults["chase_pause"] = state["chase_pause"]
+    defaults["attack_ms"] = float(body.get("attack_ms", state["attack_ms"]))
+    defaults["release_ms"] = float(body.get("release_ms", state["release_ms"]))
+    try:
+        defaults["glow_low"] = min(max(float(body.get("glow_low", state["glow_low"])), 0.0), 1.0)
+        defaults["glow_high"] = min(max(float(body.get("glow_high", state["glow_high"])), 0.0), 1.0)
+    except (TypeError, ValueError):
+        defaults["glow_low"], defaults["glow_high"] = state["glow_low"], state["glow_high"]
+
     async def _resolve(cfg: dict) -> dict:
-        """Eine Bridge auflösen: gepaart? erreichbar? area_id/Kanäle gültig?"""
+        """Eine Bridge auflösen: gepaart? erreichbar? area_id/Kanäle gültig?
+
+        Effekt-Parameter, die dieser Bridge-Eintrag nicht selbst setzt, fallen
+        auf ``defaults`` zurück (Body bzw. Add-on-Option).
+        """
         host = cfg["bridge_host"]
         creds = state["credentials"].get(host)
         if not creds:
@@ -716,12 +766,24 @@ async def handle_start(request: web.Request) -> web.Response:
             channel_ids = list(order)
         else:
             channel_ids = native_ids
+
+        glow_low = min(max(cfg.get("glow_low", defaults["glow_low"]), 0.0), 1.0)
+        glow_high = min(max(cfg.get("glow_high", defaults["glow_high"]), 0.0), 1.0)
+        glow_high = max(glow_high, glow_low)
         return {
             "bridge_host": host,
             "area_id": cfg["area_id"],
             "channel_ids": channel_ids,
             "session": session,
             "app_key": creds["username"],
+            "effect": cfg.get("effect", defaults["effect"]),
+            "color": cfg.get("color", defaults["color"]),
+            "sweep_seconds": cfg.get("sweep_seconds", defaults["sweep_seconds"]),
+            "chase_pause": max(0.0, cfg.get("chase_pause", defaults["chase_pause"])),
+            "attack_s": cfg.get("attack_ms", defaults["attack_ms"]) / 1000.0,
+            "release_s": cfg.get("release_ms", defaults["release_ms"]) / 1000.0,
+            "glow_low": glow_low,
+            "glow_high": glow_high,
         }
 
     # area_id/Kanäle für alle Bridges parallel auflösen (schnell, kein DTLS).
@@ -736,27 +798,25 @@ async def handle_start(request: web.Request) -> web.Response:
 
     # session.start() (DTLS-Handshake, ~einige Sekunden) passiert im Task,
     # damit die HTTP-Antwort nicht blockiert (HA rest_command-Timeout).
-    state["task"] = asyncio.create_task(
-        _run_effect(
-            ctxs, duration, fps, sweep_seconds, chase_pause,
-            color, effect, attack_s, release_s, glow_low, glow_high, restore,
-        )
-    )
-    r, g, b = color
+    state["task"] = asyncio.create_task(_run_effect(ctxs, duration, fps, restore))
     state["last_start"] = {
-        "effect": effect,
         "duration": duration,
         "fps": fps,
-        "sweep_seconds": sweep_seconds,
-        "chase_pause": chase_pause,
-        "color": f"#{r:02X}{g:02X}{b:02X}",
-        "attack_ms": round(attack_s * 1000),
-        "release_ms": round(release_s * 1000),
-        "glow_low": round(glow_low, 3),
-        "glow_high": round(max(glow_low, glow_high), 3),
         "restore_state": restore,
         "bridges": [
-            {"bridge_host": c["bridge_host"], "area_id": c["area_id"], "channels": c["channel_ids"]}
+            {
+                "bridge_host": c["bridge_host"],
+                "area_id": c["area_id"],
+                "channels": c["channel_ids"],
+                "effect": c["effect"],
+                "color": "#{:02X}{:02X}{:02X}".format(*c["color"]),
+                "sweep_seconds": c["sweep_seconds"],
+                "chase_pause": c["chase_pause"],
+                "attack_ms": round(c["attack_s"] * 1000),
+                "release_ms": round(c["release_s"] * 1000),
+                "glow_low": round(c["glow_low"], 3),
+                "glow_high": round(c["glow_high"], 3),
+            }
             for c in ctxs
         ],
         "failed_bridges": failed,

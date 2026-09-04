@@ -81,16 +81,23 @@
   <section class="card">
     <h2>1 · Bridges</h2>
     <p class="muted" style="margin-top:0">
-      Bis zu 3 Hue Bridges, die den Effekt gleichzeitig abspielen. Pro Bridge:
-      Link-Button drücken, IP eintragen, innerhalb ~30 s „Pairen“ klicken,
-      dann „Bereiche laden“ und den gewünschten Bereich übernehmen.
+      Bis zu 3 Hue Bridges, die gleichzeitig loslegen. Pro Bridge: Link-Button
+      drücken, IP eintragen, innerhalb ~30 s „Pairen“ klicken, dann „Bereiche
+      laden“ und den gewünschten Bereich übernehmen. Über „Effekt für diese
+      Bridge anpassen“ kann jede Bridge ihren eigenen Effekt/Farbe/Timing
+      bekommen – leer gelassene Felder übernehmen den Standard aus
+      „2 · Steuerung“.
     </p>
     <div id="bridges"></div>
   </section>
 
   <section class="card">
     <h2>2 · Steuerung</h2>
-    <p class="muted" style="margin-top:0">Gilt für alle oben eingerichteten Bridges gemeinsam.</p>
+    <p class="muted" style="margin-top:0">
+      Dauer und fps gelten immer für alle Bridges gemeinsam. Effekt/Farbe/Timing
+      hier sind der <strong>Standard</strong> für Bridges ohne eigene
+      Einstellung (siehe „1 · Bridges“).
+    </p>
     <div class="row">
       <div><label for="effect">Effekt</label><select id="effect"><option value="pulse">pulse (Takt)</option><option value="chase">chase (Lauflicht)</option></select></div>
       <div><label for="duration">Dauer (s)</label><input type="number" id="duration" min="0" step="1" placeholder="30"></div>
@@ -192,6 +199,31 @@
         </div>
         <div class="areas" id="b${i}-arealist" style="margin-top:.5rem"><span class="muted">Noch nichts geladen.</span></div>
         <details style="margin-top:.7rem">
+          <summary class="muted">Effekt für diese Bridge anpassen</summary>
+          <div class="row" style="margin:.6rem 0">
+            <div><label for="b${i}-effect">Effekt</label>
+              <select id="b${i}-effect">
+                <option value="">wie oben</option>
+                <option value="pulse">pulse (Takt)</option>
+                <option value="chase">chase (Lauflicht)</option>
+              </select></div>
+            <div><label for="b${i}-color">Farbe (Hex, leer = wie oben)</label>
+              <input type="text" id="b${i}-color" placeholder="#FF0000"></div>
+            <div><label for="b${i}-sweep">sweep_seconds</label>
+              <input type="number" id="b${i}-sweep" min="0.3" max="5" step="0.1" placeholder="wie oben"></div>
+            <div><label for="b${i}-chpause">chase-Pause (s)</label>
+              <input type="number" id="b${i}-chpause" min="0" max="60" step="0.5" placeholder="wie oben"></div>
+            <div><label for="b${i}-attack">Attack (ms)</label>
+              <input type="number" id="b${i}-attack" min="0" max="2000" step="10" placeholder="wie oben"></div>
+            <div><label for="b${i}-release">Release (ms)</label>
+              <input type="number" id="b${i}-release" min="0" max="5000" step="10" placeholder="wie oben"></div>
+            <div><label for="b${i}-glowlow">glow_low (0–1)</label>
+              <input type="number" id="b${i}-glowlow" min="0" max="1" step="0.01" placeholder="wie oben"></div>
+            <div><label for="b${i}-glowhigh">glow_high (0–1)</label>
+              <input type="number" id="b${i}-glowhigh" min="0" max="1" step="0.01" placeholder="wie oben"></div>
+          </div>
+        </details>
+        <details style="margin-top:.5rem">
           <summary class="muted">Lampen zuordnen</summary>
           <div class="row" style="margin:.6rem 0">
             <div><label for="b${i}-idsecs">Sekunden je Kanal</label>
@@ -230,7 +262,8 @@
     const body = Object.assign({ bridge_host: host }, extra);
     if ($(`b${i}-area`).value.trim()) body.area_id = $(`b${i}-area`).value.trim();
     if ($(`b${i}-idsecs`).value !== "") body.seconds = Number($(`b${i}-idsecs`).value);
-    if ($("color").value) body.color = $("color").value;
+    const ownColor = $(`b${i}-color`).value.trim();
+    body.color = ownColor || $("color").value;
     await api("identify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     refresh();
   }
@@ -284,17 +317,18 @@
 
     const s = $("status"); s.innerHTML = "";
     const fields = {
-      "Effekt": data.effect,
-      "Farbe": data.color,
+      "Effekt (Standard)": data.effect,
+      "Farbe (Standard)": data.color,
       "fps": data.fps,
-      "sweep_seconds": data.sweep_seconds,
-      "chase-Pause": data.chase_pause ? `${data.chase_pause} s` : "aus (durchgehend)",
-      "attack / release": `${data.attack_ms} / ${data.release_ms} ms`,
-      "glow low / high": `${data.glow_low} / ${data.glow_high}`,
+      "sweep_seconds (Standard)": data.sweep_seconds,
+      "chase-Pause (Standard)": data.chase_pause ? `${data.chase_pause} s` : "aus (durchgehend)",
+      "attack / release (Standard)": `${data.attack_ms} / ${data.release_ms} ms`,
+      "glow low / high (Standard)": `${data.glow_low} / ${data.glow_high}`,
     };
     bridges.forEach((b, i) => {
+      const own = b.effect ? `${b.effect}${b.color ? " " + b.color : ""}` : "Standard";
       fields[`Bridge ${i + 1} (Option)`] =
-        `${b.bridge_host} · ${b.paired ? "gepaart" : "nicht gepaart"} · Bereich ${b.area_id || "–"}`;
+        `${b.bridge_host} · ${b.paired ? "gepaart" : "nicht gepaart"} · Bereich ${b.area_id || "–"} · Effekt: ${own}`;
     });
     for (const [k, v] of Object.entries(fields)) {
       const d = document.createElement("div");
@@ -308,6 +342,14 @@
       if (b.area_id && !$(`b${i}-area`).value) $(`b${i}-area`).value = b.area_id;
       if (b.channel_order && b.channel_order.length && !$(`b${i}-order`).value)
         $(`b${i}-order`).value = b.channel_order.join(", ");
+      if (b.effect && !$(`b${i}-effect`).value) $(`b${i}-effect`).value = b.effect;
+      if (b.color && !$(`b${i}-color`).value) $(`b${i}-color`).value = b.color;
+      if (b.sweep_seconds != null && !$(`b${i}-sweep`).value) $(`b${i}-sweep`).value = b.sweep_seconds;
+      if (b.chase_pause != null && !$(`b${i}-chpause`).value) $(`b${i}-chpause`).value = b.chase_pause;
+      if (b.attack_ms != null && !$(`b${i}-attack`).value) $(`b${i}-attack`).value = b.attack_ms;
+      if (b.release_ms != null && !$(`b${i}-release`).value) $(`b${i}-release`).value = b.release_ms;
+      if (b.glow_low != null && !$(`b${i}-glowlow`).value) $(`b${i}-glowlow`).value = b.glow_low;
+      if (b.glow_high != null && !$(`b${i}-glowhigh`).value) $(`b${i}-glowhigh`).value = b.glow_high;
       setPill($(`b${i}-pill`), b.paired, b.paired ? "gepaart" : "nicht gepaart");
       renderIdentify(i);
     });
@@ -332,6 +374,15 @@
       const entry = { bridge_host: host, area_id: area };
       const order = $(`b${i}-order`).value.trim();
       if (order) entry.channel_order = order;
+      if ($(`b${i}-effect`).value) entry.effect = $(`b${i}-effect`).value;
+      const ownColor = $(`b${i}-color`).value.trim();
+      if (ownColor) entry.color = ownColor;
+      if ($(`b${i}-sweep`).value !== "") entry.sweep_seconds = Number($(`b${i}-sweep`).value);
+      if ($(`b${i}-chpause`).value !== "") entry.chase_pause = Number($(`b${i}-chpause`).value);
+      if ($(`b${i}-attack`).value !== "") entry.attack_ms = Number($(`b${i}-attack`).value);
+      if ($(`b${i}-release`).value !== "") entry.release_ms = Number($(`b${i}-release`).value);
+      if ($(`b${i}-glowlow`).value !== "") entry.glow_low = Number($(`b${i}-glowlow`).value);
+      if ($(`b${i}-glowhigh`).value !== "") entry.glow_high = Number($(`b${i}-glowhigh`).value);
       bridges.push(entry);
     }
     const body = { color: $("color").value, effect: $("effect").value };
