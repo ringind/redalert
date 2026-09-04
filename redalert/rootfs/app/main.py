@@ -78,7 +78,7 @@ options = load_json(OPTIONS_FILE, {})
 
 def _effect_name(value) -> str:
     v = str(value or "").lower()
-    return v if v in ("pulse", "chase", "glitter") else "pulse"
+    return v if v in ("pulse", "chase", "glitter", "neutral") else "pulse"
 
 
 def _parse_color_list(value) -> list[tuple[int, int, int]]:
@@ -136,13 +136,15 @@ _BRIDGE_NUMERIC_OVERRIDES = (
 def _parse_bridges_option(value) -> list[dict]:
     """``bridges``-Option/Body in normalisierte Einträge parsen.
 
-    Jeder Eintrag braucht ``bridge_host`` + ``area_id``; ``channel_order`` und
-    die Effekt-Parameter (``effect``, ``color``, ``sweep_seconds``,
-    ``chase_pause``, ``attack_ms``, ``release_ms``, ``glow_low``, ``glow_high``,
-    ``glitter_interval_ms``, ``glitter_flash_ms``, ``glitter_colors``) sind
-    optional und überschreiben nur für diese eine Bridge den sonst gültigen
-    Standard (Body bzw. Add-on-Option). Unvollständige Einträge werden mit einer
-    Warnung übersprungen, mehr als ``MAX_BRIDGES`` Einträge werden abgeschnitten.
+    Jeder Eintrag braucht ``bridge_host`` + ``area_id`` (bei ``effect: neutral``
+    reicht ``bridge_host`` – die Bridge wird dann gar nicht gesteuert);
+    ``channel_order`` und die Effekt-Parameter (``effect``, ``color``,
+    ``sweep_seconds``, ``chase_pause``, ``attack_ms``, ``release_ms``,
+    ``glow_low``, ``glow_high``, ``glitter_interval_ms``, ``glitter_flash_ms``,
+    ``glitter_colors``) sind optional und überschreiben nur für diese eine
+    Bridge den sonst gültigen Standard (Body bzw. Add-on-Option). Unvollständige
+    Einträge werden mit einer Warnung übersprungen, mehr als ``MAX_BRIDGES``
+    Einträge werden abgeschnitten.
     """
     if not isinstance(value, list):
         return []
@@ -153,7 +155,8 @@ def _parse_bridges_option(value) -> list[dict]:
             continue
         host = str(entry.get("bridge_host") or "").strip()
         area_id = str(entry.get("area_id") or "").strip()
-        if not host or not area_id:
+        eff = _effect_name(entry["effect"]) if entry.get("effect") else None
+        if not host or (not area_id and eff != "neutral"):
             log.warning("bridges-Eintrag ohne bridge_host/area_id ignoriert: %r", entry)
             continue
         try:
@@ -770,7 +773,11 @@ async def handle_start(request: web.Request) -> web.Response:
     effect?, color?, sweep_seconds?, chase_pause?, attack_ms?, release_ms?,
     glow_low?, glow_high?, glitter_interval_ms?, glitter_flash_ms?,
     glitter_colors?}``) übersteuert für diesen Aufruf die Option ``bridges`` –
-    jede Bridge kann ihren eigenen Effekt/Farbe/Timing haben.
+    jede Bridge kann ihren eigenen Effekt/Farbe/Timing haben. ``effect:
+    neutral`` (als Standard oder je Bridge) lässt die betreffende(n) Bridge(s)
+    komplett unangetastet – kein Stream, kein Sichern/Wiederherstellen –, sodass
+    in einem Effektset eine Bridge laufen und eine andere aus sein kann. Sind
+    **alle** Bridges neutral, antwortet ``/start`` mit ``no_active_bridges``.
 
     ``preset``: Name eines gespeicherten Effektsets (siehe ``/presets``); dessen
     gespeicherter Body dient als Basis, alle weiteren Body-Felder überschreiben
@@ -906,15 +913,34 @@ async def handle_start(request: web.Request) -> web.Response:
             "glitter_palette": palette,
         }
 
-    # area_id/Kanäle für alle Bridges parallel auflösen (schnell, kein DTLS).
-    resolved = await asyncio.gather(*(_resolve(cfg) for cfg in req_bridges))
+    # "neutral": diese Bridge wird gar nicht angefasst (kein DTLS, kein
+    # Sichern/Wiederherstellen) – so lässt sich in einem Effektset eine Bridge
+    # bewusst auslassen, während die anderen einen Effekt fahren.
+    neutral = [c for c in req_bridges if c.get("effect", defaults["effect"]) == "neutral"]
+    to_run = [c for c in req_bridges if c.get("effect", defaults["effect"]) != "neutral"]
+    neutral_report = [{"bridge_host": c["bridge_host"], "effect": "neutral"} for c in neutral]
+    for c in neutral:
+        log.info("Start: Bridge %s neutral – wird nicht gesteuert.", c["bridge_host"])
+
+    # area_id/Kanäle für alle zu fahrenden Bridges parallel auflösen (kein DTLS).
+    resolved = await asyncio.gather(*(_resolve(cfg) for cfg in to_run))
     ctxs = [r for r in resolved if "session" in r]
     failed = [r for r in resolved if "session" not in r]
     for r in failed:
         log.warning("Start: Bridge %s übersprungen (%s)", r["bridge_host"], r["error"])
 
     if not ctxs:
-        return web.json_response({"error": "keine Bridge verfügbar", "bridges": failed}, status=502)
+        if neutral and not failed:
+            state["last_start"] = {
+                "duration": duration, "fps": fps, "restore_state": restore,
+                "bridges": [], "failed_bridges": [], "neutral_bridges": neutral_report,
+            }
+            log.info("Start: alle konfigurierten Bridges neutral – nichts zu tun.")
+            return web.json_response({"status": "no_active_bridges", **state["last_start"]})
+        return web.json_response(
+            {"error": "keine Bridge verfügbar", "bridges": failed, "neutral_bridges": neutral_report},
+            status=502,
+        )
 
     # session.start() (DTLS-Handshake, ~einige Sekunden) passiert im Task,
     # damit die HTTP-Antwort nicht blockiert (HA rest_command-Timeout).
@@ -923,6 +949,7 @@ async def handle_start(request: web.Request) -> web.Response:
         "duration": duration,
         "fps": fps,
         "restore_state": restore,
+        "neutral_bridges": neutral_report,
         "bridges": [
             {
                 "bridge_host": c["bridge_host"],

@@ -9,13 +9,18 @@ it addable in HA under *Settings → Add-ons → Add-on Store → ⋮ → Reposi
 the add-on itself lives in `redalert/`. The add-on drives a Star Trek "Red Alert"
 scene across ~6 Philips Hue lamps on **up to 3 Hue Bridges simultaneously** via
 the **Hue Entertainment API** (persistent DTLS stream per bridge, ~25 Hz) rather
-than normal Bridge scenes — two effects, `pulse` (default: all lamps on that
-bridge together, periodic) and `chase` (a comet with a tail). **Effect, colour,
-and timing are configurable per bridge** (falling back to shared defaults when
-not overridden); all bridges still start **simultaneously** (parallel DTLS
-handshakes, shared start epoch) for a configurable `duration` (the `duration`
-option, shared across all bridges; `0` = unlimited, runs until `/stop`). It
-ships an aiohttp REST service **and** an Ingress web UI for control. HA builds the
+than normal Bridge scenes — `effect` is one of `pulse` (default: all lamps on
+that bridge together, periodic), `chase` (a comet with a tail), `glitter`
+(per-lamp random colour sparkle) or `neutral` (bridge left untouched — no
+stream/restore; per-bridge only, for effect sets where some bridges run and
+others don't). **Effect, colour, and timing are configurable per bridge**
+(falling back to shared defaults when not overridden); all bridges still start
+**simultaneously** (parallel DTLS handshakes, shared start epoch) for a
+configurable `duration` (the `duration` option, shared across all bridges; `0` =
+unlimited, runs until `/stop`). The full `/start` payload (all bridges +
+controls) can be saved as a named **effect set** in `/data/presets.json`
+(`GET/PUT/DELETE /presets`, `POST /start {"preset": "..."}`). It ships an
+aiohttp REST service **and** an Ingress web UI for control. HA builds the
 image locally from `redalert/Dockerfile` (no `image:` key, no prebuilt registry).
 Primary docs are German: repo overview in `README.md`, in-HA docs in
 `redalert/DOCS.md`.
@@ -48,7 +53,7 @@ redalert/                  the add-on
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.5.0**.
+No build system, linter, or test suite. Current version: **1.6.0**.
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
   after every code change — the only static check available.

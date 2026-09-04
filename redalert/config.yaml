@@ -1,5 +1,5 @@
 name: "Red Alert Entertainment"
-version: "1.5.0"
+version: "1.6.0"
 slug: "redalert"
 description: >-
   Rotes Lauflicht über Philips-Hue-Lampen via Hue Entertainment API
@@ -41,7 +41,7 @@ schema:
     - bridge_host: "str"
       area_id: "str"
       channel_order: "str?"
-      effect: "list(pulse|chase|glitter)?"
+      effect: "list(pulse|chase|glitter|neutral)?"
       color: "match(^#[0-9A-Fa-f]{6}$)?"
       sweep_seconds: "float(0.3,5.0)?"
       chase_pause: "float(0,60)?"
@@ -52,7 +52,7 @@ schema:
       glitter_interval_ms: "float(5,5000)?"
       glitter_flash_ms: "float(20,5000)?"
       glitter_colors: "str?"
-  effect: "list(pulse|chase|glitter)?"
+  effect: "list(pulse|chase|glitter|neutral)?"
   color: "match(^#[0-9A-Fa-f]{6}$)?"
   fps: "int(5,50)"
   sweep_seconds: "float(0.3,5.0)"

@@ -80,6 +80,7 @@ Zustand an, ob der Effekt gerade läuft.
 | `pulse` (Standard) | Alle Lampen **gemeinsam**: von `glow_low` linear auf `glow_high` und zurück, ein voller Zyklus alle `sweep_seconds`. Ein Schmitt-Trigger auf dem periodischen Signal macht daraus ein sauberes Ein/Aus, der Anstieg läuft dadurch ruckelfrei-monoton hoch. `attack_ms` = Aufblend-, `release_ms` = Abblendzeit; `release_ms` kleiner = schnelleres Abfallen als Aufblenden. |
 | `chase` | Ein Komet läuft **gleichmäßig in eine Richtung** um alle Kanäle (wraparound, konstante Geschwindigkeit) mit Zykluszeit `sweep_seconds`. Jede Lampe für sich pulst dabei: **kurz hell (`glow_high`), langes exponentielles Ausblenden, dann eine Ruhephase auf `glow_low`**, dann wieder. Der Kopf ist etwas breiter als der Lampenabstand – zwei benachbarte Lampen stehen kurz gemeinsam auf 100 % und glühen dann nacheinander aus, sodass immer mindestens eine Lampe voll leuchtet. Mit `chase_pause > 0` macht der Komet **einen** Durchlauf, danach ruhen alle Lampen `chase_pause` Sekunden auf `glow_low`, dann der nächste. |
 | `glitter` | **Diamant-Gefunkel:** jede Lampe funkelt für sich. In zufälligen Momenten (im Mittel alle `glitter_interval_ms` ms über alle Lampen einer Bridge) springt eine Lampe auf `glow_high` in einer zufällig aus `glitter_colors` gezogenen Farbe und klingt dann mit der Zeitkonstante `glitter_flash_ms` wieder auf `glow_low` ab. Ist `glitter_flash_ms` größer als `glitter_interval_ms`, funkeln mehrere Lampen gleichzeitig. `glitter_colors` leer = alle Funken in der Bridge-Farbe. |
+| `neutral` | **Kein Effekt:** die Lampen dieser Bridge werden gar nicht angesteuert – kein DTLS-Stream, kein Sichern/Wiederherstellen. Nur sinnvoll je Bridge gesetzt (`bridges[].effect: neutral`): so kann ein Effektset auf einer Bridge einen Effekt fahren und eine andere Bridge komplett auslassen. Eine `neutral`-Bridge braucht keine `area_id`. Sind **alle** Bridges `neutral`, antwortet `/start` mit `no_active_bridges` (kein Fehler). |
 
 **Mehrere Bridges:** Läuft mehr als eine Bridge, starten alle **gleichzeitig**
 – die DTLS-Handshakes aller Bridges laufen parallel, und die gemeinsame
@@ -89,7 +90,8 @@ eigenes Timing haben (`effect`, `color`, `sweep_seconds`, `chase_pause`,
 `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`,
 `glitter_flash_ms`, `glitter_colors` sind je Bridge überschreibbar; nicht
 überschriebene Werte gelten aus „2 · Steuerung“ bzw. den gleichnamigen
-Add-on-Optionen). `area_id` und `channel_order` sind immer je
+Add-on-Optionen). Mit `effect: neutral` je Bridge bleibt diese Bridge komplett
+aus, während die anderen laufen. `area_id` und `channel_order` sind immer je
 Bridge eigene Werte; `duration`, `fps` und `restore_state` gelten dagegen
 immer für alle Bridges gemeinsam. Ist eine Bridge nicht erreichbar oder nicht
 gepaart, starten die übrigen trotzdem („best effort“) – die fehlgeschlagene
@@ -106,7 +108,7 @@ Bridge nach dem Stream-Ende).
 | Option          | Typ                | Standard   | Bedeutung |
 |-----------------|--------------------|------------|-----------|
 | `bridges`       | Liste (max. 3)     | `[]`       | Eine Zeile pro Bridge: `bridge_host` (IP), `area_id` (Schritt 1), optional `channel_order` sowie je Bridge optional `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors` (überschreiben die gleichnamige Option unten nur für diese Bridge). |
-| `effect`        | `pulse` \| `chase` \| `glitter` | `pulse`    | Standard-Lichteffekt für Bridges ohne eigene Einstellung, siehe oben. |
+| `effect`        | `pulse` \| `chase` \| `glitter` \| `neutral` | `pulse`    | Standard-Lichteffekt für Bridges ohne eigene Einstellung, siehe oben. `neutral` sinnvoll nur je Bridge. |
 | `color`         | Hex-String         | `#FF0000`  | Standard-Farbe für Bridges ohne eigene Einstellung. |
 | `fps`           | int (5–50)         | `25`       | Frames/Sekunde des DTLS-Streams (für alle Bridges gleich). |
 | `sweep_seconds` | float (0.3–5.0)    | `1.4`      | Standard für Bridges ohne eigene Einstellung. `chase`: Dauer einer vollen Umrundung. `pulse`: Zyklusdauer. |

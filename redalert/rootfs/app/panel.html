@@ -99,7 +99,7 @@
       Einstellung (siehe „1 · Bridges“).
     </p>
     <div class="row">
-      <div><label for="effect">Effekt</label><select id="effect"><option value="pulse">pulse (Takt)</option><option value="chase">chase (Lauflicht)</option><option value="glitter">glitter (Funkeln)</option></select></div>
+      <div><label for="effect">Effekt</label><select id="effect"><option value="pulse">pulse (Takt)</option><option value="chase">chase (Lauflicht)</option><option value="glitter">glitter (Funkeln)</option><option value="neutral">neutral (nicht steuern)</option></select></div>
       <div><label for="duration">Dauer (s, 0 = unbegrenzt)</label><input type="number" id="duration" min="0" step="1"></div>
       <div><label for="fps">fps</label><input type="number" id="fps" min="5" max="50" step="1"></div>
       <div><label for="sweep">sweep_seconds</label><input type="number" id="sweep" min="0.3" max="5" step="0.1"></div>
@@ -125,7 +125,9 @@
       sich auf. <code>Intervall</code> = mittlerer Abstand zwischen zwei Blitzen (klein =
       hektischer), <code>Blitzdauer</code> = wie schnell ein Funken abklingt (größer als
       das Intervall ⇒ mehrere Lampen gleichzeitig), <code>Farben</code> = Hex-Liste, aus
-      der jeder Funken zufällig zieht (leer = Farbe oben).
+      der jeder Funken zufällig zieht (leer = Farbe oben).<br>
+      <strong>neutral</strong>: die Bridge wird nicht angefasst – so kann ein Effektset
+      z. B. Bridge 1 laufen lassen und Bridge 2 auslassen.
     </p>
     <div class="row" style="margin-top:.9rem">
       <button id="btn-start">▶ Start</button>
@@ -249,6 +251,7 @@
                 <option value="pulse">pulse (Takt)</option>
                 <option value="chase">chase (Lauflicht)</option>
                 <option value="glitter">glitter (Funkeln)</option>
+                <option value="neutral">neutral (nicht steuern)</option>
               </select></div>
             <div><label for="b${i}-color">Farbe (Hex, leer = wie oben)</label>
               <input type="text" id="b${i}-color" placeholder="#FF0000"></div>
@@ -441,11 +444,14 @@
     for (let i = 0; i < BRIDGE_COUNT; i++) {
       const host = $(`b${i}-host`).value.trim();
       const area = $(`b${i}-area`).value.trim();
-      if (!host || !area) continue;
-      const entry = { bridge_host: host, area_id: area };
+      const ownEffect = $(`b${i}-effect`).value;
+      if (!host) continue;
+      if (!area && ownEffect !== "neutral") continue;   // neutral braucht keine area_id
+      const entry = { bridge_host: host };
+      if (area) entry.area_id = area;
       const order = $(`b${i}-order`).value.trim();
       if (order) entry.channel_order = order;
-      if ($(`b${i}-effect`).value) entry.effect = $(`b${i}-effect`).value;
+      if (ownEffect) entry.effect = ownEffect;
       const ownColor = $(`b${i}-color`).value.trim();
       if (ownColor) entry.color = ownColor;
       const ownGcolors = $(`b${i}-gcolors`).value.trim();

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.6.0
+
+- **Neuer Effekt-Wert `neutral`.** `effect: neutral` (in der Regel je Bridge in
+  `bridges[]` gesetzt) lässt die betreffende Bridge komplett unangetastet – kein
+  DTLS-Stream, kein Sichern/Wiederherstellen. So kann ein Effektset auf einer
+  Bridge einen Effekt fahren und eine andere Bridge auslassen. Eine
+  `neutral`-Bridge braucht keine `area_id`. Sind **alle** Start-Bridges
+  `neutral`, antwortet `/start` mit `{"status": "no_active_bridges"}` (kein
+  Fehler, kein laufender Effekt). Auswählbar in der Add-on-Konfiguration, im
+  Web-UI („2 · Steuerung“ und je Bridge-Karte) und im `/start`-Body; `effect`
+  akzeptiert jetzt `pulse` | `chase` | `glitter` | `neutral`.
+
 ## 1.5.0
 
 - **Effektsets (Presets).** Der komplette Satz an Start-Parametern (alle

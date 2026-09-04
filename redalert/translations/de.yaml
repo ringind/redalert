@@ -26,7 +26,9 @@ configuration:
       name: Effekt (diese Bridge)
       description: >-
         Überschreibt die Options effect für diese eine Bridge. Leer = Standard
-        weiter unten.
+        weiter unten. neutral = diese Bridge wird nicht gesteuert (kein Stream,
+        kein Sichern/Wiederherstellen) – nützlich, um in einem Effektset eine
+        Bridge auszulassen.
     color:
       name: Farbe (diese Bridge)
       description: >-
@@ -85,7 +87,9 @@ configuration:
       (Abfallen schneller als Aufblenden). chase = ein Komet läuft gleichmäßig
       umlaufend über die Kanäle und zieht einen Schweif hinter sich her.
       glitter = jede Lampe funkelt für sich in sehr kurzen Abständen in
-      wechselnden Farben auf (Diamant-Gefunkel).
+      wechselnden Farben auf (Diamant-Gefunkel). neutral = die Lampen werden
+      nicht gesteuert (z. B. für ein Effektset, in dem nur einzelne Bridges
+      laufen).
   color:
     name: Farbe (Standard)
     description: >-

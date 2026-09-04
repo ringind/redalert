@@ -26,7 +26,8 @@ configuration:
       name: Effect (this bridge)
       description: >-
         Overrides the effect option for this one bridge. Empty = use the
-        default below.
+        default below. neutral = this bridge is left untouched (no stream, no
+        save/restore) – handy for leaving a bridge out of an effect set.
     color:
       name: Colour (this bridge)
       description: >-
@@ -84,7 +85,8 @@ configuration:
       together: 0 to 100 % on the beat, back to 0 between pulses (fall faster
       than rise). chase = a comet runs evenly around the channels, dragging a
       tail behind it. glitter = each lamp sparkles on its own in very short
-      bursts of changing colour (diamond twinkle).
+      bursts of changing colour (diamond twinkle). neutral = the lamps are not
+      driven at all (e.g. for an effect set where only some bridges run).
   color:
     name: Colour (default)
     description: >-

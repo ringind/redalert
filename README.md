@@ -11,10 +11,11 @@ eigenen Farbe und eigenem Timing. Drei Effekte: `pulse` – alle Lampen einer
 Bridge blenden gemeinsam auf und ab (Standard) –, `chase` – ein umlaufender
 Komet, der einen Schweif hinter sich herzieht – und `glitter` – jede Lampe
 funkelt für sich in sehr kurzen Abständen in wechselnden Farben auf
-(Diamant-Gefunkel). Läuft für eine konfigurierbare Dauer (Option `duration`,
-gilt für alle Bridges gemeinsam; `0` = unbegrenzt, läuft bis `/stop`). Alle
-Start-Parameter lassen sich als benanntes **Effektset** speichern, wieder
-laden/starten und als JSON-Datei aus- und einlesen.
+(Diamant-Gefunkel). Mit `effect: neutral` je Bridge bleibt eine Bridge ganz
+unangetastet, während die anderen laufen. Läuft für eine konfigurierbare Dauer
+(Option `duration`, gilt für alle Bridges gemeinsam; `0` = unbegrenzt, läuft
+bis `/stop`). Alle Start-Parameter lassen sich als benanntes **Effektset**
+speichern, wieder laden/starten und als JSON-Datei aus- und einlesen.
 
 Nutzt die Bibliothek [`hue-entertainment`](https://github.com/music-assistant/hue-entertainment)
 (dieselbe, die auch das Hue-Entertainment-Plugin von Music Assistant antreibt).
@@ -178,7 +179,7 @@ Add-on nach einer Options-Änderung neu starten.
 | Option           | Typ           | Standard | Bedeutung                                                       |
 |-------------------|--------------|----------|-------------------------------------------------------------------|
 | `bridges`         | Liste (max. 3) | leer   | Eine Zeile pro Bridge: `bridge_host` (IP), `area_id` (siehe Schritt 4), optional `channel_order` sowie je Bridge optional `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors` (überschreiben die gleichnamige Option unten nur für diese Bridge). |
-| `effect`          | `pulse`\|`chase`\|`glitter` | `pulse` | Standard für Bridges ohne eigene Einstellung. `pulse` = alle Lampen zusammen `glow_low` → `glow_high` → `glow_low` im Takt. `chase` = umlaufender Komet mit Schweif. `glitter` = jede Lampe funkelt für sich in kurzen Farb-Blitzen auf. |
+| `effect`          | `pulse`\|`chase`\|`glitter`\|`neutral` | `pulse` | Standard für Bridges ohne eigene Einstellung. `pulse` = alle Lampen zusammen `glow_low` → `glow_high` → `glow_low` im Takt. `chase` = umlaufender Komet mit Schweif. `glitter` = jede Lampe funkelt für sich in kurzen Farb-Blitzen auf. `neutral` (nur je Bridge sinnvoll) = Bridge wird nicht gesteuert. |
 | `color`           | Hex-String    | `#FF0000`| Standard-Farbe für Bridges ohne eigene Einstellung.                |
 | `fps`             | int (5–50)    | 25       | Frames/Sekunde des DTLS-Streams (für alle Bridges gleich).         |
 | `sweep_seconds`   | float (0.3–5) | 1.4      | Standard für Bridges ohne eigene Einstellung. `chase`: Dauer einer vollen Umrundung. `pulse`: Zyklusdauer. |
@@ -324,6 +325,13 @@ Die Effektfarbe kommt aus der jeweiligen Bridge-`color` (bzw. der Option/dem
 `/start`-Body-Standard); `chase.py` berechnet nur die Helligkeit, `main.py`
 setzt die Farbe über `LightColorCommand`. Bei `glitter` liefert `chase.py`
 zusätzlich je Funken eine Farbe aus `glitter_colors`.
+
+`neutral` – die Lampen dieser Bridge werden **nicht** angesteuert: kein
+DTLS-Stream, kein Sichern/Wiederherstellen. Sinnvoll nur je Bridge
+(`bridges[].effect: neutral`), damit ein Effektset auf einer Bridge einen
+Effekt fahren und eine andere Bridge komplett auslassen kann; eine
+`neutral`-Bridge braucht keine `area_id`. Sind alle Bridges `neutral`,
+antwortet `/start` mit `no_active_bridges` (kein Fehler).
 
 ### Effektsets
 
