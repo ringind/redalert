@@ -15,7 +15,8 @@ python3 -m venv .venv && .venv/bin/pip install -r redalert/requirements.txt
 ```
 
 `.venv/` and `devdata/` are gitignored. **Never `rm -rf devdata`** — it holds
-`credentials.json`; deleting it forces a physical link-button re-pair.
+`credentials.json` (keyed by `bridge_host` since multi-bridge support);
+deleting it forces a physical link-button re-pair for every bridge.
 
 ## Run
 
@@ -30,20 +31,26 @@ B=http://localhost:8099
 until curl -sf -o /dev/null $B/health; do sleep 0.5; done      # ~3 s bind race — always gate
 ```
 
-If `curl -s $B/config` shows `"paired": false` (no `devdata/credentials.json`):
-ask the user to press the bridge link button, then
-`curl -s -X POST $B/pair -H 'Content-Type: application/json' -d '{"bridge_ip":"192.168.178.84"}'`
+If `curl -s $B/config` shows no bridge with `"paired": true` (no
+`devdata/credentials.json` entry for it): ask the user to press the bridge
+link button, then
+`curl -s -X POST $B/pair -H 'Content-Type: application/json' -d '{"bridge_host":"192.168.178.84"}'`
 within ~30 s. (`devdata/credentials.<ip>.json.bak` files hold prior pairings —
-`cp` one back to `credentials.json` to switch bridges without a link-button press.)
+`cp` one back to `credentials.json`, or merge its entry in by hand, to switch
+bridges without a link-button press.)
 
 ## Exercise an effect
 
 Maintainer's test area **Houseparty Büro** = `226c7c2a-0a6d-4b01-a28a-8b29fd8cb219`
-(3 channels; confirm with `GET /areas` — the bridge/area may change).
+(3 channels; confirm with `GET /areas?bridge_host=192.168.178.84` — the
+bridge/area may change). Only one real bridge is normally available for
+testing — the `bridges` list still only needs one entry to exercise the
+single-bridge path; a second, unreachable entry is a good way to check the
+best-effort skip-and-continue behavior (see `failed_bridges` in the response).
 
 ```bash
 curl -s -X POST $B/start -H 'Content-Type: application/json' \
-  -d '{"area_id":"226c7c2a-0a6d-4b01-a28a-8b29fd8cb219","effect":"pulse","duration":20}'
+  -d '{"bridges":[{"bridge_host":"192.168.178.84","area_id":"226c7c2a-0a6d-4b01-a28a-8b29fd8cb219"}],"effect":"pulse","duration":20}'
 ```
 
 Then wait for it to finish and report — run this **backgrounded**:
@@ -58,8 +65,9 @@ pkill -f "redalert/rootfs/app/main.py"
 
 - `Effekt läuft: effect=<x> ... duration=<d>` then, ~`d` s later,
   `Effekt beendet (N Frames)` with **N ≈ d * fps** (25 fps → 20 s = 500).
-- With `restore_state` (default): `Lichtzustand gesichert (6 Lampen)` before and
-  `Lichtzustand wiederhergestellt (6/6 Lampen)` after.
+- With `restore_state` (default): `Lichtzustand gesichert (<host>: N Lampen)`
+  before and `Lichtzustand wiederhergestellt (<host>: N/N Lampen)` after, once
+  per bridge.
 - A `DTLS ... ServerHello timeout ... resending` line is **normal** (handshake
   takes 3–9 s); only a `Traceback` / `konnte nicht` / non-`beendet` exit is a fail.
 - `/start` returns immediately (before the handshake) — poll `/health` `running`,

@@ -2,16 +2,17 @@
 
 Rotes Star-Trek-„Alarmstufe Rot“-Lauflicht über mehrere Philips-Hue-Lampen,
 gesteuert über die echte **Hue Entertainment API** (DTLS-Streaming, ~25 Hz –
-nicht die träge Bridge-Szene).
+nicht die träge Bridge-Szene). Unterstützt **bis zu 3 Hue Bridges**, die den
+Effekt gleichzeitig abspielen.
 
 ## Voraussetzungen
 
 - Home Assistant **OS** oder **Supervised** (für Add-ons).
-- Hue Bridge **V2** („quadratisch“) oder Hue Pro Bridge. V1-Bridges können kein
-  Entertainment-Streaming.
-- Mehrere farbfähige Hue-Lampen, einem **Entertainment-Bereich** zugeordnet
-  (Hue-App → Einstellungen → Entertainment-Bereiche → Neuer Bereich). Die
-  Reihenfolge, in der du die Lampen hinzufügst, bestimmt die Kanalreihenfolge.
+- Eine bis drei Hue Bridge **V2** („quadratisch“) oder Hue Pro Bridge. V1-Bridges
+  können kein Entertainment-Streaming.
+- Pro Bridge: mehrere farbfähige Hue-Lampen, einem **Entertainment-Bereich**
+  zugeordnet (Hue-App → Einstellungen → Entertainment-Bereiche → Neuer Bereich).
+  Die Reihenfolge, in der du die Lampen hinzufügst, bestimmt die Kanalreihenfolge.
 
 ## Installation
 
@@ -23,55 +24,46 @@ nicht die träge Bridge-Szene).
 
 ## Einrichtung
 
-### 1 · Mit der Bridge pairen (einmalig)
+Öffne das Web-UI (Seitenleisten-Eintrag **Red Alert**). Unter **„1 · Bridges“**
+gibt es 3 gleich aufgebaute Karten, eine je Bridge – für eine einzelne Bridge
+reicht die erste, leer gelassene Karten werden ignoriert.
 
-Öffne das Web-UI (Seitenleisten-Eintrag **Red Alert**).
+### 1 · Bridges (pro Bridge wiederholen)
 
 1. Physischen **Link-Button** auf der Hue Bridge drücken.
-2. Innerhalb von ~30 s im Web-UI unter **„1 · Mit Bridge pairen“** die Bridge-IP
-   eintragen und **Pairen** klicken.
+2. Innerhalb von ~30 s in der Bridge-Karte die **Bridge-IP** eintragen und
+   **Pairen** klicken. `username`/`clientkey` werden automatisch unter
+   `/data/credentials.json` gespeichert (pro Bridge) – Pairing muss nur einmal
+   gemacht werden.
+3. **„Bereiche laden“** klicken – die Liste zeigt Name, `id` und Kanäle.
+   Mit **„übernehmen“** wird die `area_id` ins Feld der Karte übernommen.
+4. Optional **`channel_order`** setzen (siehe unten). Über **„Lampen
+   zuordnen“** (aufklappbar) lässt sich herausfinden, welche `channel_id`
+   welche physische Lampe ist: entweder **„Alle Kanäle nacheinander“**
+   (leuchtet 0, 1, 2, … je einige Sekunden rot auf) oder einen einzelnen
+   **„Kanal N“**-Button klicken. Jeder Klick nutzt kurz den
+   Entertainment-Stream (ein DTLS-Handshake, ~3–9 s, dann leuchtet der Kanal);
+   danach wird der vorherige Lampenzustand wiederhergestellt.
 
-`username` und `clientkey` werden automatisch unter `/data/credentials.json`
-gespeichert – Pairing muss nur einmal gemacht werden.
-
-Alternativ per REST:
-
-```bash
-curl -X POST http://<ha-ip>:8099/pair \
-  -H "Content-Type: application/json" \
-  -d '{"bridge_ip": "192.168.1.50"}'
-```
-
-### 2 · Entertainment-Bereich ermitteln
-
-Im Web-UI **„Bereiche laden“** klicken – die Liste zeigt Name, `id` und
-Kanäle. Mit **„übernehmen“** wird die `area_id` ins Steuerungsformular
-übernommen. Trage sie zusätzlich als Add-on-Option **`area_id`** ein, damit
+Trage Bridge-IP, `area_id` (und optional `channel_order`) zusätzlich als
+Add-on-Option **`bridges`** ein (eine Zeile pro Bridge), damit
 `rest_command`-Aufrufe ohne Body funktionieren, und starte das Add-on neu.
 
-REST-Variante: `curl http://<ha-ip>:8099/areas`
-
-### 3 · Steuerung
-
-Im Web-UI unter **„3 · Steuerung“**: `area_id`, **Effekt**, Dauer (leer = 30 s),
-`fps`, `sweep_seconds`, `chase_pause`, Farbe und **`channel_order`** setzen,
-dann **Start** / **Stop**. Die beiden Knöpfe zeigen per gedrücktem Zustand an,
-ob der Effekt gerade läuft.
+Alternativ per REST: `POST /pair` (Body `{"bridge_host": "192.168.1.50"}`),
+`GET /areas?bridge_host=192.168.1.50`.
 
 `channel_order` (leer = Bereichs-Standard) legt fest, in welcher Reihenfolge der
-`chase`-Komet die Lampen durchläuft – als kommagetrennte Liste der
-`channel_id`s, z. B. `2,3,1,0,5,4`. Es müssen genau die Kanäle des Bereichs
-sein, nur in anderer Reihenfolge.
+`chase`-Komet die Lampen dieser Bridge durchläuft – als kommagetrennte Liste
+der `channel_id`s, z. B. `2,3,1,0,5,4`. Es müssen genau die Kanäle des
+Bereichs sein, nur in anderer Reihenfolge.
 
-### 4 · Lampen zuordnen
+### 2 · Steuerung
 
-Um herauszufinden, welche `channel_id` welche physische Lampe ist: Bereich
-wählen, **„Bereiche laden“**, dann unter **„4 · Lampen zuordnen“** entweder
-**„Alle Kanäle nacheinander“** (leuchtet 0, 1, 2, … je einige Sekunden rot auf)
-oder einen einzelnen **„Kanal N“**-Button klicken. „Sekunden je Kanal“ steuert
-die Leuchtdauer. Jeder Klick nutzt kurz den Entertainment-Stream (ein
-DTLS-Handshake, ~3–9 s, dann leuchtet der Kanal). Danach wird der vorherige
-Lampenzustand wiederhergestellt.
+Im Web-UI unter **„2 · Steuerung“**: **Effekt**, Dauer (leer = 30 s), `fps`,
+`sweep_seconds`, `chase_pause`, `glow_low`/`glow_high` und Farbe setzen, dann
+**Start** / **Stop** – gilt für **alle** oben eingerichteten Bridges
+gemeinsam. Die beiden Knöpfe zeigen per gedrücktem Zustand an, ob der Effekt
+gerade läuft.
 
 ## Effekte
 
@@ -80,8 +72,17 @@ Lampenzustand wiederhergestellt.
 | `pulse` (Standard) | Alle Lampen **gemeinsam**: von `glow_low` linear auf `glow_high` und zurück, ein voller Zyklus alle `sweep_seconds`. Ein Schmitt-Trigger auf dem periodischen Signal macht daraus ein sauberes Ein/Aus, der Anstieg läuft dadurch ruckelfrei-monoton hoch. `attack_ms` = Aufblend-, `release_ms` = Abblendzeit; `release_ms` kleiner = schnelleres Abfallen als Aufblenden. |
 | `chase` | Ein Komet läuft **gleichmäßig in eine Richtung** um alle Kanäle (wraparound, konstante Geschwindigkeit) mit Zykluszeit `sweep_seconds`. Jede Lampe für sich pulst dabei: **kurz hell (`glow_high`), langes exponentielles Ausblenden, dann eine Ruhephase auf `glow_low`**, dann wieder. Der Kopf ist etwas breiter als der Lampenabstand – zwei benachbarte Lampen stehen kurz gemeinsam auf 100 % und glühen dann nacheinander aus, sodass immer mindestens eine Lampe voll leuchtet. Mit `chase_pause > 0` macht der Komet **einen** Durchlauf, danach ruhen alle Lampen `chase_pause` Sekunden auf `glow_low`, dann der nächste. |
 
+**Mehrere Bridges:** Läuft mehr als eine Bridge, spielen alle denselben Effekt
+mit identischen Parametern (Farbe, Dauer, Timing) gleichzeitig ab – die
+DTLS-Handshakes aller Bridges starten parallel, und die Effekt-Uhr beginnt erst,
+wenn alle fertig sind, damit keine Bridge nachhinkt. `area_id` und
+`channel_order` sind dabei je Bridge eigene Werte. Ist eine Bridge nicht
+erreichbar oder nicht gepaart, starten die übrigen trotzdem („best effort“) –
+die fehlgeschlagene wird in der `/start`-Antwort unter `failed_bridges`
+gemeldet.
+
 **Lichtzustand:** Vor dem Effekt sichert das Add-on an/aus, Helligkeit und Farbe
-aller Lampen des Bereichs (Hue CLIP v2) und schreibt sie nach dem Effekt zurück
+aller Lampen jedes Bereichs (Hue CLIP v2) und schreibt sie nach dem Effekt zurück
 – auch Lampen, die vorher aus waren, gehen wieder aus. Abschaltbar mit
 `restore_state: false` (dann greift nur die automatische Wiederherstellung der
 Bridge nach dem Stream-Ende).
@@ -90,9 +91,7 @@ Bridge nach dem Stream-Ende).
 
 | Option          | Typ                | Standard   | Bedeutung |
 |-----------------|--------------------|------------|-----------|
-| `bridge_host`   | String             | `""`       | IP der Hue Bridge. Optional, auch pro `/pair` übergebbar. |
-| `area_id`       | String             | `""`       | ID des Entertainment-Bereichs (Schritt 2). |
-| `channel_order` | String             | `""`       | Kanalreihenfolge für `chase` als kommagetrennte Liste, z. B. `2,3,1,0,5,4`. Leer = Bereichs-Standard. |
+| `bridges`       | Liste (max. 3)     | `[]`       | Eine Zeile pro Bridge: `bridge_host` (IP), `area_id` (Schritt 1), optional `channel_order`. |
 | `effect`        | `pulse` \| `chase` | `pulse`    | Lichteffekt, siehe oben. |
 | `color`         | Hex-String         | `#FF0000`  | Farbe des Effekts. |
 | `fps`           | int (5–50)         | `25`       | Frames/Sekunde des DTLS-Streams. |
@@ -113,13 +112,13 @@ Panel-Pfad).
 | Endpoint  | Methode | Zweck |
 |-----------|---------|-------|
 | `/`       | GET     | Web-UI (Ingress-Panel). |
-| `/health` | GET     | `{status, paired, running}` – auch Ziel des Container-HEALTHCHECK. |
-| `/config` | GET     | Effektive Konfiguration (für das Web-UI). |
-| `/pair`   | POST    | Einmalige Kopplung. Body: `{"bridge_ip": "..."}` (optional bei gesetzter Option). |
-| `/areas`  | GET     | Entertainment-Bereiche + Kanäle auflisten. |
-| `/start`  | POST    | Effekt starten (antwortet sofort; DTLS-Handshake läuft im Hintergrund). Body optional: `area_id`, `effect`, `duration`, `fps`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `color`, `restore_state`, `channel_order`. `channel_order` als Liste (`[2,3,1,0,5,4]`) oder String (`"2,3,1,0,5,4"`); muss genau die Kanäle des Bereichs in gewünschter Reihenfolge enthalten, sonst `400`. |
-| `/stop`   | POST    | Effekt sofort stoppen. |
-| `/identify` | POST  | Lampen einzeln durchtesten (Zuordnung `channel_id` → Lampe). Body optional: `area_id`, `channel_id` (fehlt = alle Kanäle nacheinander), `seconds` (Standard 3 einzeln / 2 bei „alle“), `color`, `restore_state`. Ein DTLS-Handshake für den ganzen Durchlauf. Belegt denselben Slot wie `/start` (`already_running`, `/stop` bricht ab). |
+| `/health` | GET     | `{status, paired, running}` – `paired` ist `true`, sobald mindestens eine Bridge gepaart ist. Auch Ziel des Container-HEALTHCHECK. |
+| `/config` | GET     | Effektive Konfiguration inkl. `bridges` (für das Web-UI). |
+| `/pair`   | POST    | Einmalige Kopplung. Body: `{"bridge_host": "..."}` – Pflicht, sobald mehr als eine Bridge konfiguriert ist (bei genau einer, noch ungepaarten, konfigurierten Bridge optional). |
+| `/areas`  | GET     | Entertainment-Bereiche + Kanäle einer Bridge auflisten. Query `?bridge_host=...` – Pflicht, sobald mehr als eine Bridge gepaart ist. |
+| `/start`  | POST    | Effekt auf allen konfigurierten (oder im Body übergebenen) Bridges gleichzeitig starten (antwortet sofort; DTLS-Handshakes laufen im Hintergrund, parallel). Body optional: `effect`, `duration`, `fps`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `color`, `restore_state` – gelten für alle Bridges. `bridges` (Liste von `{bridge_host, area_id, channel_order}`) übersteuert für diesen Aufruf die Option `bridges`; `channel_order` als Liste (`[2,3,1,0,5,4]`) oder String (`"2,3,1,0,5,4"`), muss genau die Kanäle des jeweiligen Bereichs enthalten, sonst wird diese eine Bridge übersprungen. Antwort enthält `bridges` (tatsächlich gestartet) und `failed_bridges` (übersprungen, mit Fehlergrund); nur wenn **keine** Bridge startet, antwortet `/start` mit `502`. |
+| `/stop`   | POST    | Effekt auf allen laufenden Bridges sofort stoppen. |
+| `/identify` | POST  | Lampen einer Bridge einzeln durchtesten (Zuordnung `channel_id` → Lampe). Body: `bridge_host` (Pflicht, sobald mehr als eine Bridge konfiguriert ist), `area_id` (optional, sonst aus der bridges-Konfiguration), `channel_id` (fehlt = alle Kanäle nacheinander), `seconds` (Standard 3 einzeln / 2 bei „alle“), `color`, `restore_state`. Ein DTLS-Handshake für den ganzen Durchlauf. Belegt denselben Slot wie `/start` (`already_running`, `/stop` bricht ab). |
 
 - `duration` (Sekunden, **Standard 30**) – wie lange der Effekt läuft, bevor er
   von selbst endet; vorher jederzeit per `/stop` abbrechbar.
@@ -184,10 +183,10 @@ herunter.
 | `/pair` schlägt fehl | Link-Button nicht rechtzeitig gedrückt (~30 s) oder falsche IP. |
 | `/start` → `already_running` | Erst `/stop` aufrufen. |
 | `/start` → 404 `area_id nicht gefunden` | `/areas` prüfen – Bereich evtl. umbenannt/gelöscht. |
-| `/start` → 502 `Bridge nicht erreichbar` | Bridge-IP geändert? Netzwerk/VLAN zwischen HA-Host und Bridge (UDP 2100). |
+| `/start` → 502 `Bridge nicht erreichbar` | Bridge-IP geändert? Netzwerk/VLAN zwischen HA-Host und Bridge (UDP 2100). Bei mehreren Bridges bedeutet `502` nur, dass **keine** davon erreichbar war – einzelne Ausfälle stehen in `failed_bridges` der `/start`-Antwort, die übrigen Bridges laufen trotzdem. |
 | Licht startet erst nach einigen Sekunden | Normaler DTLS-Handshake; bei WLAN-Bridges teils ein `ServerHello timeout`-Retry im Protokoll. `/start` selbst antwortet trotzdem sofort. |
 | Lampen reagieren nicht | V1-Bridge (kein Entertainment) oder UDP-Port 2100 zur Bridge blockiert. |
-| Streaming bricht ab | Die Bridge erlaubt nur **einen** aktiven Entertainment-Stream – Hue-Sync-App/andere Clients schließen. |
+| Streaming bricht ab | Jede Bridge erlaubt nur **einen** aktiven Entertainment-Stream (pro Bridge, nicht global) – Hue-Sync-App/andere Clients auf derselben Bridge schließen. |
 | Lauflicht ruckelt | `fps` erhöhen oder Netzlast zur Bridge prüfen. |
 | Start bricht ab mit `/bin/sh: can't open '/init': Permission denied` | Behoben ab 1.0.1 (kein eigenes AppArmor-Profil mehr). Add-on aktualisieren; ältere Version deinstallieren und neu installieren, falls das Update nicht greift. |
 

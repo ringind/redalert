@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.2.0
+
+- **Bis zu 3 Hue Bridges gleichzeitig.** Die Optionen `bridge_host`/`area_id`/
+  `channel_order` sind zur Liste **`bridges`** zusammengefasst (max. 3 Zeilen,
+  je `bridge_host` + `area_id` + optional `channel_order`) – bestehende
+  Einzel-Bridge-Konfigurationen müssen in die neue Liste umgezogen werden.
+  `/start` fährt alle konfigurierten (oder im Body per `bridges` übergebenen)
+  Bridges mit **denselben** Effekt-Parametern (Farbe, Dauer, Timing) **synchron**
+  ab: alle DTLS-Handshakes starten parallel, die Effekt-Uhr beginnt erst, wenn
+  alle fertig sind. Ist eine Bridge nicht erreichbar/gepaart, starten die
+  übrigen trotzdem („best effort“, siehe `failed_bridges` in der Antwort);
+  `/start` schlägt nur fehl, wenn **keine** Bridge startet.
+  `credentials.json` ist jetzt nach `bridge_host` verschlüsselt (alte
+  Einzel-Bridge-Dateien werden beim Laden automatisch migriert, kein
+  Re-Pairing nötig). `/pair` (Body `bridge_host`) und `/areas`
+  (Query `bridge_host`) brauchen die Bridge jetzt explizit, sobald mehr als
+  eine Bridge konfiguriert bzw. gepaart ist; `/identify` genauso (Body
+  `bridge_host`).
+- **Web-UI:** Abschnitt „1 · Bridges“ zeigt 3 Bridge-Karten (Pairing, Bereich,
+  `channel_order`, „Lampen zuordnen“) – leere Karten werden beim Start
+  ignoriert. „2 · Steuerung“ bleibt ein gemeinsames Formular für alle Bridges.
+
 ## 1.1.9
 
 - **Cue-Funktion entfernt.** Kein Audio-Beat-Sync mehr über eine mitgelieferte

@@ -1,18 +1,24 @@
 configuration:
-  bridge_host:
-    name: Hue Bridge IP
+  bridges:
+    name: Hue Bridges
     description: >-
-      IP address of the Hue Bridge. Optional – can also be supplied per /pair call.
-  area_id:
-    name: Entertainment area ID
-    description: >-
-      ID of the Hue Entertainment area to stream to. Read it from the "Bereiche laden"
-      button in the web UI or GET /areas.
-  channel_order:
-    name: Channel order
-    description: >-
-      Optional order of channel IDs for the comet sweep, as a comma-separated
-      list, e.g. 2,3,1,0,5,4. Leave empty to use the area's native channel order.
+      Up to 3 Hue Bridges that play the effect simultaneously. Add one row
+      per bridge and fill it in.
+    bridge_host:
+      name: Hue Bridge IP
+      description: >-
+        IP address of the Hue Bridge. Can also be supplied per /pair call.
+    area_id:
+      name: Entertainment area ID
+      description: >-
+        ID of this bridge's Hue Entertainment area to stream to. Read it from
+        the "Bereiche laden" button in the web UI or GET /areas.
+    channel_order:
+      name: Channel order
+      description: >-
+        Optional order of this bridge's channel IDs for the comet sweep, as a
+        comma-separated list, e.g. 2,3,1,0,5,4. Leave empty to use the area's
+        native channel order.
   effect:
     name: Effect
     description: >-

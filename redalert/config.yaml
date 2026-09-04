@@ -1,9 +1,9 @@
 name: "Red Alert Entertainment"
-version: "1.1.9"
+version: "1.2.0"
 slug: "redalert"
 description: >-
   Rotes Lauflicht über Philips-Hue-Lampen via Hue Entertainment API
-  (Star Trek »Alarmstufe Rot«), synchron zu deinem eigenen Alarm-Sound.
+  (Star Trek »Alarmstufe Rot«), auf bis zu 3 Bridges gleichzeitig.
 url: "https://github.com/ringind/redalert/tree/main/redalert"
 arch:
   - aarch64
@@ -20,9 +20,7 @@ map:
   - addon_config:rw
   - share:rw
 options:
-  bridge_host: ""
-  area_id: ""
-  channel_order: ""
+  bridges: []
   effect: pulse
   color: "#FF0000"
   fps: 25
@@ -35,9 +33,10 @@ options:
   restore_state: true
   log_level: info
 schema:
-  bridge_host: "str?"
-  area_id: "str?"
-  channel_order: "str?"
+  bridges:
+    - bridge_host: "str"
+      area_id: "str"
+      channel_order: "str?"
   effect: "list(pulse|chase)?"
   color: "match(^#[0-9A-Fa-f]{6}$)?"
   fps: "int(5,50)"

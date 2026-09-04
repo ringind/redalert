@@ -7,10 +7,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 A **Home Assistant add-on store repository**. `repository.yaml` at the root makes
 it addable in HA under *Settings → Add-ons → Add-on Store → ⋮ → Repositories*;
 the add-on itself lives in `redalert/`. The add-on drives a Star Trek "Red Alert"
-scene across ~6 Philips Hue lamps via the **Hue Entertainment API** (persistent
-DTLS stream, ~25 Hz) rather than normal Bridge scenes — two effects, `pulse`
-(default: all lamps together, periodic) and `chase` (a comet with a tail) —
-for a configurable `duration` (default 30 s). It
+scene across ~6 Philips Hue lamps on **up to 3 Hue Bridges simultaneously** via
+the **Hue Entertainment API** (persistent DTLS stream per bridge, ~25 Hz) rather
+than normal Bridge scenes — two effects, `pulse` (default: all lamps on every
+bridge together, periodic) and `chase` (a comet with a tail, phase-locked across
+bridges) — for a configurable `duration` (default 30 s). It
 ships an aiohttp REST service **and** an Ingress web UI for control. HA builds the
 image locally from `redalert/Dockerfile` (no `image:` key, no prebuilt registry).
 Primary docs are German: repo overview in `README.md`, in-HA docs in
@@ -44,7 +45,7 @@ redalert/                  the add-on
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.1.9**.
+No build system, linter, or test suite. Current version: **1.2.0**.
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
   after every code change — the only static check available.
@@ -59,7 +60,10 @@ No build system, linter, or test suite. Current version: **1.1.9**.
 `main.py` only fully runs outside the container because `DATA_DIR` is overridable:
 `REDALERT_DATA_DIR` (default `/data`). The dev setup is a venv at `.venv` and a
 `devdata/` dir — **both gitignored; do not `rm -rf devdata`**, it holds
-`credentials.json` and deleting it forces a physical re-pair (link button).
+`credentials.json` (now keyed by `bridge_host`, `{host: {username, clientkey,
+bridge_host}, ...}`; an old flat single-bridge file is migrated in memory on
+load, see `_load_credentials`) and deleting it forces a physical re-pair
+(link button) for every bridge.
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r redalert/requirements.txt   # once
@@ -67,10 +71,11 @@ mkdir -p devdata
 REDALERT_DATA_DIR=./devdata REDALERT_LOG_LEVEL=debug .venv/bin/python redalert/rootfs/app/main.py &
 B=http://localhost:8099
 until curl -sf -o /dev/null $B/health; do sleep 0.5; done          # bind race: ~3 s, always gate
-# pair only if devdata/credentials.json is missing (needs a fresh link-button press):
-#   curl -s -X POST $B/pair -H 'Content-Type: application/json' -d '{"bridge_ip":"<ip>"}'
+# pair only if devdata/credentials.json has no entry for this host (needs a fresh link-button press):
+#   curl -s -X POST $B/pair -H 'Content-Type: application/json' -d '{"bridge_host":"<ip>"}'
+# without devdata/options.json "bridges", pass it in the body instead:
 curl -s -X POST $B/start -H 'Content-Type: application/json' \
-  -d '{"area_id":"<area>","effect":"pulse","duration":20}'
+  -d '{"bridges":[{"bridge_host":"<ip>","area_id":"<area>"}],"effect":"pulse","duration":20}'
 ```
 
 - The maintainer's test rig (may change): bridge `192.168.178.84`, area
@@ -91,20 +96,33 @@ Three layers under `redalert/rootfs/app/`:
 
 - **`main.py`** — aiohttp server. Endpoints: `/` (serves `panel.html`),
   `/health` (also the Docker HEALTHCHECK target), `/config` (effective config for the UI),
-  `/pair` (one-time Bridge link-button pairing → `/data/credentials.json`),
-  `/areas`, `/start`, `/stop`, `/identify`. All mutable runtime state is
-  one module-level `state` dict. Options are read **once at import** from
+  `/pair` (one-time Bridge link-button pairing, body `bridge_host` — Pflicht bei
+  mehr als einer konfigurierten Bridge — → merged into `/data/credentials.json`),
+  `/areas` (query `bridge_host` — Pflicht bei mehr als einer gepaarten Bridge),
+  `/start`, `/stop`, `/identify`. All mutable runtime state is one module-level
+  `state` dict; `state["bridges"]` is a list (≤ `MAX_BRIDGES` = 3) of
+  `{bridge_host, area_id, channel_order}` parsed from the `bridges` option by
+  `_parse_bridges_option`, and `state["credentials"]` is a dict keyed by
+  `bridge_host` (`_load_credentials` transparently migrates the old flat
+  single-bridge file). Options are read **once at import** from
   `/data/options.json`. `REDALERT_LOG_LEVEL` (exported by
   the s6 `run` script from the `log_level` option) sets the logging level.
-  `/start` body overrides per call: `area_id`, `effect`, `duration`
-  (default `DEFAULT_DURATION_S` = 30), `fps`, `sweep_seconds`, `chase_pause`,
-  `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `color`, `restore_state`,
-  `channel_order` (list[int] or `"2,3,1,0"` string, parsed by
-  `_parse_channel_order`; must be exactly the area's channels reordered).
-  `/identify` (body `area_id?`, `channel_id?`, `seconds?`, `color?`,
-  `restore_state?`) lights one channel — or, with `channel_id` omitted, every
-  channel in turn (~`seconds`+0.4 s gap each) — over a single DTLS handshake, to
-  map channel_id → physical lamp. Shares the `state["task"]` slot with `/start`
+  `/start` body: `effect`, `duration` (default `DEFAULT_DURATION_S` = 30), `fps`,
+  `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`,
+  `glow_high`, `color`, `restore_state` apply to **all** bridges at once;
+  `bridges` (list of `{bridge_host, area_id, channel_order}`, same shape as the
+  option) overrides `state["bridges"]` for that call only. Each bridge is
+  resolved (paired? reachable? `area_id` valid? `channel_order` — list[int] or
+  `"2,3,1,0"` string via `_parse_channel_order` — matches the area's channels?)
+  concurrently via `asyncio.gather`; a bridge that fails resolution is skipped
+  (best-effort, reported back as `failed_bridges`) without blocking the others —
+  `/start` only 502s if **no** bridge resolved.
+  `/identify` (body `bridge_host` — Pflicht bei mehr als einer konfigurierten
+  Bridge —, `area_id?` defaulting to that bridge's configured entry,
+  `channel_id?`, `seconds?`, `color?`, `restore_state?`) lights one channel of
+  one bridge — or, with `channel_id` omitted, every channel in turn
+  (~`seconds`+0.4 s gap each) — over a single DTLS handshake, to map channel_id
+  → physical lamp. Shares the `state["task"]` slot with `/start`
   (`already_running` guard, `/stop` cancels it).
 - **`chase.py`** — two generators, pure math, no I/O. Both emit a **0..1 shape**;
   `_run_effect` maps it onto `[glow_low, glow_high]` (options / `/start` body,
@@ -127,31 +145,51 @@ Three layers under `redalert/rootfs/app/`:
     `release_s` (keep release < attack). `RedAlertPulse.periodic(t, period)`
     feeds the gate a cosine 0..1 pulse with period `sweep_seconds`.
 
-**Effect loop (`_run_effect`):** `handle_start` creates the `EntertainmentSession`,
-resolves the area (404/502 returned synchronously), then hands the session to a
-single `asyncio` task and returns immediately. The task, before the handshake,
-snapshots the area's lights via Hue CLIP v2 (`capture_light_state`, unless
-`restore_state` is false); does the DTLS handshake (`session.start(area_id)` —
-several seconds); owns the session lifecycle and `aclose()`s it in `finally`,
-then `restore_light_state` PUTs the snapshot back (the Bridge also auto-restores
-after streaming; this is belt-and-suspenders and re-offs lights that were off).
-Each frame, for `effect == "pulse"` feeds `RedAlertPulse.periodic(elapsed, sweep_seconds)`
-into `RedAlertPulse.step`; for `"chase"` it's `chase.brightness_for(elapsed)`.
-The resulting 0..1 levels are then mapped to `glow_low + (glow_high-glow_low)*lvl`
-(one line before `session.send`), so between pulses lamps rest at `glow_low`, not 0.
-Levels → per-channel `LightColorCommand` scaled by the colour
-(`value_8bit * 257 * level`). Frames are paced against an **absolute** clock
-(`start + n/fps`), not `sleep(1/fps)`, so the light timeline doesn't drift; the
-loop breaks once `elapsed >= duration`.
+**Effect loop (`_run_effect`):** `handle_start` resolves all bridges (area
+lookup, no DTLS — 404/502-equivalent failures per bridge collected into
+`failed_bridges` synchronously), then hands the whole list of resolved
+bridge contexts (`{bridge_host, area_id, channel_ids, session, app_key}`) to a
+**single** `asyncio` task and returns immediately. The task, before any
+handshake, snapshots every bridge's lights via Hue CLIP v2 concurrently
+(`capture_light_state`, unless `restore_state` is false); starts **all**
+DTLS handshakes concurrently via `asyncio.gather(..., return_exceptions=True)`
+so a slow or failing bridge doesn't delay/block the others, and so every
+surviving bridge gets the **same** `start = loop.time()` epoch — this is what
+keeps bridges phase-locked ("gleichzeitig"), not independent per-bridge clocks.
+A bridge whose handshake raises is dropped from `active` and logged; if none
+survive, the loop returns early. Each frame computes the 0..1 shape **once**
+from the shared `elapsed`: for `effect == "pulse"`,
+`RedAlertPulse.periodic(elapsed, sweep_seconds)` → one shared `RedAlertPulse`
+(`num_lights=1`) → a single scalar `level` reused verbatim for every channel of
+every bridge (so all lamps everywhere are bit-for-bit identical brightness);
+for `"chase"`, each bridge has its **own** `RedAlertChase` instance (channel
+count can differ per bridge) but all are called with the same `elapsed`, so
+the comet head sits at the same fractional sweep position on every bridge
+simultaneously even with different lamp counts. Levels are mapped to
+`glow_low + (glow_high-glow_low)*lvl` (so between pulses lamps rest at
+`glow_low`, not 0) → per-channel `LightColorCommand` scaled by the colour
+(`value_8bit * 257 * level`), sent per bridge via `ctx["session"].send(...)`.
+Frames are paced against an **absolute** clock (`start + n/fps`), not
+`sleep(1/fps)`, so the light timeline doesn't drift; the loop breaks once
+`elapsed >= duration`. `finally` `aclose()`s every session and
+`restore_light_state`s every snapshot (via `asyncio.gather`, best-effort) —
+including bridges whose handshake failed, since their snapshot was still
+captured beforehand.
 Concurrency is guarded by `state["task"]` still running (`/start` →
-`already_running`); `/stop` cancels and awaits it.
+`already_running`); `/stop` cancels and awaits it (cancelling the gathers
+inside cancels every bridge's in-flight work too).
 
 **Web UI (`panel.html`):** vanilla JS, all `fetch` calls use **relative** URLs so
 it works both behind Ingress (path-prefixed) and via published port 8099. Polls
-`/config` every 5 s. Section 3 has a `channel_order` text field (sent on `/start`);
-section 4 "Lampen zuordnen" renders one button per channel of the currently
-selected area (from the last `/areas` fetch, kept in `AREAS`; `renderIdentify()`)
-plus "alle nacheinander" — each POSTs `/identify`.
+`/config` every 5 s. Section "1 · Bridges" renders `BRIDGE_COUNT` = 3 identical
+cards (`bridgeCardHTML(i)`, ids `b${i}-*`) — pairing, area list/pick, own
+`channel_order` field, own nested "Lampen zuordnen" (`AREAS[i]`,
+`renderIdentify(i)`, each POSTs `/identify` with that card's `bridge_host`).
+Section "2 · Steuerung" is the **shared** effect form (effect/duration/fps/
+sweep/chase_pause/glow/color); on Start it assembles `body.bridges` from
+whichever of the 3 cards have both `bridge_host` and `area_id` filled in
+(empty cards are skipped; if none are filled, `bridges` is omitted and the
+server falls back to the configured `bridges` option).
 
 **Two Hue API surfaces:** the `hue_entertainment` lib (`EntertainmentSession`,
 `HueEntertainmentAPI`) does *only* DTLS streaming + pairing + area listing.
@@ -167,9 +205,12 @@ cert). See `_clip` / `capture_light_state` / `restore_light_state`.
 - `restore_state` (default true) snapshots + restores every area lamp via CLIP v2;
   runs in `_run_effect` before the handshake / in `finally` after `aclose()`.
 - Channel order = `channel_order` option if set, else the area's native order
-  (only meaningful for `chase`).
-- The Bridge allows only **one** active Entertainment stream at a time; the DTLS
-  handshake is 3–9 s.
+  (only meaningful for `chase`); it's per-bridge, like `area_id`.
+- Each Bridge allows only **one** active Entertainment stream at a time (this is
+  per-*bridge*, not global — different bridges stream independently and
+  concurrently); the DTLS handshake is 3–9 s per bridge.
+- `MAX_BRIDGES` = 3; extra `bridges` entries (option or `/start` body) beyond
+  that are dropped with a warning, not an error.
 - `duration` omitted → `DEFAULT_DURATION_S` (30 s); always self-terminates,
   never runs until `/stop` implicitly.
 - The s6 `run` script is `#!/command/with-contenv bashio`; the Dockerfile
@@ -184,8 +225,11 @@ cert). See `_clip` / `capture_light_state` / `restore_light_state`.
 3. `redalert/rootfs/app/main.py` — `state[...]` default from `options.get(...)`;
    the startup config `log.info(...)` line; `handle_start` body parse
    (`body.get(..., state[...])`); the `/config` JSON; the `state["last_start"]` dict.
-4. `redalert/rootfs/app/panel.html` — if user-facing: an input in section 3, the
-   `body.*` in `btn-start`, the status-grid field, and the prefill in `refresh()`.
+4. `redalert/rootfs/app/panel.html` — if user-facing and shared across bridges:
+   an input in section "2 · Steuerung", the `body.*` in `btn-start`, the
+   status-grid field, and the prefill in `refresh()`. If it's per-bridge (like
+   `area_id`/`channel_order`): a field in `bridgeCardHTML(i)` instead, wired in
+   `wireBridgeCard(i)`.
 5. `redalert/DOCS.md` (options table + `/start` body list) and `README.md`
    (§5 options table + §6 `/start` row + §8 "Effekt anpassen" if it tunes an effect).
 6. `redalert/CHANGELOG.md` + version bump (see the `release` skill).

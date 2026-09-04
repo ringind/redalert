@@ -5,7 +5,8 @@
 
 Home-Assistant-Add-on für eine Star-Trek-„Alarmstufe Rot“-Szene über mehrere
 Philips-Hue-Lampen, gesteuert über das echte **Hue Entertainment API**
-(DTLS-Streaming, nicht die normale Bridge-Szene). Zwei Effekte: `pulse` –
+(DTLS-Streaming, nicht die normale Bridge-Szene). Unterstützt **bis zu 3 Hue
+Bridges**, die den Effekt gleichzeitig abspielen. Zwei Effekte: `pulse` –
 alle Lampen blenden gemeinsam auf und ab (Standard) – und `chase` – ein
 umlaufender Komet, der einen Schweif hinter sich herzieht. Läuft für eine
 konfigurierbare Dauer (Standard 30 s).
@@ -60,15 +61,17 @@ HA-Automation ──┬──> media_player.play_media (dein Sound, z. B. Sonos)
                                         │
                                         ▼
                          Add-on (Python, aiohttp)
-                         hält DTLS-Stream offen (~25 Hz)
+                         hält je Bridge (bis zu 3) einen
+                         eigenen DTLS-Stream offen (~25 Hz)
                          pulse: alle Lampen gemeinsam im Takt
                          (chase: umlaufender Komet mit Schweif)
                                         │
-                                        ▼
-                              Hue Bridge (Entertainment API)
-                                        │
-                                        ▼
-                                  6 Hue-Lampen
+                              ┌─────────┼─────────┐
+                              ▼         ▼         ▼
+                          Bridge 1   Bridge 2   Bridge 3
+                              │         │         │
+                              ▼         ▼         ▼
+                          Hue-Lampen  Hue-Lampen  Hue-Lampen
 ```
 
 Das Add-on läuft dauerhaft im Hintergrund und stellt eine kleine REST-API
@@ -79,9 +82,10 @@ Automationen ansprichst.
 
 - Home Assistant **OS oder Supervised** (Add-on-Store nötig; bei Core/Container
   müsste der Dienst stattdessen separat als Container/Systemd-Service laufen).
-- Hue Bridge **V2** („quadratisch“) oder Hue Pro Bridge – V1-Bridges unterstützen
-  kein Entertainment-Streaming.
-- 6 Hue-Lampen (Farbe/Farbtemperatur-fähig), einem Entertainment-Bereich zugeordnet.
+- Eine bis drei Hue Bridge **V2** („quadratisch“) oder Hue Pro Bridge –
+  V1-Bridges unterstützen kein Entertainment-Streaming.
+- Pro Bridge: Hue-Lampen (Farbe/Farbtemperatur-fähig), einem Entertainment-Bereich
+  zugeordnet.
 - Ein `media_player`-Entity in Home Assistant (Sonos/Chromecast/Speaker o. ä.)
   für die Sound-Wiedergabe.
 - Eine eigene, legal erworbene Audiodatei mit dem Alarm-Sound (siehe
@@ -91,14 +95,15 @@ Automationen ansprichst.
 
 ## Schnellstart
 
-1. Entertainment-Bereich mit den 6 Lampen in der Hue-App anlegen.
+1. Entertainment-Bereich(e) in der Hue-App anlegen (einer pro Bridge).
 2. Dieses Repo im Add-on Store als Repository hinzufügen, **Red Alert
    Entertainment** installieren und starten.
-3. Link-Button auf der Bridge drücken, dann im Web-UI **Pairen** klicken
+3. Pro Bridge: Link-Button drücken, dann im Web-UI **Pairen** klicken
    (oder `POST /pair` aufrufen).
-4. `GET /areas` aufrufen, `area_id` in die Add-on-Konfiguration eintragen.
+4. Pro Bridge: `GET /areas?bridge_host=...` aufrufen, Ergebnis als Zeile in
+   die Add-on-Option `bridges` eintragen.
 5. `rest_command` + Automation in Home Assistant anlegen (Vorlage weiter unten).
-6. Fertig – Trigger auslösen, Licht und Ton laufen synchron.
+6. Fertig – Trigger auslösen, alle konfigurierten Bridges spielen gleichzeitig.
 
 ---
 
@@ -122,27 +127,27 @@ und starten. Empfohlen: „Start beim Booten“ aktivieren.
 (Alternativ als lokales Add-on: den Unterordner `redalert/` nach
 `/addons/redalert` auf den HA-Host kopieren und Repositories neu laden.)
 
-## 3. Einmalig mit der Bridge pairen
+## 3. Einmalig mit jeder Bridge pairen
 
 Physischen Link-Button auf der Hue Bridge drücken, dann **innerhalb von
 ~30 Sekunden** pairen – entweder im Web-UI (Seitenleiste **Red Alert** →
-„1 · Mit Bridge pairen“) oder per REST:
+Bridge-Karte unter „1 · Bridges“) oder per REST, für jede Bridge einzeln:
 
 ```bash
 curl -X POST http://<home-assistant-ip>:8099/pair \
   -H "Content-Type: application/json" \
-  -d '{"bridge_ip": "192.168.1.50"}'
+  -d '{"bridge_host": "192.168.1.50"}'
 ```
 
-Antwort enthält `username` und `clientkey` – werden automatisch im
-Add-on-Datenordner gespeichert (`/data/credentials.json`), du musst dir
-nichts merken. Pairing muss nur einmal gemacht werden, außer du setzt das
-Add-on komplett zurück.
+Antwort enthält `username` und `clientkey` – werden automatisch (pro Bridge)
+im Add-on-Datenordner gespeichert (`/data/credentials.json`), du musst dir
+nichts merken. Pairing muss pro Bridge nur einmal gemacht werden, außer du
+setzt das Add-on komplett zurück.
 
 ## 4. Area-ID und Kanalreihenfolge ermitteln
 
 ```bash
-curl http://<home-assistant-ip>:8099/areas
+curl "http://<home-assistant-ip>:8099/areas?bridge_host=192.168.1.50"
 ```
 
 Liefert z. B.:
@@ -151,23 +156,22 @@ Liefert z. B.:
 [{"id": "abcd-1234", "name": "Red Alert", "channels": [0, 1, 2, 3, 4, 5]}]
 ```
 
-Trage die `id` als Add-on-Option `area_id` ein (Konfiguration-Tab des
-Add-ons). Falls die `channels`-Reihenfolge nicht deiner physischen Anordnung
-entspricht, kannst du die gewünschte Reihenfolge explizit als
+Trage `bridge_host` + die `id` als Zeile der Add-on-Option `bridges` ein
+(Konfiguration-Tab des Add-ons; eine Zeile pro Bridge). Falls die
+`channels`-Reihenfolge nicht deiner physischen Anordnung entspricht, kannst
+du die gewünschte Reihenfolge in derselben Zeile explizit als
 `channel_order` setzen – als kommagetrennte Liste (z. B. `2,3,1,0,5,4`),
-entweder als Add-on-Option oder direkt im Web-UI unter „3 · Steuerung“.
-Welche `channel_id` welche Lampe ist, findest du im Web-UI unter
-„4 · Lampen zuordnen“ (leuchtet die Kanäle einzeln auf). Add-on nach einer
-Options-Änderung neu starten.
+entweder als Add-on-Option oder direkt im Web-UI in der jeweiligen
+Bridge-Karte. Welche `channel_id` welche Lampe ist, findest du in der
+Bridge-Karte unter „Lampen zuordnen“ (leuchtet die Kanäle einzeln auf).
+Add-on nach einer Options-Änderung neu starten.
 
 ## 5. Add-on-Optionen
 
 | Option           | Typ           | Standard | Bedeutung                                                       |
 |-------------------|--------------|----------|-------------------------------------------------------------------|
-| `bridge_host`     | String        | leer     | IP der Hue Bridge. Kann auch pro `/pair`-Aufruf übergeben werden. |
-| `area_id`         | String        | leer     | ID des Entertainment-Bereichs (siehe Schritt 4).                  |
-| `channel_order`   | String        | leer     | Kanalreihenfolge (`chase`) als kommagetrennte Liste, z. B. `2,3,1,0,5,4`. |
-| `effect`          | `pulse`\|`chase` | `pulse` | `pulse` = alle Lampen zusammen `glow_low` → `glow_high` → `glow_low` im Musiktakt. `chase` = umlaufender Komet mit Schweif. |
+| `bridges`         | Liste (max. 3) | leer   | Eine Zeile pro Bridge: `bridge_host` (IP), `area_id` (siehe Schritt 4), optional `channel_order`. |
+| `effect`          | `pulse`\|`chase` | `pulse` | `pulse` = alle Lampen zusammen `glow_low` → `glow_high` → `glow_low` im Takt. `chase` = umlaufender Komet mit Schweif. |
 | `color`           | Hex-String    | `#FF0000`| Farbe des Effekts.                                                |
 | `fps`             | int (5–50)    | 25       | Frames/Sekunde des DTLS-Streams.                                   |
 | `sweep_seconds`   | float (0.3–5) | 1.4      | `chase`: Dauer einer vollen Umrundung. `pulse`: Zyklusdauer. |
@@ -184,16 +188,17 @@ Options-Änderung neu starten.
 | Endpoint  | Methode | Zweck                                                                                 |
 |-----------|---------|-----------------------------------------------------------------------------------------|
 | `/`       | GET     | Web-UI (Ingress-Panel „Red Alert“)                                                      |
-| `/health` | GET     | Status (gepaart? läuft der Effekt gerade?) – auch Ziel des Container-HEALTHCHECK                         |
-| `/config` | GET     | Effektive Konfiguration (für das Web-UI)                                                |
-| `/pair`   | POST    | Einmalige Kopplung mit der Bridge. Body: `{"bridge_ip": "..."}` (optional, falls Option gesetzt) |
-| `/areas`  | GET     | Verfügbare Entertainment-Bereiche + Kanäle auflisten                                    |
-| `/start`  | POST    | Effekt starten (antwortet sofort; DTLS-Handshake läuft im Hintergrund). Body optional: `area_id`, `effect`, `duration` (Sek., Standard 30), `fps`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `color`, `restore_state`, `channel_order` (`[2,3,1,0,5,4]` oder `"2,3,1,0,5,4"`) |
-| `/stop`   | POST    | Effekt sofort stoppen                                                                   |
-| `/identify` | POST  | Lampen einzeln durchtesten (`channel_id` → Lampe). Body optional: `area_id`, `channel_id` (fehlt = alle nacheinander), `seconds`, `color`, `restore_state`. Ein DTLS-Handshake für den Durchlauf; belegt denselben Slot wie `/start`. |
+| `/health` | GET     | Status (mind. eine Bridge gepaart? läuft der Effekt gerade?) – auch Ziel des Container-HEALTHCHECK |
+| `/config` | GET     | Effektive Konfiguration inkl. `bridges` (für das Web-UI)                                |
+| `/pair`   | POST    | Einmalige Kopplung mit einer Bridge. Body: `{"bridge_host": "..."}` (Pflicht bei mehr als einer konfigurierten Bridge) |
+| `/areas`  | GET     | Entertainment-Bereiche + Kanäle einer Bridge auflisten. Query `?bridge_host=...` (Pflicht bei mehr als einer gepaarten Bridge) |
+| `/start`  | POST    | Effekt auf allen konfigurierten (oder im Body übergebenen) Bridges gleichzeitig starten (antwortet sofort; DTLS-Handshakes laufen parallel im Hintergrund). Body optional: `effect`, `duration` (Sek., Standard 30), `fps`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `color`, `restore_state` (für alle Bridges); `bridges` (Liste von `{bridge_host, area_id, channel_order}`, `channel_order` als `[2,3,1,0,5,4]` oder `"2,3,1,0,5,4"`) übersteuert für diesen Aufruf die Option `bridges`. Antwort enthält `bridges` (gestartet) + `failed_bridges` (übersprungen); `502` nur wenn keine Bridge startet. |
+| `/stop`   | POST    | Effekt auf allen laufenden Bridges sofort stoppen                                       |
+| `/identify` | POST  | Lampen einer Bridge einzeln durchtesten (`channel_id` → Lampe). Body: `bridge_host` (Pflicht bei mehr als einer konfigurierten Bridge), `area_id` (optional, sonst aus der bridges-Konfiguration), `channel_id` (fehlt = alle nacheinander), `seconds`, `color`, `restore_state`. Ein DTLS-Handshake für den Durchlauf; belegt denselben Slot wie `/start`. |
 
 `duration` weglassen → Effekt läuft **30 Sekunden**, dann endet er von selbst
-(oder vorher per `/stop`).
+(oder vorher per `/stop`). Ist eine Bridge nicht erreichbar, starten die
+übrigen trotzdem (best effort) – siehe `failed_bridges`.
 
 ## 7. Home Assistant einbinden
 
@@ -292,12 +297,12 @@ Farbe ist aktuell fest auf Rot (`green=0, blue=0`) gesetzt; über
 
 | Symptom                                   | Wahrscheinliche Ursache / Lösung                                                                 |
 |--------------------------------------------|----------------------------------------------------------------------------------------------------|
-| `/pair` schlägt fehl                       | Link-Button nicht rechtzeitig gedrückt (Zeitfenster ~30 s) oder falsche `bridge_ip`.               |
+| `/pair` schlägt fehl                       | Link-Button nicht rechtzeitig gedrückt (Zeitfenster ~30 s) oder falsche `bridge_host`.              |
 | `/start` liefert `already_running`         | Erst `/stop` aufrufen, bevor ein neuer Lauf gestartet wird.                                        |
-| `/start` liefert 404 `area_id nicht gefunden` | `GET /areas` erneut prüfen – Bereich evtl. in der Hue-App umbenannt/gelöscht.                    |
-| Lampen reagieren gar nicht                 | Bridge unterstützt evtl. kein Entertainment (V1-Bridge), oder UDP-Port 2100 zur Bridge ist blockiert (Firewall/VLAN). |
+| `/start` liefert 502 `keine Bridge verfügbar` | Keine der konfigurierten Bridges war erreichbar/gepaart – bei nur teilweisem Ausfall antwortet `/start` trotzdem `200`, einzelne Fehler stehen in `failed_bridges`. |
+| Lampen einer Bridge reagieren gar nicht    | Diese Bridge unterstützt evtl. kein Entertainment (V1-Bridge), oder UDP-Port 2100 zu ihr ist blockiert (Firewall/VLAN). |
 | Lauflicht ruckelt                          | `fps` in den Add-on-Optionen erhöhen oder Netzwerklast zur Bridge prüfen.                          |
-| Streaming bricht nach kurzer Zeit ab       | Die Bridge erlaubt nur **einen aktiven** Entertainment-Stream gleichzeitig – Hue-Sync-App oder andere Streaming-Clients währenddessen schließen. |
+| Streaming einer Bridge bricht nach kurzer Zeit ab | Jede Bridge erlaubt nur **einen aktiven** Entertainment-Stream gleichzeitig (pro Bridge, nicht global) – Hue-Sync-App oder andere Streaming-Clients auf dieser Bridge währenddessen schließen. |
 
 ## 10. Rechtlicher Hinweis zur Audiodatei
 

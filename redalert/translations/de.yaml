@@ -1,19 +1,24 @@
 configuration:
-  bridge_host:
-    name: Hue-Bridge-IP
+  bridges:
+    name: Hue Bridges
     description: >-
-      IP-Adresse der Hue Bridge. Optional – kann auch pro /pair-Aufruf übergeben werden.
-  area_id:
-    name: Entertainment-Bereich-ID
-    description: >-
-      ID des Hue-Entertainment-Bereichs, an den gestreamt wird. Über den Button
-      „Bereiche laden“ im Web-UI oder GET /areas ermitteln.
-  channel_order:
-    name: Kanalreihenfolge
-    description: >-
-      Optionale Reihenfolge der channel_ids für den Kometen-Sweep, als
-      kommagetrennte Liste, z. B. 2,3,1,0,5,4. Leer lassen = native Reihenfolge
-      des Bereichs.
+      Bis zu 3 Hue Bridges, die den Effekt gleichzeitig abspielen. Pro Bridge
+      Zeile hinzufügen und ausfüllen.
+    bridge_host:
+      name: Hue-Bridge-IP
+      description: >-
+        IP-Adresse der Hue Bridge. Kann auch pro /pair-Aufruf übergeben werden.
+    area_id:
+      name: Entertainment-Bereich-ID
+      description: >-
+        ID des Hue-Entertainment-Bereichs dieser Bridge, an den gestreamt wird.
+        Über den Button „Bereiche laden“ im Web-UI oder GET /areas ermitteln.
+    channel_order:
+      name: Kanalreihenfolge
+      description: >-
+        Optionale Reihenfolge der channel_ids dieser Bridge für den
+        Kometen-Sweep, als kommagetrennte Liste, z. B. 2,3,1,0,5,4. Leer
+        lassen = native Reihenfolge des Bereichs.
   effect:
     name: Effekt
     description: >-

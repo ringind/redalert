@@ -56,6 +56,9 @@
   pre#log { background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
     padding: .7rem; max-height: 220px; overflow: auto; font-size: .8rem; white-space: pre-wrap; margin: 0; }
   .muted { color: var(--muted); }
+  details > summary { cursor: pointer; }
+  .bridge-card h3 { margin: 0; font-size: .9rem; font-weight: 600; }
+  .bridge-card + .bridge-card { border-top: 1px solid var(--line); margin-top: 1rem; padding-top: 1rem; }
 </style>
 </head>
 <body>
@@ -68,7 +71,7 @@
   <section class="card">
     <h2>Status</h2>
     <div class="row" style="margin-bottom:.8rem">
-      <span class="pill" id="pill-pair"><span class="led"></span> Bridge</span>
+      <span class="pill" id="pill-pair"><span class="led"></span> Bridges</span>
       <span class="pill" id="pill-run"><span class="led"></span> Effekt</span>
       <button class="secondary" id="btn-refresh" style="margin-left:auto">Aktualisieren</button>
     </div>
@@ -76,26 +79,19 @@
   </section>
 
   <section class="card">
-    <h2>1 · Mit Bridge pairen</h2>
-    <p class="muted" style="margin-top:0">Zuerst den Link-Button auf der Hue Bridge drücken, dann innerhalb ~30 s pairen.</p>
-    <div class="row">
-      <div><label for="bridge">Bridge-IP</label><input type="text" id="bridge" placeholder="192.168.1.50"></div>
-      <button id="btn-pair">Pairen</button>
-    </div>
+    <h2>1 · Bridges</h2>
+    <p class="muted" style="margin-top:0">
+      Bis zu 3 Hue Bridges, die den Effekt gleichzeitig abspielen. Pro Bridge:
+      Link-Button drücken, IP eintragen, innerhalb ~30 s „Pairen“ klicken,
+      dann „Bereiche laden“ und den gewünschten Bereich übernehmen.
+    </p>
+    <div id="bridges"></div>
   </section>
 
   <section class="card">
-    <h2>2 · Entertainment-Bereich</h2>
-    <div class="row" style="margin-bottom:.7rem">
-      <button class="secondary" id="btn-areas">Bereiche laden</button>
-    </div>
-    <div class="areas" id="areas"><span class="muted">Noch nichts geladen.</span></div>
-  </section>
-
-  <section class="card">
-    <h2>3 · Steuerung</h2>
+    <h2>2 · Steuerung</h2>
+    <p class="muted" style="margin-top:0">Gilt für alle oben eingerichteten Bridges gemeinsam.</p>
     <div class="row">
-      <div><label for="area">area_id</label><input type="text" id="area" placeholder="abcd-1234"></div>
       <div><label for="effect">Effekt</label><select id="effect"><option value="pulse">pulse (Takt)</option><option value="chase">chase (Lauflicht)</option></select></div>
       <div><label for="duration">Dauer (s)</label><input type="number" id="duration" min="0" step="1" placeholder="30"></div>
       <div><label for="fps">fps</label><input type="number" id="fps" min="5" max="50" step="1"></div>
@@ -104,17 +100,10 @@
       <div><label for="glowlow">glow_low (0–1)</label><input type="number" id="glowlow" min="0" max="1" step="0.01" placeholder="0.08"></div>
       <div><label for="glowhigh">glow_high (0–1)</label><input type="number" id="glowhigh" min="0" max="1" step="0.01" placeholder="1"></div>
       <div><label for="color">Farbe</label><input type="color" id="color" value="#ff0000"></div>
-      <div style="flex:1 1 100%"><label for="chanorder">channel_order (leer = Bereichs-Standard)</label>
-        <input type="text" id="chanorder" placeholder="z. B. 2,3,1,0,5,4" style="width:100%"></div>
     </div>
     <p class="muted" style="margin:.5rem 0 0">
       <strong>Dauer</strong> (leer = 30 s): wie lange der Effekt läuft, bevor er von selbst endet
       (oder vorher per „Stop“).<br>
-      <strong>channel_order</strong> (leer = Bereichs-Standard): Reihenfolge der
-      <code>channel_id</code>s, in der der Komet (<code>chase</code>) physisch durchlaufen soll.
-      Der Bereich unten hat die Kanäle 0–N; trage genau diese Zahlen in der gewünschten
-      Reihenfolge ein, z. B. <code>2,3,1,0,5,4</code>. Mit „4 · Lampen zuordnen“ findest du
-      heraus, welcher Kanal welche Lampe ist.<br>
       <strong>glow_low / glow_high</strong> (beide Effekte): Ruhe-Helligkeit zwischen den
       Pulsen bzw. Helligkeit im Puls-Maximum. Zwischen den Pulsen gehen die Lampen auf
       <code>glow_low</code> zurück (nicht auf 0), im Maximum auf <code>glow_high</code>.
@@ -122,23 +111,6 @@
     <div class="row" style="margin-top:.9rem">
       <button id="btn-start">▶ Start</button>
       <button class="secondary" id="btn-stop">■ Stop</button>
-    </div>
-  </section>
-
-  <section class="card">
-    <h2>4 · Lampen zuordnen</h2>
-    <p class="muted" style="margin-top:0">
-      Leuchtet Kanäle einzeln rot auf, damit du siehst, welche Lampe an welcher Position sitzt.
-      Nutzt kurz den Entertainment-Stream – pro Klick ein DTLS-Handshake (~3–9 s), dann leuchtet
-      der Kanal. Zuerst oben einen Bereich wählen und „Bereiche laden“.
-    </p>
-    <div class="row" style="margin-bottom:.6rem">
-      <div><label for="idsecs">Sekunden je Kanal</label>
-        <input type="number" id="idsecs" min="1" max="15" step="1" placeholder="3"></div>
-      <button class="secondary" id="btn-identify-all">Alle Kanäle nacheinander</button>
-    </div>
-    <div class="row" id="identify-buttons">
-      <span class="muted">Noch kein Bereich geladen.</span>
     </div>
   </section>
 
@@ -156,6 +128,8 @@
 <script>
   // Relative URLs -> funktioniert hinter Ingress und via Port 8099 direkt.
   const $ = (id) => document.getElementById(id);
+  const BRIDGE_COUNT = 3;
+
   const logEl = $("log");
   let LOG_ENTRIES = [];
   function renderLog() {
@@ -199,19 +173,118 @@
     el.classList.toggle("on", !!on);
     el.lastChild.textContent = " " + label;
   }
+
+  // --- Bridge-Karten (bis zu 3) --------------------------------------------
+  function bridgeCardHTML(i) {
+    return `
+      <div class="bridge-card" data-idx="${i}">
+        <h3>Bridge ${i + 1}</h3>
+        <div class="row" style="margin-top:.5rem">
+          <div><label for="b${i}-host">Bridge-IP</label><input type="text" id="b${i}-host" placeholder="192.168.1.50"></div>
+          <button id="b${i}-pair">Pairen</button>
+          <span class="pill" id="b${i}-pill"><span class="led"></span> nicht gepaart</span>
+        </div>
+        <div class="row" style="margin-top:.6rem">
+          <div><label for="b${i}-area">area_id</label><input type="text" id="b${i}-area" placeholder="abcd-1234"></div>
+          <button class="secondary" id="b${i}-areas-btn">Bereiche laden</button>
+          <div style="flex:1 1 100%"><label for="b${i}-order">channel_order (leer = Bereichs-Standard)</label>
+            <input type="text" id="b${i}-order" placeholder="z. B. 2,3,1,0,5,4" style="width:100%"></div>
+        </div>
+        <div class="areas" id="b${i}-arealist" style="margin-top:.5rem"><span class="muted">Noch nichts geladen.</span></div>
+        <details style="margin-top:.7rem">
+          <summary class="muted">Lampen zuordnen</summary>
+          <div class="row" style="margin:.6rem 0">
+            <div><label for="b${i}-idsecs">Sekunden je Kanal</label>
+              <input type="number" id="b${i}-idsecs" min="1" max="15" step="1" placeholder="3"></div>
+            <button class="secondary" id="b${i}-identify-all">Alle Kanäle nacheinander</button>
+          </div>
+          <div class="row" id="b${i}-identify-buttons"><span class="muted">Bereich oben wählen und „Bereiche laden“.</span></div>
+        </details>
+      </div>`;
+  }
+  $("bridges").innerHTML = Array.from({ length: BRIDGE_COUNT }, (_, i) => bridgeCardHTML(i)).join("");
+
+  // Zuletzt per "Bereiche laden" geholte Bereichsliste, eine pro Bridge-Karte.
+  const AREAS = Array.from({ length: BRIDGE_COUNT }, () => []);
+
+  function renderIdentify(i) {
+    const box = $(`b${i}-identify-buttons`);
+    const a = AREAS[i].find((x) => x.id === $(`b${i}-area`).value.trim());
+    box.innerHTML = "";
+    if (!a) {
+      box.innerHTML = '<span class="muted">Bereich oben wählen und „Bereiche laden“.</span>';
+      return;
+    }
+    for (const c of a.channels) {
+      const btn = document.createElement("button");
+      btn.className = "secondary";
+      btn.textContent = "Kanal " + c;
+      btn.onclick = () => identify(i, { channel_id: c });
+      box.appendChild(btn);
+    }
+  }
+
+  async function identify(i, extra) {
+    const host = $(`b${i}-host`).value.trim();
+    if (!host) { logLine(`Bridge ${i + 1}: keine Bridge-IP eingetragen.`); return; }
+    const body = Object.assign({ bridge_host: host }, extra);
+    if ($(`b${i}-area`).value.trim()) body.area_id = $(`b${i}-area`).value.trim();
+    if ($(`b${i}-idsecs`).value !== "") body.seconds = Number($(`b${i}-idsecs`).value);
+    if ($("color").value) body.color = $("color").value;
+    await api("identify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    refresh();
+  }
+
+  function wireBridgeCard(i) {
+    $(`b${i}-pair`).onclick = async () => {
+      const body = {};
+      if ($(`b${i}-host`).value.trim()) body.bridge_host = $(`b${i}-host`).value.trim();
+      await api("pair", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      refresh();
+    };
+    $(`b${i}-areas-btn`).onclick = async () => {
+      const host = $(`b${i}-host`).value.trim();
+      if (!host) { logLine(`Bridge ${i + 1}: keine Bridge-IP eingetragen.`); return; }
+      const { ok, data } = await api(`areas?bridge_host=${encodeURIComponent(host)}`);
+      const box = $(`b${i}-arealist`); box.innerHTML = "";
+      if (!ok || !Array.isArray(data) || data.length === 0) {
+        AREAS[i] = []; renderIdentify(i);
+        box.innerHTML = '<span class="muted">Keine Bereiche gefunden.</span>'; return;
+      }
+      AREAS[i] = data;
+      for (const a of data) {
+        const el = document.createElement("div");
+        el.className = "area";
+        el.innerHTML = `<div><strong>${a.name || "(ohne Name)"}</strong><br><code>${a.id}</code> · Kanäle: ${a.channels.join(", ")}</div>`;
+        const btn = document.createElement("button");
+        btn.className = "secondary"; btn.textContent = "übernehmen";
+        btn.onclick = () => { $(`b${i}-area`).value = a.id; logLine(`Bridge ${i + 1}: area_id gesetzt: ` + a.id); renderIdentify(i); };
+        el.appendChild(btn);
+        box.appendChild(el);
+      }
+      renderIdentify(i);
+    };
+    $(`b${i}-identify-all`).onclick = () => identify(i, {});
+    $(`b${i}-area`).addEventListener("input", () => renderIdentify(i));
+  }
+  for (let i = 0; i < BRIDGE_COUNT; i++) wireBridgeCard(i);
+
+  // --- Status / Steuerung ---------------------------------------------------
   async function refresh() {
     const { ok, data } = await api("config");
     if (!ok) return;
-    setPill($("pill-pair"), data.paired, data.paired ? "Bridge gepaart" : "Nicht gepaart");
+    const bridges = data.bridges || [];
+    const anyPaired = bridges.some((b) => b.paired);
+    setPill($("pill-pair"), anyPaired, anyPaired
+      ? `${bridges.filter((b) => b.paired).length}/${bridges.length || 0} gepaart`
+      : "keine gepaart");
     setPill($("pill-run"), data.running, data.running ? "Effekt läuft" : "Effekt aus");
     $("btn-start").classList.toggle("pressed", !!data.running);
     $("btn-stop").classList.toggle("pressed", !data.running);
+
     const s = $("status"); s.innerHTML = "";
     const fields = {
-      "Bridge": data.bridge_host || "–",
-      "area_id (Option)": data.area_id || "–",
       "Effekt": data.effect,
-      "Kanalreihenfolge": (data.channel_order && data.channel_order.join(", ")) || "Bereichs-Standard",
       "Farbe": data.color,
       "fps": data.fps,
       "sweep_seconds": data.sweep_seconds,
@@ -219,12 +292,26 @@
       "attack / release": `${data.attack_ms} / ${data.release_ms} ms`,
       "glow low / high": `${data.glow_low} / ${data.glow_high}`,
     };
+    bridges.forEach((b, i) => {
+      fields[`Bridge ${i + 1} (Option)`] =
+        `${b.bridge_host} · ${b.paired ? "gepaart" : "nicht gepaart"} · Bereich ${b.area_id || "–"}`;
+    });
     for (const [k, v] of Object.entries(fields)) {
       const d = document.createElement("div");
       d.innerHTML = `<span>${k}</span>${v}`;
       s.appendChild(d);
     }
-    if (data.area_id && !$("area").value) $("area").value = data.area_id;
+
+    bridges.forEach((b, i) => {
+      if (i >= BRIDGE_COUNT) return;
+      if (b.bridge_host && !$(`b${i}-host`).value) $(`b${i}-host`).value = b.bridge_host;
+      if (b.area_id && !$(`b${i}-area`).value) $(`b${i}-area`).value = b.area_id;
+      if (b.channel_order && b.channel_order.length && !$(`b${i}-order`).value)
+        $(`b${i}-order`).value = b.channel_order.join(", ");
+      setPill($(`b${i}-pill`), b.paired, b.paired ? "gepaart" : "nicht gepaart");
+      renderIdentify(i);
+    });
+
     if (data.effect && !$("effect").dataset.touched) $("effect").value = data.effect;
     if (data.fps && !$("fps").value) $("fps").value = data.fps;
     if (data.sweep_seconds && !$("sweep").value) $("sweep").value = data.sweep_seconds;
@@ -232,71 +319,23 @@
     if (data.glow_low != null && !$("glowlow").value) $("glowlow").value = data.glow_low;
     if (data.glow_high != null && !$("glowhigh").value) $("glowhigh").value = data.glow_high;
     if (data.color) $("color").value = data.color.toLowerCase();
-    if (data.channel_order && data.channel_order.length && !$("chanorder").value)
-      $("chanorder").value = data.channel_order.join(", ");
-    renderIdentify();
   }
 
-  // Zuletzt per "Bereiche laden" geholte Bereichsliste – für die Kanal-Buttons.
-  let AREAS = [];
-  function renderIdentify() {
-    const box = $("identify-buttons");
-    const a = AREAS.find((x) => x.id === $("area").value.trim());
-    box.innerHTML = "";
-    if (!a) {
-      box.innerHTML = '<span class="muted">Bereich oben wählen und „Bereiche laden“.</span>';
-      return;
-    }
-    for (const c of a.channels) {
-      const b = document.createElement("button");
-      b.className = "secondary";
-      b.textContent = "Kanal " + c;
-      b.onclick = () => identify({ channel_id: c });
-      box.appendChild(b);
-    }
-  }
-  async function identify(extra) {
-    const body = Object.assign({}, extra);
-    if ($("area").value.trim()) body.area_id = $("area").value.trim();
-    if ($("idsecs").value !== "") body.seconds = Number($("idsecs").value);
-    if ($("color").value) body.color = $("color").value;
-    await api("identify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    refresh();
-  }
   $("btn-refresh").onclick = refresh;
-  $("btn-pair").onclick = async () => {
-    const body = {};
-    if ($("bridge").value.trim()) body.bridge_ip = $("bridge").value.trim();
-    await api("pair", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    refresh();
-  };
-  $("btn-areas").onclick = async () => {
-    const { ok, data } = await api("areas");
-    const box = $("areas"); box.innerHTML = "";
-    if (!ok || !Array.isArray(data) || data.length === 0) {
-      AREAS = []; renderIdentify();
-      box.innerHTML = '<span class="muted">Keine Bereiche gefunden.</span>'; return;
-    }
-    AREAS = data;
-    for (const a of data) {
-      const el = document.createElement("div");
-      el.className = "area";
-      el.innerHTML = `<div><strong>${a.name || "(ohne Name)"}</strong><br><code>${a.id}</code> · Kanäle: ${a.channels.join(", ")}</div>`;
-      const b = document.createElement("button");
-      b.className = "secondary"; b.textContent = "übernehmen";
-      b.onclick = () => { $("area").value = a.id; logLine("area_id gesetzt: " + a.id); renderIdentify(); };
-      el.appendChild(b);
-      box.appendChild(el);
-    }
-    renderIdentify();
-  };
-  $("btn-identify-all").onclick = () => identify({});
-  $("area").addEventListener("input", renderIdentify);
   $("effect").onchange = () => { $("effect").dataset.touched = "1"; };
   $("btn-start").onclick = async () => {
+    const bridges = [];
+    for (let i = 0; i < BRIDGE_COUNT; i++) {
+      const host = $(`b${i}-host`).value.trim();
+      const area = $(`b${i}-area`).value.trim();
+      if (!host || !area) continue;
+      const entry = { bridge_host: host, area_id: area };
+      const order = $(`b${i}-order`).value.trim();
+      if (order) entry.channel_order = order;
+      bridges.push(entry);
+    }
     const body = { color: $("color").value, effect: $("effect").value };
-    if ($("area").value.trim()) body.area_id = $("area").value.trim();
-    if ($("chanorder").value.trim()) body.channel_order = $("chanorder").value.trim();
+    if (bridges.length) body.bridges = bridges;
     if ($("duration").value !== "") body.duration = Number($("duration").value);
     if ($("fps").value !== "") body.fps = Number($("fps").value);
     if ($("sweep").value !== "") body.sweep_seconds = Number($("sweep").value);

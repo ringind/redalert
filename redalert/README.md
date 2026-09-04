@@ -1,9 +1,9 @@
 # Red Alert Entertainment
 
 Star-Trek-„Alarmstufe Rot“-Effekt über Philips-Hue-Lampen via **Hue
-Entertainment API** (DTLS-Streaming), mit Ingress-Web-UI. Effekte: `pulse`
-(alle Lampen gemeinsam im Takt, Standard) und `chase` (umlaufender Komet mit
-Schweif).
+Entertainment API** (DTLS-Streaming), mit Ingress-Web-UI, auf **bis zu 3
+Bridges gleichzeitig**. Effekte: `pulse` (alle Lampen gemeinsam im Takt,
+Standard) und `chase` (umlaufender Komet mit Schweif).
 
 Vollständige Anleitung: siehe **[DOCS.md](DOCS.md)** (wird in HA als Tab
 „Dokumentation“ angezeigt).
@@ -11,8 +11,8 @@ Vollständige Anleitung: siehe **[DOCS.md](DOCS.md)** (wird in HA als Tab
 ## Auf einen Blick
 
 - **Info / Konfiguration / Dokumentation / Protokoll**: Standard-Tabs des Add-ons.
-- **Steuerung**: Seitenleisten-Panel „Red Alert“ (Ingress) – Pairing, Bereiche
-  laden, Effekt, Start/Stop, Farbe/Dauer/fps.
+- **Steuerung**: Seitenleisten-Panel „Red Alert“ (Ingress) – Pairing/Bereiche
+  je Bridge (bis zu 3), gemeinsame Steuerung für Effekt/Start/Stop/Farbe/Dauer/fps.
 - **REST-API** auf Port `8099`: `/health`, `/config`, `/pair`, `/areas`,
   `/start`, `/stop` – für `rest_command`-Automationen.
 - Container-HEALTHCHECK auf `/health`, s6-Supervision, DE/EN-Übersetzung.
