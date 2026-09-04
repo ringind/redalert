@@ -5,9 +5,10 @@
 
 Home-Assistant-Add-on für eine Star-Trek-„Alarmstufe Rot“-Szene über mehrere
 Philips-Hue-Lampen, gesteuert über das echte **Hue Entertainment API**
-(DTLS-Streaming, nicht die normale Bridge-Szene), synchron zu deinem eigenen
-Alarm-Sound. Zwei Effekte: `pulse` – alle Lampen blenden gemeinsam im Takt der
-Musik auf und ab (Standard) – und `chase` – ein umlaufender Komet, der einen Schweif hinter sich herzieht.
+(DTLS-Streaming, nicht die normale Bridge-Szene). Zwei Effekte: `pulse` –
+alle Lampen blenden gemeinsam auf und ab (Standard) – und `chase` – ein
+umlaufender Komet, der einen Schweif hinter sich herzieht. Läuft für eine
+konfigurierbare Dauer (Standard 30 s).
 
 Nutzt die Bibliothek [`hue-entertainment`](https://github.com/music-assistant/hue-entertainment)
 (dieselbe, die auch das Hue-Entertainment-Plugin von Music Assistant antreibt).
@@ -37,11 +38,10 @@ DTLS-Streaming und Start/Stop laufen end-to-end.
 8. [Add-on-Optionen](#5-add-on-optionen)
 9. [REST-API](#6-rest-api)
 10. [Home Assistant einbinden](#7-home-assistant-einbinden)
-11. [Audio-Sync per Cue-Datei](#8-audio-sync-per-cue-datei)
-12. [Effekt anpassen](#9-effekt-anpassen)
-13. [Fehlerbehebung](#10-fehlerbehebung)
-14. [Rechtlicher Hinweis zur Audiodatei](#11-rechtlicher-hinweis-zur-audiodatei)
-15. [Projektstruktur](#projektstruktur)
+11. [Effekt anpassen](#8-effekt-anpassen)
+12. [Fehlerbehebung](#9-fehlerbehebung)
+13. [Rechtlicher Hinweis zur Audiodatei](#10-rechtlicher-hinweis-zur-audiodatei)
+14. [Projektstruktur](#projektstruktur)
 
 ---
 
@@ -61,7 +61,7 @@ HA-Automation ──┬──> media_player.play_media (dein Sound, z. B. Sonos)
                                         ▼
                          Add-on (Python, aiohttp)
                          hält DTLS-Stream offen (~25 Hz)
-                         pulse: alle Lampen × Audio-Hüllkurve
+                         pulse: alle Lampen gemeinsam im Takt
                          (chase: umlaufender Komet mit Schweif)
                                         │
                                         ▼
@@ -85,7 +85,7 @@ Automationen ansprichst.
 - Ein `media_player`-Entity in Home Assistant (Sonos/Chromecast/Speaker o. ä.)
   für die Sound-Wiedergabe.
 - Eine eigene, legal erworbene Audiodatei mit dem Alarm-Sound (siehe
-  [Rechtlicher Hinweis](#11-rechtlicher-hinweis-zur-audiodatei)).
+  [Rechtlicher Hinweis](#10-rechtlicher-hinweis-zur-audiodatei)).
 - Zugriff auf den HA-Host per Samba- oder SSH-Add-on, um den Add-on-Ordner
   nach `/addons/` zu kopieren.
 
@@ -170,14 +170,13 @@ Options-Änderung neu starten.
 | `effect`          | `pulse`\|`chase` | `pulse` | `pulse` = alle Lampen zusammen `glow_low` → `glow_high` → `glow_low` im Musiktakt. `chase` = umlaufender Komet mit Schweif. |
 | `color`           | Hex-String    | `#FF0000`| Farbe des Effekts.                                                |
 | `fps`             | int (5–50)    | 25       | Frames/Sekunde des DTLS-Streams.                                   |
-| `sweep_seconds`   | float (0.3–5) | 1.4      | `chase`: Dauer einer vollen Umrundung. `pulse` ohne Cue: Zyklusdauer. |
+| `sweep_seconds`   | float (0.3–5) | 1.4      | `chase`: Dauer einer vollen Umrundung. `pulse`: Zyklusdauer. |
 | `chase_pause`     | float (0–60)  | 0        | `chase`: Pause (s) zwischen zwei Durchläufen. `0` = durchgehend; `> 0` = ein Durchlauf, dann alle Lampen `chase_pause` s auf `glow_low`. |
 | `attack_ms`       | int (0–2000)  | 140      | `pulse`: Aufblendzeit `glow_low` → `glow_high`.                   |
 | `release_ms`      | int (0–5000)  | 70       | `pulse`: Abblendzeit → `glow_low` (kleiner als `attack_ms`).       |
 | `glow_low`        | float (0–1)   | 0.08     | **Beide Effekte:** Ruhe-Helligkeit zwischen den Pulsen (`0` = ganz aus). |
 | `glow_high`       | float (0–1)   | 1.0      | **Beide Effekte:** Helligkeit im Puls-Maximum (über `glow_low`).   |
 | `restore_state`   | bool          | `true`   | Lampenzustand vor dem Effekt sichern und danach wiederherstellen.  |
-| `cue_file`        | String        | leer     | Pfad zu einer alternativen `redalert_cue.json` (z. B. `/share/...`). |
 | `log_level`       | Liste         | `info`   | Ausführlichkeit des Add-on-Protokolls (`trace`…`fatal`).           |
 
 ## 6. REST-API
@@ -189,19 +188,12 @@ Options-Änderung neu starten.
 | `/config` | GET     | Effektive Konfiguration (für das Web-UI)                                                |
 | `/pair`   | POST    | Einmalige Kopplung mit der Bridge. Body: `{"bridge_ip": "..."}` (optional, falls Option gesetzt) |
 | `/areas`  | GET     | Verfügbare Entertainment-Bereiche + Kanäle auflisten                                    |
-| `/start`  | POST    | Effekt starten (antwortet sofort; DTLS-Handshake läuft im Hintergrund). Body optional: `area_id`, `effect`, `duration` (Sek.), `cue_offset` (Sek.), `fps`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `color`, `use_cue`, `restore_state`, `channel_order` (`[2,3,1,0,5,4]` oder `"2,3,1,0,5,4"`) |
+| `/start`  | POST    | Effekt starten (antwortet sofort; DTLS-Handshake läuft im Hintergrund). Body optional: `area_id`, `effect`, `duration` (Sek., Standard 30), `fps`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `color`, `restore_state`, `channel_order` (`[2,3,1,0,5,4]` oder `"2,3,1,0,5,4"`) |
 | `/stop`   | POST    | Effekt sofort stoppen                                                                   |
-| `/sync`   | POST    | Feinsynchronisation zur Musik. Body `{"position": <Sek. im Track>}`; zieht den Licht-Cue max. ±0,5 s/Aufruf nach. `409`, wenn nichts läuft. |
 | `/identify` | POST  | Lampen einzeln durchtesten (`channel_id` → Lampe). Body optional: `area_id`, `channel_id` (fehlt = alle nacheinander), `seconds`, `color`, `restore_state`. Ein DTLS-Handshake für den Durchlauf; belegt denselben Slot wie `/start`. |
 
-`use_cue` (Beat-Sync über die Cue-Datei) ist standardmäßig **bei `pulse` an, bei
-`chase` aus** – chase läuft nach seiner eigenen `sweep_seconds`-Uhr. Im Body von
-`/start` mit `"use_cue": true`/`false` übersteuerbar.
-`duration` weglassen → wenn eine Cue-Datei geladen ist, wird deren Restlänge ab
-`cue_offset` verwendet (auch bei `use_cue: false`), sonst läuft der Effekt bis
-`/stop` aufgerufen wird.
-`cue_offset` + `/sync`: siehe Abschnitt „Synchronisation zur Musik“ in
-[`redalert/DOCS.md`](redalert/DOCS.md#synchronisation-zur-musik).
+`duration` weglassen → Effekt läuft **30 Sekunden**, dann endet er von selbst
+(oder vorher per `/stop`).
 
 ## 7. Home Assistant einbinden
 
@@ -213,7 +205,7 @@ rest_command:
     url: "http://<home-assistant-ip>:8099/start"
     method: POST
     content_type: "application/json"
-    payload: '{}'   # Dauer wird automatisch aus redalert_cue.json übernommen
+    payload: '{}'   # Dauer ohne Angabe: 30 s
 
   redalert_stop:
     url: "http://<home-assistant-ip>:8099/stop"
@@ -252,39 +244,7 @@ automation:
 Tipp: `input_boolean.red_alert` lässt sich bequem als Dashboard-Kachel oder
 per Sprachbefehl schalten.
 
-## 8. Audio-Sync per Cue-Datei
-
-Das Add-on lädt eine `redalert_cue.json`: eine reine Zahlenfolge (Helligkeit
-0–1 pro Frame), extrahiert aus der Lautstärke-Hüllkurve deiner Audiodatei. Es
-werden dabei **keine Audiodaten gespeichert oder mitgeliefert** – nur die
-abgeleitete Helligkeitskurve. Bei `effect: pulse` ist diese Kurve direkt die
-gemeinsame Helligkeit aller Lampen; bei `effect: chase` dimmt sie den
-durchlaufenden Kometen.
-
-Wie das Licht **exakt** zur über Home Assistant abgespielten Musik synchron
-läuft (Start-Versatz, Drift, `cue_offset`, `/sync`-Regelschleife): eigener
-Abschnitt [„Synchronisation zur Musik“](redalert/DOCS.md#synchronisation-zur-musik)
-in `redalert/DOCS.md`.
-
-Ein Cue liegt bereits als `redalert/rootfs/app/redalert_cue.json` bei, erzeugt aus dem
-hochgeladenen Alarm-Sound (Dauer 53,66 s, Alarm-Zyklus alle 1,906 s ± 5 ms).
-Bei `pulse` moduliert er standardmäßig den Takt; bei `chase` ist er standardmäßig
-**aus** (`"use_cue": true` schaltet ihn dazu). Er legt ausserdem – sofern geladen –
-die Standard-`duration` fest, wenn `/start` ohne `duration` aufgerufen wird.
-
-Für einen anderen oder neuen Sound-Clip erzeugst du selbst eine neue Cue-Datei:
-
-```bash
-python3 tools/generate_cue.py meine_datei.mp3 redalert_cue.json --fps 25
-```
-
-Benötigt `ffmpeg` sowie `pip install numpy scipy` (scipy optional, nur für
-die Konsolenausgabe des erkannten Wiederhol-Zyklus). Die erzeugte Datei dann
-entweder `redalert/rootfs/app/redalert_cue.json` ersetzen (Add-on neu bauen) oder unter
-`/share/` ablegen und als Add-on-Option `cue_file: /share/redalert_cue.json`
-eintragen (Add-on-Neustart genügt, kein Neubau nötig).
-
-## 9. Effekt anpassen
+## 8. Effekt anpassen
 
 Effekt wählen: Option `effect` bzw. `"effect": "pulse"|"chase"` im `/start`-Body.
 
@@ -297,7 +257,7 @@ aus.
 zurück:
 - `attack_ms` / `release_ms` – Aufblend- bzw. Abblendzeit; `release_ms` kleiner
   wählen für schnelleres Abfallen als Aufblenden.
-- `sweep_seconds` – Zyklusdauer, wenn keine Cue aktiv ist.
+- `sweep_seconds` – Zyklusdauer eines Auf-/Ab-Durchlaufs.
 - `RedAlertPulse` `lo` / `hi` / `hold_s` in `redalert/rootfs/app/chase.py` –
   Beat-Gate (Schmitt-Trigger): ab `hi` an, wieder aus, wenn der Pegel `hold_s`
   lang unter `lo` bleibt.
@@ -328,7 +288,7 @@ gemeinsam auf 100 % stehen und dann nacheinander ausglühen (`RedAlertChase` in
 Farbe ist aktuell fest auf Rot (`green=0, blue=0`) gesetzt; über
 `LightColorCommand` lassen sich bei Bedarf auch andere Farbverläufe fahren.
 
-## 10. Fehlerbehebung
+## 9. Fehlerbehebung
 
 | Symptom                                   | Wahrscheinliche Ursache / Lösung                                                                 |
 |--------------------------------------------|----------------------------------------------------------------------------------------------------|
@@ -339,13 +299,11 @@ Farbe ist aktuell fest auf Rot (`green=0, blue=0`) gesetzt; über
 | Lauflicht ruckelt                          | `fps` in den Add-on-Optionen erhöhen oder Netzwerklast zur Bridge prüfen.                          |
 | Streaming bricht nach kurzer Zeit ab       | Die Bridge erlaubt nur **einen aktiven** Entertainment-Stream gleichzeitig – Hue-Sync-App oder andere Streaming-Clients währenddessen schließen. |
 
-## 11. Rechtlicher Hinweis zur Audiodatei
+## 10. Rechtlicher Hinweis zur Audiodatei
 
 Dieses Add-on kümmert sich ausschließlich um das Licht. Den Alarmstufe-Rot-Sound
 aus der Serie musst du selbst aus einer legal erworbenen Quelle bereitstellen
-(z. B. eigene Kaufversion, eigene Aufnahme). Die mitgelieferte
-`redalert_cue.json` enthält keinerlei Audiomaterial, sondern ausschließlich
-eine daraus abgeleitete numerische Helligkeitskurve.
+(z. B. eigene Kaufversion, eigene Aufnahme).
 
 ## Projektstruktur
 
@@ -370,8 +328,5 @@ selbst im Unterordner `redalert/`.
 │       └── app/
 │           ├── main.py           REST-Server + Streaming-Loop + Ingress-Panel
 │           ├── chase.py          Kometen-Effekt (umlaufend, mit Schweif)
-│           ├── panel.html        Web-UI (Steuerung)
-│           └── redalert_cue.json Vorgefertigte Helligkeits-Hüllkurve (kein Audio)
-└── tools/
-    └── generate_cue.py          Eigenständiges Skript zum Erzeugen neuer Cue-Dateien
+│           └── panel.html        Web-UI (Steuerung)
 ```

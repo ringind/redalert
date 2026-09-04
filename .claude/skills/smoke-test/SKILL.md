@@ -43,7 +43,7 @@ Maintainer's test area **Houseparty Büro** = `226c7c2a-0a6d-4b01-a28a-8b29fd8cb
 
 ```bash
 curl -s -X POST $B/start -H 'Content-Type: application/json' \
-  -d '{"area_id":"226c7c2a-0a6d-4b01-a28a-8b29fd8cb219","effect":"pulse","duration":20,"use_cue":true}'
+  -d '{"area_id":"226c7c2a-0a6d-4b01-a28a-8b29fd8cb219","effect":"pulse","duration":20}'
 ```
 
 Then wait for it to finish and report — run this **backgrounded**:
@@ -67,12 +67,12 @@ pkill -f "redalert/rootfs/app/main.py"
 
 ## Effect shape checks without hardware
 
-`RedAlertPulse` / `RedAlertChase` are pure math — simulate against the real cue:
+`RedAlertPulse` / `RedAlertChase` are pure math — simulate without hardware:
 
 ```python
-import sys, json; sys.path.insert(0, "redalert/rootfs/app")
+import sys; sys.path.insert(0, "redalert/rootfs/app")
 from chase import RedAlertPulse, RedAlertChase
-g = json.load(open("redalert/rootfs/app/redalert_cue.json"))["gain"]
-# feed g[i] into RedAlertPulse().step(g[i], 1/25) frame by frame; assert monotonic
-# rise (no mid-ramp reversals), rests at exactly 0.0, peaks at exactly 1.0.
+p = RedAlertPulse(num_lights=3)
+# feed RedAlertPulse.periodic(t, 1.4) into p.step(level, 1/25) frame by frame;
+# assert monotonic rise (no mid-ramp reversals), rests at exactly 0.0, peaks at exactly 1.0.
 ```

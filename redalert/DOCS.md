@@ -2,7 +2,7 @@
 
 Rotes Star-Trek-„Alarmstufe Rot“-Lauflicht über mehrere Philips-Hue-Lampen,
 gesteuert über die echte **Hue Entertainment API** (DTLS-Streaming, ~25 Hz –
-nicht die träge Bridge-Szene), optional synchron zu deinem eigenen Alarm-Sound.
+nicht die träge Bridge-Szene).
 
 ## Voraussetzungen
 
@@ -12,8 +12,6 @@ nicht die träge Bridge-Szene), optional synchron zu deinem eigenen Alarm-Sound.
 - Mehrere farbfähige Hue-Lampen, einem **Entertainment-Bereich** zugeordnet
   (Hue-App → Einstellungen → Entertainment-Bereiche → Neuer Bereich). Die
   Reihenfolge, in der du die Lampen hinzufügst, bestimmt die Kanalreihenfolge.
-- Ein `media_player` in HA (Sonos/Chromecast/…) für die Sound-Wiedergabe.
-- Eine selbst bereitgestellte, legal erworbene Audiodatei mit dem Alarm-Sound.
 
 ## Installation
 
@@ -55,11 +53,10 @@ REST-Variante: `curl http://<ha-ip>:8099/areas`
 
 ### 3 · Steuerung
 
-Im Web-UI unter **„3 · Steuerung“**: `area_id`, **Effekt**, Dauer (leer = Länge
-der Cue-Datei), `cue_offset`, `fps`, `sweep_seconds`, `chase_pause`, Farbe,
-„Cue nutzen“ und **`channel_order`** setzen, dann **Start** / **Stop**. „Cue nutzen“ folgt
-automatisch dem Effekt (an bei `pulse`, aus bei `chase`), bis du die Checkbox
-selbst anfasst.
+Im Web-UI unter **„3 · Steuerung“**: `area_id`, **Effekt**, Dauer (leer = 30 s),
+`fps`, `sweep_seconds`, `chase_pause`, Farbe und **`channel_order`** setzen,
+dann **Start** / **Stop**. Die beiden Knöpfe zeigen per gedrücktem Zustand an,
+ob der Effekt gerade läuft.
 
 `channel_order` (leer = Bereichs-Standard) legt fest, in welcher Reihenfolge der
 `chase`-Komet die Lampen durchläuft – als kommagetrennte Liste der
@@ -80,8 +77,8 @@ Lampenzustand wiederhergestellt.
 
 | `effect` | Verhalten |
 |----------|-----------|
-| `pulse` (Standard) | Alle Lampen **gemeinsam**: von `glow_low` linear auf `glow_high` im Takt der Musik, zwischen den Pulsen zurück auf `glow_low`. Ein Schmitt-Trigger auf der Cue-Hüllkurve macht aus jedem Beat ein sauberes Ein/Aus, der Anstieg läuft dadurch ruckelfrei-monoton hoch. `attack_ms` = Aufblend-, `release_ms` = Abblendzeit; `release_ms` kleiner = schnelleres Abfallen als Aufblenden. Ohne Cue: gleichmäßiger Puls mit Periode `sweep_seconds`. |
-| `chase` | Ein Komet läuft **gleichmäßig in eine Richtung** um alle Kanäle (wraparound, konstante Geschwindigkeit). Jede Lampe für sich pulst dabei: **kurz hell (`glow_high`), langes exponentielles Ausblenden, dann eine Ruhephase auf `glow_low`**, dann wieder. Der Kopf ist etwas breiter als der Lampenabstand – zwei benachbarte Lampen stehen kurz gemeinsam auf 100 % und glühen dann nacheinander aus, sodass immer mindestens eine Lampe voll leuchtet. Mit `chase_pause > 0` macht der Komet **einen** Durchlauf, danach ruhen alle Lampen `chase_pause` Sekunden auf `glow_low`, dann der nächste. Läuft standardmäßig **ohne Cue** nach `sweep_seconds`; mit `"use_cue": true` wird der Komet zusätzlich im Takt der Cue gedimmt. |
+| `pulse` (Standard) | Alle Lampen **gemeinsam**: von `glow_low` linear auf `glow_high` und zurück, ein voller Zyklus alle `sweep_seconds`. Ein Schmitt-Trigger auf dem periodischen Signal macht daraus ein sauberes Ein/Aus, der Anstieg läuft dadurch ruckelfrei-monoton hoch. `attack_ms` = Aufblend-, `release_ms` = Abblendzeit; `release_ms` kleiner = schnelleres Abfallen als Aufblenden. |
+| `chase` | Ein Komet läuft **gleichmäßig in eine Richtung** um alle Kanäle (wraparound, konstante Geschwindigkeit) mit Zykluszeit `sweep_seconds`. Jede Lampe für sich pulst dabei: **kurz hell (`glow_high`), langes exponentielles Ausblenden, dann eine Ruhephase auf `glow_low`**, dann wieder. Der Kopf ist etwas breiter als der Lampenabstand – zwei benachbarte Lampen stehen kurz gemeinsam auf 100 % und glühen dann nacheinander aus, sodass immer mindestens eine Lampe voll leuchtet. Mit `chase_pause > 0` macht der Komet **einen** Durchlauf, danach ruhen alle Lampen `chase_pause` Sekunden auf `glow_low`, dann der nächste. |
 
 **Lichtzustand:** Vor dem Effekt sichert das Add-on an/aus, Helligkeit und Farbe
 aller Lampen des Bereichs (Hue CLIP v2) und schreibt sie nach dem Effekt zurück
@@ -99,14 +96,13 @@ Bridge nach dem Stream-Ende).
 | `effect`        | `pulse` \| `chase` | `pulse`    | Lichteffekt, siehe oben. |
 | `color`         | Hex-String         | `#FF0000`  | Farbe des Effekts. |
 | `fps`           | int (5–50)         | `25`       | Frames/Sekunde des DTLS-Streams. |
-| `sweep_seconds` | float (0.3–5.0)    | `1.4`      | `chase`: Dauer einer vollen Umrundung. `pulse` ohne Cue: Zyklusdauer. |
+| `sweep_seconds` | float (0.3–5.0)    | `1.4`      | `chase`: Dauer einer vollen Umrundung. `pulse`: Zyklusdauer. |
 | `chase_pause`   | float (0–60)       | `0`        | `chase`: Pause (Sekunden) zwischen zwei Durchläufen. `0` = durchgehend umlaufender Komet. `> 0` = ein Durchlauf, dann alle Lampen für so viele Sekunden auf `glow_low`, dann der nächste. |
 | `attack_ms`     | int (0–2000)       | `140`      | `pulse`: Aufblendzeit `glow_low` → `glow_high`. |
 | `release_ms`    | int (0–5000)       | `70`       | `pulse`: Abblendzeit → `glow_low` zwischen den Pulsen (kleiner als `attack_ms` = schnelleres Abfallen). |
 | `glow_low`      | float (0–1)        | `0.08`     | **Beide Effekte:** Ruhe-Helligkeit zwischen den Pulsen. `0` = ganz aus. |
 | `glow_high`     | float (0–1)        | `1.0`      | **Beide Effekte:** Helligkeit im Puls-Maximum. Muss über `glow_low` liegen. |
 | `restore_state` | bool               | `true`     | Lampenzustand (an/aus, Helligkeit, Farbe) vor dem Effekt sichern und danach wiederherstellen. |
-| `cue_file`      | String             | `""`       | Pfad zu alternativer `redalert_cue.json` (z. B. `/share/…`). |
 | `log_level`     | Liste              | `info`     | `trace`,`debug`,`info`,`notice`,`warning`,`error`,`fatal`. |
 
 ## REST-API
@@ -121,20 +117,12 @@ Panel-Pfad).
 | `/config` | GET     | Effektive Konfiguration (für das Web-UI). |
 | `/pair`   | POST    | Einmalige Kopplung. Body: `{"bridge_ip": "..."}` (optional bei gesetzter Option). |
 | `/areas`  | GET     | Entertainment-Bereiche + Kanäle auflisten. |
-| `/start`  | POST    | Effekt starten (antwortet sofort; DTLS-Handshake läuft im Hintergrund). Body optional: `area_id`, `effect`, `duration`, `cue_offset`, `fps`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `color`, `use_cue`, `restore_state`, `channel_order`. `channel_order` als Liste (`[2,3,1,0,5,4]`) oder String (`"2,3,1,0,5,4"`); muss genau die Kanäle des Bereichs in gewünschter Reihenfolge enthalten, sonst `400`. |
+| `/start`  | POST    | Effekt starten (antwortet sofort; DTLS-Handshake läuft im Hintergrund). Body optional: `area_id`, `effect`, `duration`, `fps`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `color`, `restore_state`, `channel_order`. `channel_order` als Liste (`[2,3,1,0,5,4]`) oder String (`"2,3,1,0,5,4"`); muss genau die Kanäle des Bereichs in gewünschter Reihenfolge enthalten, sonst `400`. |
 | `/stop`   | POST    | Effekt sofort stoppen. |
-| `/sync`   | POST    | Laufende Feinsynchronisation. Body: `{"position": <Sekunden im Track>}` – die echte Wiedergabeposition des media_player. Der Licht-Cue wird um die Differenz nachgezogen (max. ±0,5 s pro Aufruf, damit nichts springt). `409`, wenn kein Effekt läuft. |
 | `/identify` | POST  | Lampen einzeln durchtesten (Zuordnung `channel_id` → Lampe). Body optional: `area_id`, `channel_id` (fehlt = alle Kanäle nacheinander), `seconds` (Standard 3 einzeln / 2 bei „alle“), `color`, `restore_state`. Ein DTLS-Handshake für den ganzen Durchlauf. Belegt denselben Slot wie `/start` (`already_running`, `/stop` bricht ab). |
 
-- `use_cue` – Beat-Sync über die Cue-Datei. **Standard: bei `pulse` an, bei
-  `chase` aus** (chase läuft nach seiner eigenen `sweep_seconds`-Uhr). Mit
-  `"use_cue": true` bzw. `false` im Body übersteuerbar.
-- `duration` weglassen → wenn eine Cue-Datei geladen ist, deren Restlänge ab
-  `cue_offset` (auch bei `use_cue: false`, damit der Effekt von selbst endet);
-  sonst läuft der Effekt bis `/stop`.
-- `cue_offset` (Sekunden) = an welcher Stelle der Cue der Effekt beginnt. Damit
-  richtest du das Licht auf die schon laufende Musik aus (siehe
-  [Synchronisation zur Musik](#synchronisation-zur-musik)).
+- `duration` (Sekunden, **Standard 30**) – wie lange der Effekt läuft, bevor er
+  von selbst endet; vorher jederzeit per `/stop` abbrechbar.
 
 ## Home Assistant einbinden
 
@@ -147,18 +135,13 @@ rest_command:
     method: POST
     content_type: "application/json"
     payload: >-
-      {"cue_offset": {{ offset | default(0) }}}
-  redalert_sync:
-    url: "http://<ha-ip>:8099/sync"
-    method: POST
-    content_type: "application/json"
-    payload: '{"position": {{ position }}}'
+      {"duration": {{ duration | default(30) }}}
   redalert_stop:
     url: "http://<ha-ip>:8099/stop"
     method: POST
 ```
 
-Einfache Automation (Sound + Licht gemeinsam, fester Versatz):
+Einfache Automation (Sound + Licht gemeinsam):
 
 ```yaml
 automation:
@@ -185,126 +168,14 @@ automation:
       - service: rest_command.redalert_stop
 ```
 
-## Synchronisation zur Musik
-
-**Kurzantwort:** exakt geht es nur, wenn *eine* Uhr beides steuert. Hier spielt
-Home Assistant den Ton auf einem `media_player`, das Add-on das Licht – zwei
-unabhängige Zeitachsen. „Beides gleichzeitig auslösen“ heißt **nicht** „beides
-kommt gleichzeitig raus“. Die Lösung: (1) Start-Jitter beseitigen und (2) das
-Licht laufend an der **echten Wiedergabeposition** des Players ausrichten.
-
-### Die drei Fehlerquellen
-
-1. **Start-Versatz.** Schon der DTLS-Handshake zur Bridge dauert 3–9 s und
-   schwankt; dazu Puffer im Lautsprecher (Sonos & Co. oft 0,3–0,8 s). Der Ton
-   läuft also, bevor die erste helle Lichtframe kommt.
-2. **Drift.** Licht-Loop (monotone Uhr, 25 fps) und Player-Uhr laufen minimal
-   verschieden schnell – über eine Minute einige 10 ms.
-3. **Cue-Auflösung.** Die Cue wird alle 10 ms abgetastet und interpoliert; feiner
-   wird's mit höherem `--fps` beim Erzeugen und höherem `fps` im Add-on.
-
-Gegen (2) plant der Effekt-Loop seine Frames seit 1.1.0 gegen eine absolute Uhr –
-die Licht-Zeitachse driftet nicht mehr gegen die Wanduhr. Bleiben (1) und (3).
-
-### Empfohlenes Vorgehen (geschlossene Regelschleife)
-
-1. **Ton starten**, kurz warten (~1 s), bis der Player wirklich spielt.
-2. **Position lesen** und als `cue_offset` an `/start` geben. Die echte Position
-   jetzt ist
-   `media_position + (now() - media_position_updated_at)`.
-3. **Nachführen:** alle 3–5 s die Position erneut lesen und an `/sync` schicken.
-   Das Add-on zieht den Licht-Cue an die Position heran – pro Aufruf max. ±0,5 s,
-   also unsichtbar, solange regelmäßig gesynct wird. Das fängt auch den
-   Handshake-Verzug und die Lautsprecher-Latenz mit ein.
-4. **Feinversatz** (einmalig messen): die konstante Restlatenz deines
-   Lautsprechers von der gemessenen Position abziehen, bevor du sie sendest.
-
-```yaml
-automation:
-  - alias: "Alarmstufe Rot – synchron"
-    trigger:
-      - platform: state
-        entity_id: input_boolean.red_alert
-        to: "on"
-    variables:
-      player: media_player.wohnzimmer
-      speaker_latency: 0.4   # einmalig für deinen Lautsprecher messen
-    action:
-      - service: media_player.play_media
-        target: { entity_id: "{{ player }}" }
-        data:
-          media_content_id: media-source://media_source/local/red_alert.mp3
-          media_content_type: audio/mpeg
-      - delay: "00:00:01"
-      - service: rest_command.redalert_start
-        data:
-          offset: >-
-            {{ (state_attr(player,'media_position') | float(0))
-               + (now() - state_attr(player,'media_position_updated_at')).total_seconds()
-               - speaker_latency }}
-      # laufend nachführen, solange der Player spielt
-      - repeat:
-          while:
-            - condition: template
-              value_template: "{{ is_state(player, 'playing') }}"
-          sequence:
-            - service: rest_command.redalert_sync
-              data:
-                position: >-
-                  {{ (state_attr(player,'media_position') | float(0))
-                     + (now() - state_attr(player,'media_position_updated_at')).total_seconds()
-                     - speaker_latency }}
-            - delay: "00:00:03"
-
-  - alias: "Alarmstufe Rot – Ende"
-    trigger:
-      - platform: state
-        entity_id: media_player.wohnzimmer
-        to: "idle"
-    action:
-      - service: rest_command.redalert_stop
-```
-
-### Wenn du die Regelschleife nicht willst
-
-Reicht meist auch: **konstanten Versatz einmal messen** (Ton vs. Licht mit dem
-Handy filmen), Ton und Licht aus derselben Automation mit festem `delay:`
-dazwischen starten und einen passenden `cue_offset` setzen. Für einen Puls sind
-±50–100 ms kaum sichtbar. Der größte Brocken bleibt der Handshake – ihn
-verkleinert am wirksamsten ein dauerhaft offener Stream (geplante Option
-`keep_stream_warm`, noch nicht enthalten).
-
-### Was hier bewusst *nicht* geht
-
-Live-Beaterkennung aus dem laufenden Ton – das Add-on „hört“ die Musik nicht,
-es kennt nur die vorab erzeugte Cue. Und der Ton im Add-on selbst abspielen
-(eine Uhr für beides) scheitert daran, dass HA-Add-ons i. d. R. keine
-Audio-Hardware erreichen und du Multiroom verlierst.
-
-## Audio-Sync per Cue-Datei
-
-Das Add-on lädt eine `redalert_cue.json`: eine reine Zahlenfolge (Helligkeit
-0–1 pro Frame), abgeleitet aus der Lautstärke-Hüllkurve deiner Audiodatei –
-**keine Audiodaten**. Bei `pulse` ist diese Kurve direkt die gemeinsame
-Helligkeit aller Lampen; bei `chase` dimmt sie den durchlaufenden Kometen, der
-so nur bei Ton sichtbar hell wird.
-
-Eine vorgefertigte Cue liegt bei. Für einen anderen Sound-Clip:
-
-```bash
-python3 tools/generate_cue.py meine_datei.mp3 redalert_cue.json --fps 25
-```
-
-Benötigt `ffmpeg` sowie `pip install numpy` (`scipy` optional). Ergebnis
-entweder ins Add-on einbauen (`redalert/rootfs/app/redalert_cue.json` ersetzen,
-neu bauen) oder unter `/share/` ablegen und `cue_file: /share/redalert_cue.json`
-setzen (nur Add-on-Neustart nötig).
-
 ## Protokoll
 
 Das Add-on-**Protokoll** (Log-Tab) zeigt Konfiguration beim Start, Pairing-,
 Start-/Stop-Ereignisse und Fehler. Ausführlichkeit über `log_level`. Das Web-UI
-zeigt zusätzlich die letzten API-Antworten im Abschnitt „Protokoll (Antworten)“.
+zeigt zusätzlich die letzten API-Aufrufe im Abschnitt „Protokoll“ – die
+Checkbox „Anfragen einblenden“ zeigt zusätzlich die gesendeten Request-Bodys,
+und die Knöpfe daneben löschen das Protokoll oder laden es als Textdatei
+herunter.
 
 ## Fehlerbehebung
 
@@ -322,7 +193,7 @@ zeigt zusätzlich die letzten API-Antworten im Abschnitt „Protokoll (Antworten
 
 ## Rechtlicher Hinweis zur Audiodatei
 
-Das Add-on kümmert sich ausschließlich um das Licht. Den Alarmstufe-Rot-Sound
-musst du selbst aus einer legal erworbenen Quelle bereitstellen. Die
-mitgelieferte `redalert_cue.json` enthält keinerlei Audiomaterial, sondern nur
-eine daraus abgeleitete numerische Helligkeitskurve.
+Das Add-on kümmert sich ausschließlich um das Licht. Spielst du wie im
+Automations-Beispiel oben zusätzlich einen Alarmstufe-Rot-Sound über einen
+`media_player` ab, musst du diese Audiodatei selbst aus einer legal erworbenen
+Quelle bereitstellen.

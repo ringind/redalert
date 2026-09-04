@@ -31,7 +31,7 @@ configuration:
     name: Sweep-Dauer
     description: >-
       chase: Sekunden für eine volle Umrundung aller Lampen.
-      pulse ohne Cue: Dauer eines vollständigen Auf-/Ab-Zyklus (0.3–5.0).
+      pulse: Dauer eines vollständigen Auf-/Ab-Zyklus (0.3–5.0).
   chase_pause:
     name: chase-Pause (Sekunden)
     description: >-
@@ -62,11 +62,6 @@ configuration:
     description: >-
       Vor dem Effekt den aktuellen Zustand der Lampen (an/aus, Helligkeit, Farbe)
       sichern und danach wiederherstellen.
-  cue_file:
-    name: Pfad zur Cue-Datei
-    description: >-
-      Pfad zu einer alternativen redalert_cue.json (z. B. /share/redalert_cue.json).
-      Leer = mitgelieferte Cue verwenden.
   log_level:
     name: Log-Level
     description: Ausführlichkeit des Add-on-Protokolls (trace, debug, info, notice, warning, error, fatal).

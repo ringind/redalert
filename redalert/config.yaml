@@ -1,5 +1,5 @@
 name: "Red Alert Entertainment"
-version: "1.1.8"
+version: "1.1.9"
 slug: "redalert"
 description: >-
   Rotes Lauflicht über Philips-Hue-Lampen via Hue Entertainment API
@@ -33,7 +33,6 @@ options:
   glow_low: 0.08
   glow_high: 1.0
   restore_state: true
-  cue_file: ""
   log_level: info
 schema:
   bridge_host: "str?"
@@ -49,5 +48,4 @@ schema:
   glow_low: "float(0,1)?"
   glow_high: "float(0,1)?"
   restore_state: "bool?"
-  cue_file: "str?"
   log_level: "list(trace|debug|info|notice|warning|error|fatal)?"

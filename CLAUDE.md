@@ -9,8 +9,8 @@ it addable in HA under *Settings → Add-ons → Add-on Store → ⋮ → Reposi
 the add-on itself lives in `redalert/`. The add-on drives a Star Trek "Red Alert"
 scene across ~6 Philips Hue lamps via the **Hue Entertainment API** (persistent
 DTLS stream, ~25 Hz) rather than normal Bridge scenes — two effects, `pulse`
-(default: all lamps together on the beat) and `chase` (a comet with a tail) —
-timed to a locally-provided alarm sound via a precomputed loudness envelope. It
+(default: all lamps together, periodic) and `chase` (a comet with a tail) —
+for a configurable `duration` (default 30 s). It
 ships an aiohttp REST service **and** an Ingress web UI for control. HA builds the
 image locally from `redalert/Dockerfile` (no `image:` key, no prebuilt registry).
 Primary docs are German: repo overview in `README.md`, in-HA docs in
@@ -29,7 +29,6 @@ watch it: `RUN=$(gh run list --workflow=build.yaml --branch main -L1 --json data
 ```
 repository.yaml            store metadata
 README.md                  repo overview (German)
-tools/generate_cue.py      standalone cue generator (dev tool, not in the image)
 redalert/                  the add-on
   config.yaml              manifest: options schema, ingress, ports
   build.yaml               base images: ghcr.io/home-assistant/{arch}-base-python
@@ -41,19 +40,16 @@ redalert/                  the add-on
   rootfs/app/main.py        REST server + streaming loop + serves panel.html
   rootfs/app/chase.py       RedAlertPulse (beat gate) + RedAlertChase (comet+tail), no I/O
   rootfs/app/panel.html     Ingress web UI (vanilla JS, relative fetch URLs)
-  rootfs/app/redalert_cue.json  precomputed brightness envelope (no audio)
 ```
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.1.8**.
+No build system, linter, or test suite. Current version: **1.1.9**.
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
   after every code change — the only static check available.
 - Container build (normally the HA Supervisor does this):
   `docker build --build-arg BUILD_FROM=ghcr.io/home-assistant/amd64-base-python:3.12-alpine3.20 -t redalert redalert/`
-- Regenerate the audio cue: `python3 tools/generate_cue.py input.mp3 redalert/rootfs/app/redalert_cue.json --fps 25`
-  — needs `ffmpeg` + `numpy` (`scipy` optional). Keep `--fps` equal to the runtime `fps`.
 - Regenerate store graphics: the generator lives in the scratchpad
   (`mkpng.py`); `icon.png`/`logo.png` are a solid-red beacon on near-black.
 - Cut a versioned release: see the **`release`** skill.
@@ -74,7 +70,7 @@ until curl -sf -o /dev/null $B/health; do sleep 0.5; done          # bind race: 
 # pair only if devdata/credentials.json is missing (needs a fresh link-button press):
 #   curl -s -X POST $B/pair -H 'Content-Type: application/json' -d '{"bridge_ip":"<ip>"}'
 curl -s -X POST $B/start -H 'Content-Type: application/json' \
-  -d '{"area_id":"<area>","effect":"pulse","duration":20,"use_cue":true}'
+  -d '{"area_id":"<area>","effect":"pulse","duration":20}'
 ```
 
 - The maintainer's test rig (may change): bridge `192.168.178.84`, area
@@ -96,19 +92,15 @@ Three layers under `redalert/rootfs/app/`:
 - **`main.py`** — aiohttp server. Endpoints: `/` (serves `panel.html`),
   `/health` (also the Docker HEALTHCHECK target), `/config` (effective config for the UI),
   `/pair` (one-time Bridge link-button pairing → `/data/credentials.json`),
-  `/areas`, `/start`, `/stop`, `/sync`, `/identify`. All mutable runtime state is
-  one module-level `state` dict (incl. `state["sync"]` for the live sync loop).
-  Options are read **once at import** from `/data/options.json`; the cue is
-  loaded once at startup into `state["cue"]`. `REDALERT_LOG_LEVEL` (exported by
+  `/areas`, `/start`, `/stop`, `/identify`. All mutable runtime state is
+  one module-level `state` dict. Options are read **once at import** from
+  `/data/options.json`. `REDALERT_LOG_LEVEL` (exported by
   the s6 `run` script from the `log_level` option) sets the logging level.
-  `/start` body overrides per call: `area_id`, `effect`, `duration`,
-  `cue_offset`, `fps`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`,
-  `glow_low`, `glow_high`, `color`, `use_cue`, `restore_state`, `channel_order` (list[int] or
-  `"2,3,1,0"` string, parsed by `_parse_channel_order`; must be exactly the
-  area's channels reordered). `use_cue` defaults per effect — **on for `pulse`,
-  off for `chase`** (`bool(body.get("use_cue", effect == "pulse"))`); the cue is
-  beat-sync and only a `pulse` feature. `effect` is resolved before `use_cue` for
-  this reason.
+  `/start` body overrides per call: `area_id`, `effect`, `duration`
+  (default `DEFAULT_DURATION_S` = 30), `fps`, `sweep_seconds`, `chase_pause`,
+  `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `color`, `restore_state`,
+  `channel_order` (list[int] or `"2,3,1,0"` string, parsed by
+  `_parse_channel_order`; must be exactly the area's channels reordered).
   `/identify` (body `area_id?`, `channel_id?`, `seconds?`, `color?`,
   `restore_state?`) lights one channel — or, with `channel_id` omitted, every
   channel in turn (~`seconds`+0.4 s gap each) — over a single DTLS handshake, to
@@ -130,37 +122,27 @@ Three layers under `redalert/rootfs/app/`:
     rise leading in so lamp 0 doesn't snap), then all lamps at 0 for
     `pause_seconds`. `pause_seconds == 0` keeps the exact seamless loop above.
   - `RedAlertPulse.step(level, dt)` → uniform level for all lights. A Schmitt gate
-    (on above `hi`, off after `hold_s` below `lo`) turns the noisy cue into a
+    (on above `hi`, off after `hold_s` below `lo`) turns the periodic input into a
     stable 0/1, then a **linear** slew hits exactly 1.0 in `attack_s` / 0.0 in
-    `release_s` (keep release < attack). `RedAlertPulse.periodic(t, period)` is
-    the no-cue cosine fallback fed into the same gate.
-- **`redalert_cue.json`** — `{fps, duration_s, gain: [0..1, ...]}`, one value per
-  frame from an audio RMS envelope, **no audio data**. `sample_gain()` in
-  `main.py` linearly interpolates it at an arbitrary time.
+    `release_s` (keep release < attack). `RedAlertPulse.periodic(t, period)`
+    feeds the gate a cosine 0..1 pulse with period `sweep_seconds`.
 
 **Effect loop (`_run_effect`):** `handle_start` creates the `EntertainmentSession`,
 resolves the area (404/502 returned synchronously), then hands the session to a
 single `asyncio` task and returns immediately. The task, before the handshake,
 snapshots the area's lights via Hue CLIP v2 (`capture_light_state`, unless
 `restore_state` is false); does the DTLS handshake (`session.start(area_id)` —
-several seconds); publishes its start time to `state["sync"]`; owns the session
-lifecycle and `aclose()`s it in `finally`, then `restore_light_state` PUTs the
-snapshot back (the Bridge also auto-restores after streaming; this is belt-and-
-suspenders and re-offs lights that were off).
-Each frame computes `cue_t = elapsed + cue_offset + state["sync"]["correction"]`,
-then for `effect == "pulse"` feeds `sample_gain(cue, cue_t)` (or `periodic`) into
-`RedAlertPulse.step`; for `"chase"` it's `chase.brightness_for(elapsed)`, then —
-only if `use_cue` was set true for this chase run (off by default) — multiplied by
-`CHASE_CUE_FLOOR + (1-floor)*gate` where
-`gate` is `sample_gain` run through the **same** `pulse` gate+slew (the raw gain
-flickers the comet), so the cue dims the comet between `CHASE_CUE_FLOOR` and 1.0.
+several seconds); owns the session lifecycle and `aclose()`s it in `finally`,
+then `restore_light_state` PUTs the snapshot back (the Bridge also auto-restores
+after streaming; this is belt-and-suspenders and re-offs lights that were off).
+Each frame, for `effect == "pulse"` feeds `RedAlertPulse.periodic(elapsed, sweep_seconds)`
+into `RedAlertPulse.step`; for `"chase"` it's `chase.brightness_for(elapsed)`.
 The resulting 0..1 levels are then mapped to `glow_low + (glow_high-glow_low)*lvl`
 (one line before `session.send`), so between pulses lamps rest at `glow_low`, not 0.
 Levels → per-channel `LightColorCommand` scaled by the colour
 (`value_8bit * 257 * level`). Frames are paced against an **absolute** clock
-(`start + n/fps`), not `sleep(1/fps)`, so the light timeline doesn't drift.
-`/sync` (body `{position}`) nudges `state["sync"]["correction"]` toward the
-player's real position, clamped to ±`MAX_SYNC_STEP_S` (0.5 s) per call.
+(`start + n/fps`), not `sleep(1/fps)`, so the light timeline doesn't drift; the
+loop breaks once `elapsed >= duration`.
 Concurrency is guarded by `state["task"]` still running (`/start` →
 `already_running`); `/stop` cancels and awaits it.
 
@@ -187,11 +169,9 @@ cert). See `_clip` / `capture_light_state` / `restore_light_state`.
 - Channel order = `channel_order` option if set, else the area's native order
   (only meaningful for `chase`).
 - The Bridge allows only **one** active Entertainment stream at a time; the DTLS
-  handshake is 3–9 s and is the dominant music-sync error source — `/sync` +
-  `cue_offset` exist to correct for it (see `DOCS.md` "Synchronisation zur Musik").
-- `duration` omitted → `cue["duration_s"] - cue_offset` whenever a cue is
-  **loaded** (even with `use_cue` false, so the effect still self-terminates);
-  only runs until `/stop` if no cue file is loaded at all.
+  handshake is 3–9 s.
+- `duration` omitted → `DEFAULT_DURATION_S` (30 s); always self-terminates,
+  never runs until `/stop` implicitly.
 - The s6 `run` script is `#!/command/with-contenv bashio`; the Dockerfile
   `chmod a+x`s `run` and `finish` (no reliable file mode without git).
 
@@ -207,6 +187,6 @@ cert). See `_clip` / `capture_light_state` / `restore_light_state`.
 4. `redalert/rootfs/app/panel.html` — if user-facing: an input in section 3, the
    `body.*` in `btn-start`, the status-grid field, and the prefill in `refresh()`.
 5. `redalert/DOCS.md` (options table + `/start` body list) and `README.md`
-   (§5 options table + §6 `/start` row + §9 "Effekt anpassen" if it tunes an effect).
+   (§5 options table + §6 `/start` row + §8 "Effekt anpassen" if it tunes an effect).
 6. `redalert/CHANGELOG.md` + version bump (see the `release` skill).
 7. Live-test on the real bridge (`smoke-test` skill) before committing.

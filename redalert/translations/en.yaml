@@ -29,7 +29,7 @@ configuration:
     name: Sweep duration
     description: >-
       chase: seconds for one full loop of the comet around all lamps.
-      pulse without a cue: length of one full up/down cycle (0.3–5.0).
+      pulse: length of one full up/down cycle (0.3–5.0).
   chase_pause:
     name: chase pause (seconds)
     description: >-
@@ -59,11 +59,6 @@ configuration:
     description: >-
       Snapshot the lamps' current state (on/off, brightness, colour) before the
       effect and put it back afterwards.
-  cue_file:
-    name: Cue file path
-    description: >-
-      Path to an alternative redalert_cue.json (e.g. /share/redalert_cue.json).
-      Empty = use the bundled cue.
   log_level:
     name: Log level
     description: Verbosity of the add-on log (trace, debug, info, notice, warning, error, fatal).

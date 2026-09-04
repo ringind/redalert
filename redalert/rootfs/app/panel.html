@@ -33,10 +33,16 @@
     border-radius: 8px; background: var(--bg); color: var(--fg); }
   input[type=number] { width: 6.5rem; }
   input[type=text] { min-width: 12rem; }
+  input[type=color] { width: 4.5rem; height: 3rem; padding: .2rem; cursor: pointer; }
   button { font: inherit; font-weight: 600; padding: .5rem .9rem; border: 0; border-radius: 8px;
-    background: var(--accent); color: var(--accent-fg); cursor: pointer; }
-  button.secondary { background: transparent; color: var(--fg); border: 1px solid var(--line); }
+    background: var(--accent); color: var(--accent-fg); cursor: pointer;
+    box-shadow: 0 1px 0 rgba(0,0,0,.15); transition: transform .05s, box-shadow .05s, filter .05s; }
+  button.secondary { background: transparent; color: var(--fg); border: 1px solid var(--line);
+    box-shadow: none; }
   button:disabled { opacity: .5; cursor: not-allowed; }
+  button.pressed { transform: translateY(1px); filter: brightness(.85);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,.4); }
+  button.secondary.pressed { filter: none; background: var(--line); }
   .pill { display: inline-flex; align-items: center; gap: .4rem; font-size: .8rem;
     padding: .2rem .55rem; border-radius: 999px; border: 1px solid var(--line); }
   .pill .led { width: 8px; height: 8px; border-radius: 50%; background: var(--off); }
@@ -91,19 +97,19 @@
     <div class="row">
       <div><label for="area">area_id</label><input type="text" id="area" placeholder="abcd-1234"></div>
       <div><label for="effect">Effekt</label><select id="effect"><option value="pulse">pulse (Takt)</option><option value="chase">chase (Lauflicht)</option></select></div>
-      <div><label for="duration">Dauer (s, leer = Cue)</label><input type="number" id="duration" min="0" step="1" placeholder="auto"></div>
-      <div><label for="offset">cue_offset (s)</label><input type="number" id="offset" min="0" step="0.1" placeholder="0"></div>
+      <div><label for="duration">Dauer (s)</label><input type="number" id="duration" min="0" step="1" placeholder="30"></div>
       <div><label for="fps">fps</label><input type="number" id="fps" min="5" max="50" step="1"></div>
       <div><label for="sweep">sweep_seconds</label><input type="number" id="sweep" min="0.3" max="5" step="0.1"></div>
       <div><label for="chpause">chase-Pause (s)</label><input type="number" id="chpause" min="0" max="60" step="0.5" placeholder="0"></div>
       <div><label for="glowlow">glow_low (0–1)</label><input type="number" id="glowlow" min="0" max="1" step="0.01" placeholder="0.08"></div>
       <div><label for="glowhigh">glow_high (0–1)</label><input type="number" id="glowhigh" min="0" max="1" step="0.01" placeholder="1"></div>
       <div><label for="color">Farbe</label><input type="color" id="color" value="#ff0000"></div>
-      <div><label><input type="checkbox" id="usecue" checked> Cue nutzen (Beat-Sync; Standard: pulse an, chase aus)</label></div>
       <div style="flex:1 1 100%"><label for="chanorder">channel_order (leer = Bereichs-Standard)</label>
         <input type="text" id="chanorder" placeholder="z. B. 2,3,1,0,5,4" style="width:100%"></div>
     </div>
     <p class="muted" style="margin:.5rem 0 0">
+      <strong>Dauer</strong> (leer = 30 s): wie lange der Effekt läuft, bevor er von selbst endet
+      (oder vorher per „Stop“).<br>
       <strong>channel_order</strong> (leer = Bereichs-Standard): Reihenfolge der
       <code>channel_id</code>s, in der der Komet (<code>chase</code>) physisch durchlaufen soll.
       Der Bereich unten hat die Kanäle 0–N; trage genau diese Zahlen in der gewünschten
@@ -137,7 +143,12 @@
   </section>
 
   <section class="card">
-    <h2>Protokoll (Antworten)</h2>
+    <h2>Protokoll</h2>
+    <div class="row" style="margin-bottom:.6rem">
+      <label><input type="checkbox" id="log-requests"> Anfragen einblenden</label>
+      <button class="secondary" id="btn-log-download" style="margin-left:auto">Herunterladen</button>
+      <button class="secondary" id="btn-log-clear">Löschen</button>
+    </div>
     <pre id="log">Bereit.</pre>
   </section>
 </main>
@@ -146,11 +157,21 @@
   // Relative URLs -> funktioniert hinter Ingress und via Port 8099 direkt.
   const $ = (id) => document.getElementById(id);
   const logEl = $("log");
+  let LOG_ENTRIES = [];
+  function renderLog() {
+    logEl.textContent = LOG_ENTRIES.join("\n\n") || "Bereit.";
+  }
   function logLine(msg, obj) {
     const t = new Date().toLocaleTimeString();
-    logEl.textContent = `[${t}] ${msg}` + (obj !== undefined ? "\n" + JSON.stringify(obj, null, 2) : "") + "\n\n" + logEl.textContent;
+    LOG_ENTRIES.unshift(`[${t}] ${msg}` + (obj !== undefined ? "\n" + JSON.stringify(obj, null, 2) : ""));
+    renderLog();
   }
   async function api(path, opts) {
+    if ($("log-requests").checked) {
+      let reqBody = opts?.body;
+      try { reqBody = opts?.body ? JSON.parse(opts.body) : undefined; } catch { /* keep raw */ }
+      logLine(`→ ${opts?.method || "GET"} ${path}`, reqBody);
+    }
     try {
       const res = await fetch(path, opts);
       const data = await res.json().catch(() => ({}));
@@ -161,6 +182,19 @@
       return { ok: false, data: {} };
     }
   }
+  $("btn-log-clear").onclick = () => { LOG_ENTRIES = []; renderLog(); };
+  $("btn-log-download").onclick = () => {
+    const text = LOG_ENTRIES.slice().reverse().join("\n\n") || "Bereit.";
+    const blob = new Blob([text], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `redalert-log-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
   function setPill(el, on, label) {
     el.classList.toggle("on", !!on);
     el.lastChild.textContent = " " + label;
@@ -170,6 +204,8 @@
     if (!ok) return;
     setPill($("pill-pair"), data.paired, data.paired ? "Bridge gepaart" : "Nicht gepaart");
     setPill($("pill-run"), data.running, data.running ? "Effekt läuft" : "Effekt aus");
+    $("btn-start").classList.toggle("pressed", !!data.running);
+    $("btn-stop").classList.toggle("pressed", !data.running);
     const s = $("status"); s.innerHTML = "";
     const fields = {
       "Bridge": data.bridge_host || "–",
@@ -182,8 +218,6 @@
       "chase-Pause": data.chase_pause ? `${data.chase_pause} s` : "aus (durchgehend)",
       "attack / release": `${data.attack_ms} / ${data.release_ms} ms`,
       "glow low / high": `${data.glow_low} / ${data.glow_high}`,
-      "Cue": data.cue_loaded ? `${data.cue_duration_s}s (${data.cue_source})` : "keine",
-      "Sync-Korrektur": data.sync_correction_s == null ? "–" : `${data.sync_correction_s.toFixed(3)} s`,
     };
     for (const [k, v] of Object.entries(fields)) {
       const d = document.createElement("div");
@@ -192,7 +226,6 @@
     }
     if (data.area_id && !$("area").value) $("area").value = data.area_id;
     if (data.effect && !$("effect").dataset.touched) $("effect").value = data.effect;
-    syncCueToEffect();
     if (data.fps && !$("fps").value) $("fps").value = data.fps;
     if (data.sweep_seconds && !$("sweep").value) $("sweep").value = data.sweep_seconds;
     if (data.chase_pause != null && !$("chpause").value && data.chase_pause > 0) $("chpause").value = data.chase_pause;
@@ -259,19 +292,12 @@
   };
   $("btn-identify-all").onclick = () => identify({});
   $("area").addEventListener("input", renderIdentify);
-  // "Cue nutzen" folgt dem Effekt (an bei pulse, aus bei chase), bis der Nutzer
-  // die Checkbox selbst anfasst.
-  $("usecue").onchange = () => { $("usecue").dataset.touched = "1"; };
-  function syncCueToEffect() {
-    if (!$("usecue").dataset.touched) $("usecue").checked = $("effect").value === "pulse";
-  }
-  $("effect").onchange = () => { $("effect").dataset.touched = "1"; syncCueToEffect(); };
+  $("effect").onchange = () => { $("effect").dataset.touched = "1"; };
   $("btn-start").onclick = async () => {
-    const body = { use_cue: $("usecue").checked, color: $("color").value, effect: $("effect").value };
+    const body = { color: $("color").value, effect: $("effect").value };
     if ($("area").value.trim()) body.area_id = $("area").value.trim();
     if ($("chanorder").value.trim()) body.channel_order = $("chanorder").value.trim();
     if ($("duration").value !== "") body.duration = Number($("duration").value);
-    if ($("offset").value !== "") body.cue_offset = Number($("offset").value);
     if ($("fps").value !== "") body.fps = Number($("fps").value);
     if ($("sweep").value !== "") body.sweep_seconds = Number($("sweep").value);
     if ($("chpause").value !== "") body.chase_pause = Number($("chpause").value);

@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.1.9
+
+- **Cue-Funktion entfernt.** Kein Audio-Beat-Sync mehr über eine mitgelieferte
+  `redalert_cue.json`: die Option `cue_file`, der `use_cue`-Schalter, `cue_offset`
+  und der `/sync`-Endpunkt (Feinsynchronisation zur Musik) sind komplett
+  entfallen, ebenso `tools/generate_cue.py`. `pulse` läuft jetzt immer nach der
+  periodischen `sweep_seconds`-Uhr.
+- **`duration` bestimmt jetzt allein die Laufzeit.** Ohne Angabe im `/start`-Body
+  läuft der Effekt **30 Sekunden** (statt bisher bis zum Ende der Cue-Datei bzw.
+  bis `/stop`), danach endet er von selbst.
+- **Web-UI, „3 · Steuerung“:** das Farbfeld zeigt die gewählte Farbe jetzt
+  deutlich größer an; **Start** und **Stop** zeigen per gedrücktem Zustand an,
+  welcher der beiden gerade aktiv ist.
+- **Web-UI, „Protokoll“:** neue Checkbox „Anfragen einblenden“ zeigt zusätzlich
+  die gesendeten Request-Bodys; neue Knöpfe **Löschen** und **Herunterladen**
+  (als Textdatei).
+
 ## 1.1.8
 
 - **Neue Option `chase_pause` (Sekunden).** Steuert die Pause zwischen zwei
