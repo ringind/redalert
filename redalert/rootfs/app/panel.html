@@ -99,7 +99,7 @@
       Einstellung (siehe „1 · Bridges“).
     </p>
     <div class="row">
-      <div><label for="effect">Effekt</label><select id="effect"><option value="pulse">pulse (Takt)</option><option value="chase">chase (Lauflicht)</option></select></div>
+      <div><label for="effect">Effekt</label><select id="effect"><option value="pulse">pulse (Takt)</option><option value="chase">chase (Lauflicht)</option><option value="glitter">glitter (Funkeln)</option></select></div>
       <div><label for="duration">Dauer (s, 0 = unbegrenzt)</label><input type="number" id="duration" min="0" step="1"></div>
       <div><label for="fps">fps</label><input type="number" id="fps" min="5" max="50" step="1"></div>
       <div><label for="sweep">sweep_seconds</label><input type="number" id="sweep" min="0.3" max="5" step="0.1"></div>
@@ -108,17 +108,53 @@
       <div><label for="glowhigh">glow_high (0–1)</label><input type="number" id="glowhigh" min="0" max="1" step="0.01" placeholder="1"></div>
       <div><label for="color">Farbe</label><input type="color" id="color" value="#ff0000"></div>
     </div>
+    <div class="row" style="margin-top:.6rem">
+      <div><label for="ginterval">glitter: Intervall (ms)</label><input type="number" id="ginterval" min="5" max="5000" step="5" placeholder="90"></div>
+      <div><label for="gflash">glitter: Blitzdauer (ms)</label><input type="number" id="gflash" min="20" max="5000" step="10" placeholder="260"></div>
+      <div style="flex:1 1 100%"><label for="gcolors">glitter: Farben (Hex, mit Leerzeichen getrennt – leer = Farbe oben)</label>
+        <input type="text" id="gcolors" placeholder="#FFFFFF #CFE8FF #FFF1D0" style="width:100%"></div>
+    </div>
     <p class="muted" style="margin:.5rem 0 0">
       <strong>Dauer</strong> (leer = Standard aus der Add-on-Option <code>duration</code>):
       wie lange der Effekt läuft, bevor er von selbst endet (oder vorher per „Stop“).
       <code>0</code> = unbegrenzt, läuft bis „Stop“.<br>
-      <strong>glow_low / glow_high</strong> (beide Effekte): Ruhe-Helligkeit zwischen den
+      <strong>glow_low / glow_high</strong> (alle Effekte): Ruhe-Helligkeit zwischen den
       Pulsen bzw. Helligkeit im Puls-Maximum. Zwischen den Pulsen gehen die Lampen auf
-      <code>glow_low</code> zurück (nicht auf 0), im Maximum auf <code>glow_high</code>.
+      <code>glow_low</code> zurück (nicht auf 0), im Maximum auf <code>glow_high</code>.<br>
+      <strong>glitter</strong> (nur <code>effect: glitter</code>): jede Lampe funkelt für
+      sich auf. <code>Intervall</code> = mittlerer Abstand zwischen zwei Blitzen (klein =
+      hektischer), <code>Blitzdauer</code> = wie schnell ein Funken abklingt (größer als
+      das Intervall ⇒ mehrere Lampen gleichzeitig), <code>Farben</code> = Hex-Liste, aus
+      der jeder Funken zufällig zieht (leer = Farbe oben).
     </p>
     <div class="row" style="margin-top:.9rem">
       <button id="btn-start">▶ Start</button>
       <button class="secondary" id="btn-stop">■ Stop</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>3 · Effektsets</h2>
+    <p class="muted" style="margin-top:0">
+      Alle Einstellungen aus „1 · Bridges“ und „2 · Steuerung“ unter einem Namen
+      speichern, später wieder laden oder direkt starten (auch per
+      <code>POST /start {"preset": "…"}</code>). Sets lassen sich als JSON-Datei
+      herunter- und wieder hochladen.
+    </p>
+    <div class="row">
+      <div><label for="preset-select">Gespeichertes Set</label>
+        <select id="preset-select"><option value="">– keins –</option></select></div>
+      <button class="secondary" id="btn-preset-load">Laden</button>
+      <button id="btn-preset-start">▶ Starten</button>
+      <button class="secondary" id="btn-preset-download">Herunterladen</button>
+      <button class="secondary" id="btn-preset-delete">Löschen</button>
+    </div>
+    <div class="row" style="margin-top:.6rem">
+      <div style="flex:1 1 18rem"><label for="preset-name">Aktuelle Einstellungen speichern als</label>
+        <input type="text" id="preset-name" placeholder="z. B. Star Trek – Alarmstufe Rot" style="width:100%"></div>
+      <button id="btn-preset-save">Speichern</button>
+      <button class="secondary" id="btn-preset-upload">Hochladen…</button>
+      <input type="file" id="preset-file" accept="application/json,.json" style="display:none">
     </div>
   </section>
 
@@ -164,18 +200,23 @@
       return { ok: false, data: {} };
     }
   }
-  $("btn-log-clear").onclick = () => { LOG_ENTRIES = []; renderLog(); };
-  $("btn-log-download").onclick = () => {
-    const text = LOG_ENTRIES.slice().reverse().join("\n\n") || "Bereit.";
-    const blob = new Blob([text], { type: "text/plain" });
+  function downloadText(text, filename, mime) {
+    const blob = new Blob([text], { type: mime || "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `redalert-log-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+  }
+  const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  $("btn-log-clear").onclick = () => { LOG_ENTRIES = []; renderLog(); };
+  $("btn-log-download").onclick = () => {
+    const text = LOG_ENTRIES.slice().reverse().join("\n\n") || "Bereit.";
+    downloadText(text, `redalert-log-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`, "text/plain");
   };
   function setPill(el, on, label) {
     el.classList.toggle("on", !!on);
@@ -207,6 +248,7 @@
                 <option value="">wie oben</option>
                 <option value="pulse">pulse (Takt)</option>
                 <option value="chase">chase (Lauflicht)</option>
+                <option value="glitter">glitter (Funkeln)</option>
               </select></div>
             <div><label for="b${i}-color">Farbe (Hex, leer = wie oben)</label>
               <input type="text" id="b${i}-color" placeholder="#FF0000"></div>
@@ -222,6 +264,12 @@
               <input type="number" id="b${i}-glowlow" min="0" max="1" step="0.01" placeholder="wie oben"></div>
             <div><label for="b${i}-glowhigh">glow_high (0–1)</label>
               <input type="number" id="b${i}-glowhigh" min="0" max="1" step="0.01" placeholder="wie oben"></div>
+            <div><label for="b${i}-ginterval">glitter: Intervall (ms)</label>
+              <input type="number" id="b${i}-ginterval" min="5" max="5000" step="5" placeholder="wie oben"></div>
+            <div><label for="b${i}-gflash">glitter: Blitzdauer (ms)</label>
+              <input type="number" id="b${i}-gflash" min="20" max="5000" step="10" placeholder="wie oben"></div>
+            <div style="flex:1 1 100%"><label for="b${i}-gcolors">glitter: Farben (Hex, leer = wie oben)</label>
+              <input type="text" id="b${i}-gcolors" placeholder="#FFFFFF #CFE8FF #FFF1D0" style="width:100%"></div>
           </div>
         </details>
         <details style="margin-top:.5rem">
@@ -326,6 +374,9 @@
       "chase-Pause (Standard)": data.chase_pause ? `${data.chase_pause} s` : "aus (durchgehend)",
       "attack / release (Standard)": `${data.attack_ms} / ${data.release_ms} ms`,
       "glow low / high (Standard)": `${data.glow_low} / ${data.glow_high}`,
+      "glitter (Standard)": `${data.glitter_interval_ms} / ${data.glitter_flash_ms} ms · `
+        + (data.glitter_colors ? data.glitter_colors : "Bridge-Farbe"),
+      "Effektsets": (data.presets && data.presets.length) ? data.presets.join(", ") : "keine",
     };
     bridges.forEach((b, i) => {
       const own = b.effect ? `${b.effect}${b.color ? " " + b.color : ""}` : "Standard";
@@ -352,6 +403,9 @@
       if (b.release_ms != null && !$(`b${i}-release`).value) $(`b${i}-release`).value = b.release_ms;
       if (b.glow_low != null && !$(`b${i}-glowlow`).value) $(`b${i}-glowlow`).value = b.glow_low;
       if (b.glow_high != null && !$(`b${i}-glowhigh`).value) $(`b${i}-glowhigh`).value = b.glow_high;
+      if (b.glitter_interval_ms != null && !$(`b${i}-ginterval`).value) $(`b${i}-ginterval`).value = b.glitter_interval_ms;
+      if (b.glitter_flash_ms != null && !$(`b${i}-gflash`).value) $(`b${i}-gflash`).value = b.glitter_flash_ms;
+      if (b.glitter_colors && !$(`b${i}-gcolors`).value) $(`b${i}-gcolors`).value = b.glitter_colors;
       setPill($(`b${i}-pill`), b.paired, b.paired ? "gepaart" : "nicht gepaart");
       renderIdentify(i);
     });
@@ -364,12 +418,25 @@
     if (data.chase_pause != null && !$("chpause").value && data.chase_pause > 0) $("chpause").value = data.chase_pause;
     if (data.glow_low != null && !$("glowlow").value) $("glowlow").value = data.glow_low;
     if (data.glow_high != null && !$("glowhigh").value) $("glowhigh").value = data.glow_high;
-    if (data.color) $("color").value = data.color.toLowerCase();
+    if (data.glitter_interval_ms != null && !$("ginterval").value) $("ginterval").value = data.glitter_interval_ms;
+    if (data.glitter_flash_ms != null && !$("gflash").value) $("gflash").value = data.glitter_flash_ms;
+    if (data.glitter_colors && !$("gcolors").value) $("gcolors").value = data.glitter_colors;
+    if (data.color && !$("color").dataset.touched) $("color").value = data.color.toLowerCase();
+    loadPresets();
   }
 
   $("btn-refresh").onclick = refresh;
   $("effect").onchange = () => { $("effect").dataset.touched = "1"; };
-  $("btn-start").onclick = async () => {
+  $("color").oninput = () => { $("color").dataset.touched = "1"; };
+
+  // Formular (Bridges + Steuerung) -> /start-Body. Basis für Start und Set-Speichern.
+  function collectBody() {
+    // Geteilte Felder aus „2 · Steuerung“ (kein attack/release – die gibt es nur je Bridge).
+    const sharedNum = [
+      ["sweep", "sweep_seconds"], ["chpause", "chase_pause"],
+      ["glowlow", "glow_low"], ["glowhigh", "glow_high"],
+      ["ginterval", "glitter_interval_ms"], ["gflash", "glitter_flash_ms"],
+    ];
     const bridges = [];
     for (let i = 0; i < BRIDGE_COUNT; i++) {
       const host = $(`b${i}-host`).value.trim();
@@ -381,24 +448,132 @@
       if ($(`b${i}-effect`).value) entry.effect = $(`b${i}-effect`).value;
       const ownColor = $(`b${i}-color`).value.trim();
       if (ownColor) entry.color = ownColor;
-      if ($(`b${i}-sweep`).value !== "") entry.sweep_seconds = Number($(`b${i}-sweep`).value);
-      if ($(`b${i}-chpause`).value !== "") entry.chase_pause = Number($(`b${i}-chpause`).value);
-      if ($(`b${i}-attack`).value !== "") entry.attack_ms = Number($(`b${i}-attack`).value);
-      if ($(`b${i}-release`).value !== "") entry.release_ms = Number($(`b${i}-release`).value);
-      if ($(`b${i}-glowlow`).value !== "") entry.glow_low = Number($(`b${i}-glowlow`).value);
-      if ($(`b${i}-glowhigh`).value !== "") entry.glow_high = Number($(`b${i}-glowhigh`).value);
+      const ownGcolors = $(`b${i}-gcolors`).value.trim();
+      if (ownGcolors) entry.glitter_colors = ownGcolors;
+      for (const [suf, key] of [["sweep", "sweep_seconds"], ["chpause", "chase_pause"],
+        ["attack", "attack_ms"], ["release", "release_ms"], ["glowlow", "glow_low"],
+        ["glowhigh", "glow_high"], ["ginterval", "glitter_interval_ms"], ["gflash", "glitter_flash_ms"]]) {
+        if ($(`b${i}-${suf}`).value !== "") entry[key] = Number($(`b${i}-${suf}`).value);
+      }
       bridges.push(entry);
     }
     const body = { color: $("color").value, effect: $("effect").value };
     if (bridges.length) body.bridges = bridges;
     if ($("duration").value !== "") body.duration = Number($("duration").value);
     if ($("fps").value !== "") body.fps = Number($("fps").value);
-    if ($("sweep").value !== "") body.sweep_seconds = Number($("sweep").value);
-    if ($("chpause").value !== "") body.chase_pause = Number($("chpause").value);
-    if ($("glowlow").value !== "") body.glow_low = Number($("glowlow").value);
-    if ($("glowhigh").value !== "") body.glow_high = Number($("glowhigh").value);
-    await api("start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    for (const [id, key] of sharedNum) {
+      if ($(id).value !== "") body[key] = Number($(id).value);
+    }
+    const gcolors = $("gcolors").value.trim();
+    if (gcolors) body.glitter_colors = gcolors;
+    return body;
+  }
+
+  // /start-Body (z. B. aus einem geladenen Set) -> Formular.
+  function applyBody(b) {
+    b = b || {};
+    const setVal = (id, v) => { $(id).value = (v === undefined || v === null) ? "" : v; };
+    if (b.effect) { $("effect").value = b.effect; $("effect").dataset.touched = "1"; }
+    if (b.color) { $("color").value = String(b.color).toLowerCase(); $("color").dataset.touched = "1"; }
+    setVal("duration", b.duration);
+    setVal("fps", b.fps);
+    setVal("sweep", b.sweep_seconds);
+    setVal("chpause", b.chase_pause);
+    setVal("glowlow", b.glow_low);
+    setVal("glowhigh", b.glow_high);
+    setVal("ginterval", b.glitter_interval_ms);
+    setVal("gflash", b.glitter_flash_ms);
+    $("gcolors").value = b.glitter_colors || "";
+    const arr = Array.isArray(b.bridges) ? b.bridges : [];
+    for (let i = 0; i < BRIDGE_COUNT; i++) {
+      const e = arr[i] || {};
+      setVal(`b${i}-host`, e.bridge_host);
+      setVal(`b${i}-area`, e.area_id);
+      $(`b${i}-order`).value = Array.isArray(e.channel_order)
+        ? e.channel_order.join(", ") : (e.channel_order || "");
+      $(`b${i}-effect`).value = e.effect || "";
+      $(`b${i}-color`).value = e.color || "";
+      $(`b${i}-gcolors`).value = e.glitter_colors || "";
+      setVal(`b${i}-sweep`, e.sweep_seconds);
+      setVal(`b${i}-chpause`, e.chase_pause);
+      setVal(`b${i}-attack`, e.attack_ms);
+      setVal(`b${i}-release`, e.release_ms);
+      setVal(`b${i}-glowlow`, e.glow_low);
+      setVal(`b${i}-glowhigh`, e.glow_high);
+      setVal(`b${i}-ginterval`, e.glitter_interval_ms);
+      setVal(`b${i}-gflash`, e.glitter_flash_ms);
+      renderIdentify(i);
+    }
+  }
+
+  $("btn-start").onclick = async () => {
+    await api("start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(collectBody()) });
     refresh();
+  };
+
+  // --- Effektsets --------------------------------------------------------------
+  let PRESETS = {};
+  async function loadPresets(keepSelection) {
+    const { ok, data } = await api("presets");
+    if (!ok) return;
+    PRESETS = data.presets || {};
+    const sel = $("preset-select");
+    const want = keepSelection || sel.value;
+    const names = data.names || Object.keys(PRESETS).sort();
+    sel.innerHTML = '<option value="">– keins –</option>'
+      + names.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
+    if (want && names.includes(want)) sel.value = want;
+  }
+  $("btn-preset-load").onclick = () => {
+    const name = $("preset-select").value;
+    if (!name || !PRESETS[name]) { logLine("Kein Set gewählt."); return; }
+    applyBody(PRESETS[name]);
+    $("preset-name").value = name;
+    logLine(`Effektset „${name}“ ins Formular geladen.`);
+  };
+  $("btn-preset-start").onclick = async () => {
+    const name = $("preset-select").value;
+    if (!name) { logLine("Kein Set gewählt."); return; }
+    await api("start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preset: name }) });
+    refresh();
+  };
+  $("btn-preset-save").onclick = async () => {
+    const name = $("preset-name").value.trim();
+    if (!name) { logLine("Bitte einen Namen für das Set eingeben."); return; }
+    const { ok } = await api("presets", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, config: collectBody() }) });
+    if (ok) await loadPresets(name);
+  };
+  $("btn-preset-delete").onclick = async () => {
+    const name = $("preset-select").value;
+    if (!name) { logLine("Kein Set gewählt."); return; }
+    await api("presets?name=" + encodeURIComponent(name), { method: "DELETE" });
+    await loadPresets("");
+  };
+  $("btn-preset-download").onclick = () => {
+    const name = $("preset-select").value;
+    const config = (name && PRESETS[name]) ? PRESETS[name] : collectBody();
+    const outName = name || $("preset-name").value.trim() || "Effektset";
+    const safe = outName.replace(/[^\w.\- ]+/g, "_").trim().replace(/\s+/g, "_");
+    downloadText(JSON.stringify({ name: outName, config }, null, 2),
+      `redalert-set-${safe || "export"}.json`, "application/json");
+  };
+  $("btn-preset-upload").onclick = () => $("preset-file").click();
+  $("preset-file").onchange = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    let parsed;
+    try { parsed = JSON.parse(await file.text()); }
+    catch (err) { logLine("Upload fehlgeschlagen – keine gültige JSON-Datei: " + err); return; }
+    let name, config;
+    if (parsed && typeof parsed === "object" && parsed.config && typeof parsed.config === "object") {
+      name = parsed.name; config = parsed.config;
+    } else { config = parsed; name = parsed && parsed.name; }
+    name = String(name || $("preset-name").value.trim() || file.name.replace(/\.json$/i, "")).trim();
+    if (!name) { logLine("Upload: kein Name für das Set – bitte oben einen eintragen."); return; }
+    if (!config || typeof config !== "object") { logLine("Upload: Datei enthält keine Einstellungen."); return; }
+    const { ok } = await api("presets", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, config }) });
+    if (ok) { await loadPresets(name); logLine(`Effektset „${name}“ hochgeladen.`); }
   };
   $("btn-stop").onclick = async () => {
     await api("stop", { method: "POST" });

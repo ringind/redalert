@@ -1,14 +1,20 @@
 """Red Alert Entertainment – REST-API, Streaming-Loop und Ingress-Web-UI.
 
 Der Dienst hält pro konfigurierter Hue Bridge (bis zu 3) einen eigenen
-DTLS-Stream offen und schiebt ~25 Frames/s an die Kanäle: entweder ein
-gemeinsames Auf-/Ab-Blenden aller Lampen einer Bridge (``effect: pulse``,
-Standard) oder das originale Larson-Scanner-Lauflicht (``effect: chase``).
+DTLS-Stream offen und schiebt ~25 Frames/s an die Kanäle: ein gemeinsames
+Auf-/Ab-Blenden aller Lampen einer Bridge (``effect: pulse``, Standard), das
+originale Larson-Scanner-Lauflicht (``effect: chase``) oder ein
+Diamant-Gefunkel aus kurzen Farb-Blitzen (``effect: glitter``).
 Effekt, Farbe und Timing sind pro Bridge einzeln einstellbar; alle Bridges
 starten trotzdem gleichzeitig (gemeinsame Start-Uhr nach parallelen
 DTLS-Handshakes). Läuft für ``duration`` Sekunden (Standardwert aus der
 gleichnamigen Add-on-Option, für alle Bridges gemeinsam; `0` = unbegrenzt,
 läuft bis ``POST /stop``).
+
+Der komplette Satz an Start-Parametern (alle Bridges + Steuerung) lässt sich
+als benanntes **Effektset** unter ``/data/presets.json`` ablegen
+(``GET/PUT/DELETE /presets``) und per ``POST /start {"preset": "..."}``
+wieder starten.
 """
 
 import asyncio
@@ -21,11 +27,12 @@ import aiohttp
 from aiohttp import web
 from hue_entertainment import EntertainmentSession, HueEntertainmentAPI, LightColorCommand
 
-from chase import RedAlertChase, RedAlertPulse
+from chase import RedAlertChase, RedAlertGlitter, RedAlertPulse
 
 DATA_DIR = Path(os.environ.get("REDALERT_DATA_DIR", "/data"))
 CRED_FILE = DATA_DIR / "credentials.json"
 OPTIONS_FILE = DATA_DIR / "options.json"
+PRESETS_FILE = DATA_DIR / "presets.json"
 
 APP_DIR = Path(__file__).parent
 PANEL_HTML = (APP_DIR / "panel.html").read_text(encoding="utf-8")
@@ -70,7 +77,29 @@ options = load_json(OPTIONS_FILE, {})
 
 
 def _effect_name(value) -> str:
-    return "chase" if str(value or "").lower() == "chase" else "pulse"
+    v = str(value or "").lower()
+    return v if v in ("pulse", "chase", "glitter") else "pulse"
+
+
+def _parse_color_list(value) -> list[tuple[int, int, int]]:
+    """Farbliste aus Option/Body: ``["#FFF...", ...]`` oder ``"#FFF... #CFE..."``.
+
+    Leer/``None`` -> ``[]`` (Aufrufer fällt auf die Einzelfarbe zurück).
+    """
+    if not value:
+        return []
+    if isinstance(value, (list, tuple)):
+        parts = [str(x) for x in value]
+    else:
+        parts = [p for p in str(value).replace(",", " ").split() if p]
+    return [hex_to_rgb(p) for p in parts if p.strip()]
+
+
+def _colors_to_hex(colors) -> str:
+    """rgb-Tupel-Liste -> ``"#RRGGBB #RRGGBB"`` (für /config und das Web-UI)."""
+    if not colors:
+        return ""
+    return " ".join("#{:02X}{:02X}{:02X}".format(*c) for c in colors)
 
 
 def _parse_channel_order(value) -> list[int] | None:
@@ -99,6 +128,8 @@ _BRIDGE_NUMERIC_OVERRIDES = (
     ("release_ms", float),
     ("glow_low", float),
     ("glow_high", float),
+    ("glitter_interval_ms", float),
+    ("glitter_flash_ms", float),
 )
 
 
@@ -107,11 +138,11 @@ def _parse_bridges_option(value) -> list[dict]:
 
     Jeder Eintrag braucht ``bridge_host`` + ``area_id``; ``channel_order`` und
     die Effekt-Parameter (``effect``, ``color``, ``sweep_seconds``,
-    ``chase_pause``, ``attack_ms``, ``release_ms``, ``glow_low``, ``glow_high``)
-    sind optional und überschreiben nur für diese eine Bridge den sonst
-    gültigen Standard (Body bzw. Add-on-Option). Unvollständige Einträge werden
-    mit einer Warnung übersprungen, mehr als ``MAX_BRIDGES`` Einträge werden
-    abgeschnitten.
+    ``chase_pause``, ``attack_ms``, ``release_ms``, ``glow_low``, ``glow_high``,
+    ``glitter_interval_ms``, ``glitter_flash_ms``, ``glitter_colors``) sind
+    optional und überschreiben nur für diese eine Bridge den sonst gültigen
+    Standard (Body bzw. Add-on-Option). Unvollständige Einträge werden mit einer
+    Warnung übersprungen, mehr als ``MAX_BRIDGES`` Einträge werden abgeschnitten.
     """
     if not isinstance(value, list):
         return []
@@ -135,6 +166,10 @@ def _parse_bridges_option(value) -> list[dict]:
             norm["effect"] = _effect_name(entry["effect"])
         if entry.get("color"):
             norm["color"] = hex_to_rgb(entry["color"])
+        if entry.get("glitter_colors"):
+            palette = _parse_color_list(entry["glitter_colors"])
+            if palette:
+                norm["glitter_colors"] = palette
         for key, cast in _BRIDGE_NUMERIC_OVERRIDES:
             raw = entry.get(key)
             if raw is None or raw == "":
@@ -170,8 +205,22 @@ def _save_credentials(creds: dict) -> None:
     CRED_FILE.write_text(json.dumps(creds))
 
 
+def _load_presets() -> dict:
+    """Effektsets laden: ``{name: <start-Body-Dict>}`` aus ``/data/presets.json``."""
+    data = load_json(PRESETS_FILE, {})
+    if not isinstance(data, dict):
+        return {}
+    return {str(k): v for k, v in data.items() if isinstance(v, dict)}
+
+
+def _save_presets(presets: dict) -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    PRESETS_FILE.write_text(json.dumps(presets, indent=2, ensure_ascii=False))
+
+
 state = {
     "credentials": _load_credentials(),
+    "presets": _load_presets(),
     "bridges": _parse_bridges_option(options.get("bridges")),
     "color": hex_to_rgb(options.get("color", "#FF0000")),
     "effect": _effect_name(options.get("effect", "pulse")),
@@ -180,6 +229,10 @@ state = {
     "glow_low": float(options.get("glow_low", 0.08)),
     "glow_high": float(options.get("glow_high", 1.0)),
     "chase_pause": float(options.get("chase_pause", 0.0)),
+    "glitter_interval_ms": max(1.0, float(options.get("glitter_interval_ms", 90.0))),
+    "glitter_flash_ms": max(1.0, float(options.get("glitter_flash_ms", 260.0))),
+    # Roh-String wie konfiguriert; leer -> je Bridge die Einzelfarbe.
+    "glitter_colors": str(options.get("glitter_colors", "") or ""),
     "restore_state": bool(options.get("restore_state", True)),
     # 0 = unbegrenzt (läuft bis POST /stop).
     "duration": max(0.0, float(options.get("duration", 0.0))),
@@ -189,11 +242,13 @@ state = {
 
 log.info(
     "Konfiguration: bridges=%s (Standard) effect=%s color=%s fps=%s sweep=%ss chase_pause=%ss "
-    "attack=%sms release=%sms glow=%s..%s duration=%ss (0=unbegrenzt)",
+    "attack=%sms release=%sms glow=%s..%s glitter=%sms/%sms colors=%r duration=%ss (0=unbegrenzt) "
+    "presets=%s",
     [
         {"bridge_host": b["bridge_host"], "area_id": b["area_id"], "channel_order": b["channel_order"],
          **{k: b[k] for k in ("effect", "color", "sweep_seconds", "chase_pause",
-                               "attack_ms", "release_ms", "glow_low", "glow_high") if k in b}}
+                               "attack_ms", "release_ms", "glow_low", "glow_high",
+                               "glitter_interval_ms", "glitter_flash_ms", "glitter_colors") if k in b}}
         for b in state["bridges"]
     ],
     state["effect"],
@@ -205,7 +260,11 @@ log.info(
     state["release_ms"],
     state["glow_low"],
     state["glow_high"],
+    state["glitter_interval_ms"],
+    state["glitter_flash_ms"],
+    state["glitter_colors"] or "(Bridge-Farbe)",
     state["duration"],
+    sorted(state["presets"].keys()) or "(keine)",
 )
 if state["bridges"]:
     paired = [b["bridge_host"] for b in state["bridges"] if b["bridge_host"] in state["credentials"]]
@@ -336,6 +395,9 @@ async def handle_config(request: web.Request) -> web.Response:
                     "release_ms": bg.get("release_ms"),
                     "glow_low": bg.get("glow_low"),
                     "glow_high": bg.get("glow_high"),
+                    "glitter_interval_ms": bg.get("glitter_interval_ms"),
+                    "glitter_flash_ms": bg.get("glitter_flash_ms"),
+                    "glitter_colors": _colors_to_hex(bg["glitter_colors"]) if "glitter_colors" in bg else None,
                 }
                 for bg in state["bridges"]
             ],
@@ -348,8 +410,12 @@ async def handle_config(request: web.Request) -> web.Response:
             "release_ms": state["release_ms"],
             "glow_low": state["glow_low"],
             "glow_high": state["glow_high"],
+            "glitter_interval_ms": state["glitter_interval_ms"],
+            "glitter_flash_ms": state["glitter_flash_ms"],
+            "glitter_colors": state["glitter_colors"],
             "restore_state": state["restore_state"],
             "default_duration_s": state["duration"],
+            "presets": sorted(state["presets"].keys()),
             "running": bool(task and not task.done()),
             "last_start": state["last_start"],
         }
@@ -443,9 +509,9 @@ async def _run_effect(
     """Effekt auf mehreren Bridges gleichzeitig fahren, jede mit ihrem eigenen
     Effekt/Farbe/Timing (siehe ``handle_start._resolve``).
 
-    Jede Bridge bekommt ihre eigenen ``RedAlertChase``/``RedAlertPulse``-
-    Instanzen (Kanalzahl, Timing und Effekt-Art können pro Bridge
-    unterschiedlich sein). Damit sie trotzdem **gleichzeitig** loslegen statt
+    Jede Bridge bekommt ihre eigenen ``RedAlertChase``/``RedAlertPulse``/
+    ``RedAlertGlitter``-Instanzen (Kanalzahl, Timing und Effekt-Art können pro
+    Bridge unterschiedlich sein). Damit sie trotzdem **gleichzeitig** loslegen statt
     nacheinander, starten alle DTLS-Handshakes parallel, und die gemeinsame
     ``elapsed``-Uhr beginnt erst, wenn alle fertig sind (oder fehlgeschlagen
     sind – eine fehlschlagende Bridge fliegt best-effort raus).
@@ -455,6 +521,12 @@ async def _run_effect(
         ctx["pulse"] = RedAlertPulse(num_lights=n, attack_s=ctx["attack_s"], release_s=ctx["release_s"])
         ctx["chase"] = RedAlertChase(
             num_lights=n, sweep_seconds=ctx["sweep_seconds"], pause_seconds=ctx["chase_pause"]
+        )
+        ctx["glitter"] = RedAlertGlitter(
+            num_lights=n,
+            interval_s=ctx["glitter_interval_ms"] / 1000.0,
+            flash_s=ctx["glitter_flash_ms"] / 1000.0,
+            palette=ctx["glitter_palette"],
         )
     frames = 0
     snapshots: dict[str, list[dict]] = {}
@@ -502,22 +574,29 @@ async def _run_effect(
             for ctx in active:
                 glow_low, glow_high = ctx["glow_low"], ctx["glow_high"]
                 glow_span = glow_high - glow_low
-                if ctx["effect"] == "chase":
-                    levels = ctx["chase"].brightness_for(elapsed)
-                else:  # pulse
-                    target = RedAlertPulse.periodic(elapsed, ctx["sweep_seconds"])
-                    levels = ctx["pulse"].step(target, dt)
-                levels = [glow_low + glow_span * lvl for lvl in levels]
-                cr, cg, cb = ctx["color"]
+                if ctx["effect"] == "glitter":
+                    # jede Lampe eigene Farbe + eigener Pegel (Diamant-Gefunkel)
+                    chans = [
+                        (r, g, b, glow_low + glow_span * lvl)
+                        for lvl, (r, g, b) in ctx["glitter"].step(dt)
+                    ]
+                else:
+                    if ctx["effect"] == "chase":
+                        levels = ctx["chase"].brightness_for(elapsed)
+                    else:  # pulse
+                        target = RedAlertPulse.periodic(elapsed, ctx["sweep_seconds"])
+                        levels = ctx["pulse"].step(target, dt)
+                    cr, cg, cb = ctx["color"]
+                    chans = [(cr, cg, cb, glow_low + glow_span * lvl) for lvl in levels]
                 ctx["session"].send(
                     [
                         LightColorCommand(
                             channel_id=cid,
-                            red=int(cr * 257 * lvl),
-                            green=int(cg * 257 * lvl),
-                            blue=int(cb * 257 * lvl),
+                            red=int(r * 257 * s),
+                            green=int(g * 257 * s),
+                            blue=int(b * 257 * s),
                         )
-                        for cid, lvl in zip(ctx["channel_ids"], levels)
+                        for cid, (r, g, b, s) in zip(ctx["channel_ids"], chans)
                     ]
                 )
             frames += 1
@@ -684,18 +763,35 @@ async def handle_start(request: web.Request) -> web.Response:
 
     Body optional: ``duration``, ``fps``, ``restore_state`` gelten für **alle**
     Bridges gemeinsam. ``effect``, ``color``, ``sweep_seconds``, ``chase_pause``,
-    ``attack_ms``, ``release_ms``, ``glow_low``, ``glow_high`` im Body sind die
-    **Standardwerte** für Bridges, die diese Parameter nicht selbst setzen.
-    ``bridges`` (Liste von ``{bridge_host, area_id, channel_order, effect?,
-    color?, sweep_seconds?, chase_pause?, attack_ms?, release_ms?, glow_low?,
-    glow_high?}``) übersteuert für diesen Aufruf die Option ``bridges`` – jede
-    Bridge kann ihren eigenen Effekt/Farbe/Timing haben.
+    ``attack_ms``, ``release_ms``, ``glow_low``, ``glow_high``,
+    ``glitter_interval_ms``, ``glitter_flash_ms``, ``glitter_colors`` im Body
+    sind die **Standardwerte** für Bridges, die diese Parameter nicht selbst
+    setzen. ``bridges`` (Liste von ``{bridge_host, area_id, channel_order,
+    effect?, color?, sweep_seconds?, chase_pause?, attack_ms?, release_ms?,
+    glow_low?, glow_high?, glitter_interval_ms?, glitter_flash_ms?,
+    glitter_colors?}``) übersteuert für diesen Aufruf die Option ``bridges`` –
+    jede Bridge kann ihren eigenen Effekt/Farbe/Timing haben.
+
+    ``preset``: Name eines gespeicherten Effektsets (siehe ``/presets``); dessen
+    gespeicherter Body dient als Basis, alle weiteren Body-Felder überschreiben
+    ihn für diesen Aufruf.
     """
     existing = state["task"]
     if existing and not existing.done():
         return web.json_response({"status": "already_running"})
 
     body = await _json_body(request)
+
+    preset_name = body.get("preset")
+    if preset_name:
+        base = state["presets"].get(str(preset_name))
+        if not isinstance(base, dict):
+            return web.json_response(
+                {"error": f"Effektset '{preset_name}' nicht gefunden"}, status=404
+            )
+        merged = dict(base)
+        merged.update({k: v for k, v in body.items() if k != "preset"})
+        body = merged
 
     if "bridges" in body:
         req_bridges = _parse_bridges_option(body["bridges"])
@@ -734,6 +830,22 @@ async def handle_start(request: web.Request) -> web.Response:
         defaults["glow_high"] = min(max(float(body.get("glow_high", state["glow_high"])), 0.0), 1.0)
     except (TypeError, ValueError):
         defaults["glow_low"], defaults["glow_high"] = state["glow_low"], state["glow_high"]
+    try:
+        defaults["glitter_interval_ms"] = max(
+            1.0, float(body.get("glitter_interval_ms") or state["glitter_interval_ms"])
+        )
+    except (TypeError, ValueError):
+        defaults["glitter_interval_ms"] = state["glitter_interval_ms"]
+    try:
+        defaults["glitter_flash_ms"] = max(
+            1.0, float(body.get("glitter_flash_ms") or state["glitter_flash_ms"])
+        )
+    except (TypeError, ValueError):
+        defaults["glitter_flash_ms"] = state["glitter_flash_ms"]
+    _gc = body.get("glitter_colors")
+    defaults["glitter_palette"] = _parse_color_list(
+        _gc if _gc is not None else state["glitter_colors"]
+    )
 
     async def _resolve(cfg: dict) -> dict:
         """Eine Bridge auflösen: gepaart? erreichbar? area_id/Kanäle gültig?
@@ -773,6 +885,8 @@ async def handle_start(request: web.Request) -> web.Response:
         glow_low = min(max(cfg.get("glow_low", defaults["glow_low"]), 0.0), 1.0)
         glow_high = min(max(cfg.get("glow_high", defaults["glow_high"]), 0.0), 1.0)
         glow_high = max(glow_high, glow_low)
+        color = cfg.get("color", defaults["color"])
+        palette = cfg.get("glitter_colors", defaults["glitter_palette"]) or [color]
         return {
             "bridge_host": host,
             "area_id": cfg["area_id"],
@@ -780,13 +894,16 @@ async def handle_start(request: web.Request) -> web.Response:
             "session": session,
             "app_key": creds["username"],
             "effect": cfg.get("effect", defaults["effect"]),
-            "color": cfg.get("color", defaults["color"]),
+            "color": color,
             "sweep_seconds": cfg.get("sweep_seconds", defaults["sweep_seconds"]),
             "chase_pause": max(0.0, cfg.get("chase_pause", defaults["chase_pause"])),
             "attack_s": cfg.get("attack_ms", defaults["attack_ms"]) / 1000.0,
             "release_s": cfg.get("release_ms", defaults["release_ms"]) / 1000.0,
             "glow_low": glow_low,
             "glow_high": glow_high,
+            "glitter_interval_ms": max(1.0, cfg.get("glitter_interval_ms", defaults["glitter_interval_ms"])),
+            "glitter_flash_ms": max(1.0, cfg.get("glitter_flash_ms", defaults["glitter_flash_ms"])),
+            "glitter_palette": palette,
         }
 
     # area_id/Kanäle für alle Bridges parallel auflösen (schnell, kein DTLS).
@@ -819,6 +936,9 @@ async def handle_start(request: web.Request) -> web.Response:
                 "release_ms": round(c["release_s"] * 1000),
                 "glow_low": round(c["glow_low"], 3),
                 "glow_high": round(c["glow_high"], 3),
+                "glitter_interval_ms": round(c["glitter_interval_ms"]),
+                "glitter_flash_ms": round(c["glitter_flash_ms"]),
+                "glitter_colors": _colors_to_hex(c["glitter_palette"]),
             }
             for c in ctxs
         ],
@@ -841,6 +961,62 @@ async def handle_stop(request: web.Request) -> web.Response:
     return web.json_response({"status": "stopped"})
 
 
+# --------------------------------------------------------------------------- #
+# Effektsets (Presets)
+# --------------------------------------------------------------------------- #
+def _preset_names() -> list[str]:
+    return sorted(state["presets"].keys())
+
+
+async def handle_presets_get(request: web.Request) -> web.Response:
+    """GET /presets – alle gespeicherten Effektsets (Name -> /start-Body)."""
+    name = request.query.get("name")
+    if name is not None:
+        cfg = state["presets"].get(name)
+        if cfg is None:
+            return web.json_response({"error": f"Effektset '{name}' nicht gefunden"}, status=404)
+        return web.json_response({"name": name, "config": cfg})
+    return web.json_response({"presets": state["presets"], "names": _preset_names()})
+
+
+async def handle_presets_put(request: web.Request) -> web.Response:
+    """PUT/POST /presets – ein Effektset speichern/überschreiben.
+
+    Body: ``{"name": "...", "config": { <start-Body> }}``. ``config`` darf die
+    kompletten ``/start``-Felder enthalten (inkl. ``bridges``); ein evtl.
+    mitgeschicktes ``preset`` wird entfernt. Dient auch als Upload-Ziel.
+    """
+    body = await _json_body(request)
+    name = str(body.get("name") or "").strip()
+    if not name:
+        return web.json_response({"error": "name fehlt"}, status=400)
+    config = body.get("config")
+    if config is None and isinstance(body.get("bridges"), list):
+        # Bequemlichkeit: flacher Upload ohne {name, config}-Hülle.
+        config = {k: v for k, v in body.items() if k != "name"}
+    if not isinstance(config, dict):
+        return web.json_response({"error": "config muss ein Objekt sein"}, status=400)
+    config.pop("preset", None)
+    state["presets"][name] = config
+    _save_presets(state["presets"])
+    log.info("Effektset '%s' gespeichert (%d gesamt).", name, len(state["presets"]))
+    return web.json_response({"status": "saved", "name": name, "names": _preset_names()})
+
+
+async def handle_presets_delete(request: web.Request) -> web.Response:
+    """DELETE /presets?name=... – ein Effektset löschen."""
+    name = request.query.get("name")
+    if not name:
+        name = (await _json_body(request)).get("name")
+    name = str(name or "").strip()
+    if name in state["presets"]:
+        del state["presets"][name]
+        _save_presets(state["presets"])
+        log.info("Effektset '%s' gelöscht (%d verbleibend).", name, len(state["presets"]))
+        return web.json_response({"status": "deleted", "name": name, "names": _preset_names()})
+    return web.json_response({"status": "not_found", "name": name}, status=404)
+
+
 def create_app() -> web.Application:
     app = web.Application()
     app.router.add_get("/", handle_panel)
@@ -851,6 +1027,10 @@ def create_app() -> web.Application:
     app.router.add_post("/start", handle_start)
     app.router.add_post("/stop", handle_stop)
     app.router.add_post("/identify", handle_identify)
+    app.router.add_get("/presets", handle_presets_get)
+    app.router.add_put("/presets", handle_presets_put)
+    app.router.add_post("/presets", handle_presets_put)
+    app.router.add_delete("/presets", handle_presets_delete)
     return app
 
 

@@ -1,6 +1,6 @@
 """Red-Alert light patterns.
 
-Two effects, selected by the ``effect`` option / ``/start`` body:
+Three effects, selected by the ``effect`` option / ``/start`` body:
 
 - ``pulse`` (default): every channel rises and falls **together** – bright on
   sound, dim in the pauses. Driven by the audio cue envelope (or a periodic
@@ -11,15 +11,20 @@ Two effects, selected by the ``effect`` option / ``/start`` body:
   **pulse**: a very short rise as the head arrives, then a long exponential
   fade back to the resting glow. Consecutive lamps peak one after another, so
   together they read as a comet dragging a tail.
+- ``glitter``: each lamp sparkles on its own – at random moments it snaps to
+  full brightness in a colour picked from a palette and then fades out fast,
+  like light glinting off diamonds. Several lamps can be lit at once.
 
-Both classes only compute a **0..1 shape**; ``main.py`` maps it onto the
-configured ``glow_low`` / ``glow_high`` levels and applies the colour + 16-bit
-scaling.
+``RedAlertChase`` / ``RedAlertPulse`` only compute a **0..1 shape**; ``main.py``
+maps it onto the configured ``glow_low`` / ``glow_high`` levels and applies the
+colour + 16-bit scaling. ``RedAlertGlitter`` additionally picks a per-lamp
+colour (``main.py`` still does the level mapping and 16-bit scaling).
 """
 
 from __future__ import annotations
 
 import math
+import random
 
 HUE_16BIT_MAX = 65535
 
@@ -212,3 +217,57 @@ class RedAlertPulse:
         if period_s <= 0:
             return 1.0
         return 0.5 - 0.5 * math.cos(2.0 * math.pi * (t % period_s) / period_s)
+
+
+class RedAlertGlitter:
+    """Independent sparkle per lamp – short bright flashes in random colours.
+
+    Diamond-twinkle look: sparkles ignite at random moments (on average one
+    every ``interval_s`` **across the whole strip**); each ignition snaps one
+    lamp to full brightness in a colour picked at random from ``palette`` and
+    then fades exponentially with time constant ``flash_s``. Whenever
+    ``flash_s`` is longer than ``interval_s`` several lamps glint at once.
+
+    Unlike the other effects this one is stateful and time-stepped rather than
+    a pure function of ``t``: :meth:`step` advances by ``dt`` seconds and
+    returns one ``(level, (r, g, b))`` pair per lamp – ``level`` is the 0..1
+    shape (mapped onto ``glow_low`` / ``glow_high`` by ``main.py``),
+    ``(r, g, b)`` the 8-bit sparkle colour that lamp is currently showing.
+    Randomness is intentionally unseeded, so two ``glitter`` bridges next to
+    each other twinkle differently.
+    """
+
+    def __init__(
+        self,
+        num_lights: int,
+        interval_s: float = 0.09,
+        flash_s: float = 0.26,
+        palette: list[tuple[int, int, int]] | None = None,
+        seed: int | None = None,
+    ) -> None:
+        self.num_lights = max(1, num_lights)
+        self.interval_s = max(1e-3, interval_s)
+        self.flash_s = max(1e-3, flash_s)
+        self.palette = [tuple(c) for c in palette] if palette else [(255, 255, 255)]
+        self._rng = random.Random(seed)
+        self._level = [0.0] * self.num_lights
+        self._color = [self.palette[0]] * self.num_lights
+        self._carry = 0.0  # fractional ignitions carried between frames
+
+    def step(self, dt: float) -> list[tuple[float, tuple[int, int, int]]]:
+        """Advance by ``dt`` s; return per-lamp ``(level, (r, g, b))``."""
+        dt = max(0.0, dt)
+        if dt > 0.0:
+            decay = math.exp(-dt / self.flash_s)
+            for i in range(self.num_lights):
+                lv = self._level[i] * decay
+                self._level[i] = lv if lv > 1e-3 else 0.0
+            # Expected number of ignitions this frame; keep the fraction for next.
+            self._carry += dt / self.interval_s
+            ignitions = int(self._carry)
+            self._carry -= ignitions
+            for _ in range(min(ignitions, self.num_lights * 4)):
+                i = self._rng.randrange(self.num_lights)
+                self._level[i] = 1.0
+                self._color[i] = self.palette[self._rng.randrange(len(self.palette))]
+        return list(zip(self._level, self._color))

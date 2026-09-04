@@ -4,8 +4,9 @@ configuration:
     description: >-
       Up to 3 Hue Bridges that play simultaneously. Add one row per bridge;
       effect/color/sweep_seconds/chase_pause/attack_ms/release_ms/glow_low/
-      glow_high are optional per bridge – leave empty and the like-named
-      option below is used as this bridge's default.
+      glow_high/glitter_interval_ms/glitter_flash_ms/glitter_colors are
+      optional per bridge – leave empty and the like-named option below is used
+      as this bridge's default.
     bridge_host:
       name: Hue Bridge IP
       description: >-
@@ -61,13 +62,29 @@ configuration:
       description: >-
         Overrides the glow_high option for this one bridge. Empty = use the
         default below.
+    glitter_interval_ms:
+      name: Glitter interval ms (this bridge)
+      description: >-
+        Overrides the glitter_interval_ms option for this one bridge. Empty =
+        use the default below.
+    glitter_flash_ms:
+      name: Glitter flash ms (this bridge)
+      description: >-
+        Overrides the glitter_flash_ms option for this one bridge. Empty = use
+        the default below.
+    glitter_colors:
+      name: Glitter colours (this bridge)
+      description: >-
+        Overrides the glitter_colors option for this one bridge (hex colours
+        separated by spaces). Empty = use the default below.
   effect:
     name: Effect (default)
     description: >-
       Default effect for bridges without their own setting. pulse = all lamps
       together: 0 to 100 % on the beat, back to 0 between pulses (fall faster
       than rise). chase = a comet runs evenly around the channels, dragging a
-      tail behind it.
+      tail behind it. glitter = each lamp sparkles on its own in very short
+      bursts of changing colour (diamond twinkle).
   color:
     name: Colour (default)
     description: >-
@@ -114,6 +131,24 @@ configuration:
       Default for bridges without their own setting. Brightness (0–1) at the
       pulse peak (both effects). Default 1.0 = full brightness. Must be above
       the resting glow level.
+  glitter_interval_ms:
+    name: Glitter interval (ms, default)
+    description: >-
+      effect glitter only. Mean gap in milliseconds between two sparkle
+      flashes across all of a bridge's lamps. Small = frantic diamond twinkle
+      (default 90).
+  glitter_flash_ms:
+    name: Glitter flash time (ms, default)
+    description: >-
+      effect glitter only. How fast a single spark fades out (time constant in
+      milliseconds). Larger than the interval = several lamps sparkle at once
+      (default 260).
+  glitter_colors:
+    name: Glitter colours (default)
+    description: >-
+      effect glitter only. List of hex colours (space-separated, e.g.
+      "#FFFFFF #CFE8FF #FFF1D0") each spark picks from at random. Empty = the
+      colour of the respective bridge.
   restore_state:
     name: Restore light state
     description: >-

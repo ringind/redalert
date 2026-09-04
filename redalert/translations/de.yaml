@@ -4,8 +4,9 @@ configuration:
     description: >-
       Bis zu 3 Hue Bridges, die gleichzeitig abspielen. Pro Bridge Zeile
       hinzufügen; effect/color/sweep_seconds/chase_pause/attack_ms/release_ms/
-      glow_low/glow_high sind je Bridge optional – leer gelassen gilt der
-      gleichnamige Wert weiter unten als Standard für diese Bridge.
+      glow_low/glow_high/glitter_interval_ms/glitter_flash_ms/glitter_colors
+      sind je Bridge optional – leer gelassen gilt der gleichnamige Wert weiter
+      unten als Standard für diese Bridge.
     bridge_host:
       name: Hue-Bridge-IP
       description: >-
@@ -61,6 +62,21 @@ configuration:
       description: >-
         Überschreibt die Option glow_high für diese eine Bridge. Leer =
         Standard weiter unten.
+    glitter_interval_ms:
+      name: Glitter-Intervall ms (diese Bridge)
+      description: >-
+        Überschreibt die Option glitter_interval_ms für diese eine Bridge.
+        Leer = Standard weiter unten.
+    glitter_flash_ms:
+      name: Glitter-Blitzdauer ms (diese Bridge)
+      description: >-
+        Überschreibt die Option glitter_flash_ms für diese eine Bridge. Leer =
+        Standard weiter unten.
+    glitter_colors:
+      name: Glitter-Farben (diese Bridge)
+      description: >-
+        Überschreibt die Option glitter_colors für diese eine Bridge
+        (Hex-Farben, durch Leerzeichen getrennt). Leer = Standard weiter unten.
   effect:
     name: Effekt (Standard)
     description: >-
@@ -68,6 +84,8 @@ configuration:
       zusammen: von 0 auf 100 % im Takt, zwischen den Pulsen wieder auf 0
       (Abfallen schneller als Aufblenden). chase = ein Komet läuft gleichmäßig
       umlaufend über die Kanäle und zieht einen Schweif hinter sich her.
+      glitter = jede Lampe funkelt für sich in sehr kurzen Abständen in
+      wechselnden Farben auf (Diamant-Gefunkel).
   color:
     name: Farbe (Standard)
     description: >-
@@ -114,6 +132,24 @@ configuration:
       Standard für Bridges ohne eigene Einstellung. Helligkeit (0–1) im
       Puls-Maximum (beide Effekte). Standard 1.0 = volle Helligkeit. Muss über
       dem Grund-Glühwert liegen.
+  glitter_interval_ms:
+    name: Glitter-Intervall (ms, Standard)
+    description: >-
+      Nur effect glitter. Mittlerer Abstand in Millisekunden zwischen zwei
+      Funkel-Blitzen über alle Lampen einer Bridge. Klein = hektisches
+      Diamant-Gefunkel (Standard 90).
+  glitter_flash_ms:
+    name: Glitter-Blitzdauer (ms, Standard)
+    description: >-
+      Nur effect glitter. Wie schnell ein einzelner Funken wieder abklingt
+      (Zeitkonstante in Millisekunden). Größer als das Intervall = mehrere
+      Lampen funkeln gleichzeitig (Standard 260).
+  glitter_colors:
+    name: Glitter-Farben (Standard)
+    description: >-
+      Nur effect glitter. Liste von Hex-Farben (durch Leerzeichen getrennt,
+      z. B. "#FFFFFF #CFE8FF #FFF1D0"), aus denen jeder Funken zufällig eine
+      Farbe zieht. Leer = die Farbe der jeweiligen Bridge.
   restore_state:
     name: Lichtzustand wiederherstellen
     description: >-

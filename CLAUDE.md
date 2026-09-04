@@ -42,13 +42,13 @@ redalert/                  the add-on
   icon.png / logo.png      store graphics (generated, solid-red beacon)
   rootfs/etc/s6-overlay/s6-rc.d/redalert/{type,run,finish}  s6 service (bashio)
   rootfs/app/main.py        REST server + streaming loop + serves panel.html
-  rootfs/app/chase.py       RedAlertPulse (beat gate) + RedAlertChase (comet+tail), no I/O
+  rootfs/app/chase.py       RedAlertPulse (beat gate) + RedAlertChase (comet+tail) + RedAlertGlitter (per-lamp sparkle), no I/O
   rootfs/app/panel.html     Ingress web UI (vanilla JS, relative fetch URLs)
 ```
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.4.0**.
+No build system, linter, or test suite. Current version: **1.5.0**.
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
   after every code change — the only static check available.

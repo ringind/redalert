@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.5.0
+
+- **Effektsets (Presets).** Der komplette Satz an Start-Parametern (alle
+  Bridge-Karten aus „1 · Bridges“ **und** die Steuerung aus „2 · Steuerung“)
+  lässt sich unter „3 · Effektsets“ im Web-UI unter einem Namen speichern
+  (z. B. *Star Trek – Alarmstufe Rot*), wieder laden, direkt starten, als
+  JSON-Datei herunter- und wieder hochladen und löschen. Die Sets liegen als
+  `/data/presets.json` im Add-on-Datenordner. Neue REST-Endpunkte
+  `GET /presets` (alle bzw. `?name=…` eines), `PUT`/`POST /presets`
+  (`{"name","config"}` – speichern/hochladen), `DELETE /presets?name=…`; und
+  `POST /start {"preset": "<Name>"}` startet ein Set direkt (weitere
+  Body-Felder überschreiben es für diesen Aufruf). `/config` liefert die
+  Set-Namen unter `presets` mit.
+- **Neuer Effekt `glitter` (Diamant-Gefunkel).** Jede Lampe funkelt für sich:
+  in zufälligen Momenten – im Mittel alle `glitter_interval_ms` ms über alle
+  Lampen einer Bridge – springt eine Lampe auf `glow_high` in einer zufällig
+  aus `glitter_colors` gezogenen Farbe und klingt mit der Zeitkonstante
+  `glitter_flash_ms` wieder auf `glow_low` ab; ist `glitter_flash_ms` größer
+  als `glitter_interval_ms`, funkeln mehrere Lampen gleichzeitig. Neue Optionen
+  `glitter_interval_ms` (Standard 90), `glitter_flash_ms` (Standard 260) und
+  `glitter_colors` (Standard `#FFFFFF #CFE8FF #FFF1D0`; leer = Bridge-Farbe) –
+  in der Add-on-Konfiguration, im Web-UI („2 · Steuerung“ und je Bridge-Karte)
+  und im `/start`-Body, wie die übrigen Effekt-Parameter je Bridge
+  überschreibbar. `effect` akzeptiert jetzt `pulse` | `chase` | `glitter`.
+
 ## 1.4.0
 
 - **Neue Option `duration`.** Die Standard-Effektdauer (Sekunden, für alle
