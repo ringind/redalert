@@ -168,21 +168,139 @@ Neustarts. Per REST: `GET /presets` (alle), `PUT /presets`
 
 ## Home Assistant einbinden
 
-`configuration.yaml`:
+Das Add-on hat keine eigene HA-Integration – die REST-API (siehe oben) wird über
+die eingebaute **[`rest_command`](https://www.home-assistant.io/integrations/rest_command/)**-
+Integration als ganz normaler HA-Dienst nutzbar (`rest_command.<name>`). Jeder
+`rest_command`-Eintrag in `configuration.yaml` wird 1:1 zu einem Dienst, den du
+aus Automationen, Skripten, Dashboard-Buttons oder **Entwicklerwerkzeuge →
+Aktionen** aufrufen kannst.
+
+### Grundlage: Parameter beim Aufruf übergeben
+
+`rest_command` erlaubt beim Dienstaufruf **beliebige zusätzliche Felder** unter
+`data:` – die stehen dann als Jinja-Variablen im `payload` (bzw. `url`) dieses
+Eintrags zur Verfügung. So lässt sich ein einziger, in `configuration.yaml`
+fest definierter Dienst bei jedem Aufruf mit anderen Werten füttern, ohne für
+jede Kombination eine eigene `rest_command`-Zeile zu brauchen. Für JSON-Bodys
+den Filter `to_json` verwenden (escaped korrekt Anführungszeichen, Sonderzeichen
+und Zahlen) statt Werte per Hand in `"…"` einzubetten. `{% if <name> is
+defined %}…{% endif %}` lässt ein Feld weg, wenn beim Aufruf keine Variable
+dieses Namens mitgegeben wurde – so bleibt z. B. `duration` unangegeben und das
+Add-on nimmt seinen eigenen Standard (Effektset- bzw. Options-Wert), statt dass
+ein template-seitiger Default (z. B. `0`) das ungewollt überschreibt.
+
+### `configuration.yaml`
 
 ```yaml
 rest_command:
+  # Startet mit den im Add-on konfigurierten Standardwerten (Options bzw. Web-UI).
   redalert_start:
     url: "http://<ha-ip>:8099/start"
     method: POST
     content_type: "application/json"
     payload: '{}'   # Dauer ohne Angabe: Standard aus der Add-on-Option duration
+
+  # Startet ein gespeichertes Effektset (Web-UI "3 · Effektsets" bzw. PUT /presets).
+  # Aufruf z. B. mit data: {preset: "Star Trek – Alarmstufe Rot"}
+  # optional zusätzlich data: {duration: 30} um die Dauer für diesen einen Aufruf zu übersteuern.
+  redalert_start_preset:
+    url: "http://<ha-ip>:8099/start"
+    method: POST
+    content_type: "application/json"
+    payload: >-
+      {"preset": {{ preset | to_json }}
+      {%- if duration is defined %}, "duration": {{ duration | float }}{% endif -%}
+      }
+
   redalert_stop:
     url: "http://<ha-ip>:8099/stop"
     method: POST
 ```
 
-Einfache Automation (Sound + Licht gemeinsam):
+Nach dem Speichern **Entwicklerwerkzeuge → YAML → Alle YAML-Konfigurationen neu
+laden** (oder HA neu starten), damit die neuen Dienste erscheinen.
+
+### Ein Effektset aus Home Assistant starten
+
+Den genauen Namen des Sets (Groß-/Kleinschreibung und Leerzeichen zählen) zeigt
+entweder das Dropdown unter „3 · Effektsets“ im Web-UI oder `GET /presets` (Feld
+`names`).
+
+**Direkt testen** – Entwicklerwerkzeuge → Aktionen → `rest_command.redalert_start_preset`
+→ im YAML-Modus:
+
+```yaml
+preset: "Star Trek – Alarmstufe Rot"
+```
+
+**Fest verdrahteter Dienst pro Set** (bequem für einen Dashboard-Button, der
+immer dasselbe Set startet):
+
+```yaml
+script:
+  redalert_alarmstufe_rot:
+    alias: "Red Alert: Alarmstufe Rot"
+    sequence:
+      - service: rest_command.redalert_start_preset
+        data:
+          preset: "Star Trek – Alarmstufe Rot"
+```
+
+`script.redalert_alarmstufe_rot` erscheint danach wie jede andere Entität und
+lässt sich auf einem Dashboard, per Sprachbefehl oder aus einer Automation
+auslösen.
+
+**Auswahl per Dropdown** – ein `input_select` mit den Set-Namen plus ein Skript,
+das den aktuell gewählten Eintrag startet:
+
+```yaml
+input_select:
+  redalert_preset:
+    name: Red-Alert-Effektset
+    options:
+      - "Star Trek – Alarmstufe Rot"
+      - "Diamant-Funkeln"   # Optionen manuell pflegen, siehe GET /presets
+
+script:
+  redalert_start_selected_preset:
+    alias: "Red Alert: ausgewähltes Set starten"
+    sequence:
+      - service: rest_command.redalert_start_preset
+        data:
+          preset: "{{ states('input_select.redalert_preset') }}"
+```
+
+`input_select.redalert_preset` auf ein Dashboard legen, Set auswählen, dann
+`script.redalert_start_selected_preset` per Button auslösen.
+
+### Weitere Parameter dynamisch übergeben
+
+Alle Felder aus der `/start`-Zeile der REST-API-Tabelle oben (`effect`, `color`,
+`sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`,
+`glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors`,
+`bridges`, `fps`, `restore_state`, …) lassen sich nach demselben Muster wie
+`preset`/`duration` oben ergänzen – im `payload` je einen
+`{% if <name> is defined %}, "<name>": {{ <name> | to_json }}{% endif %}`-Block
+hinzufügen und die Variable beim Dienstaufruf per `data:` mitgeben. Beispiel:
+Effekt und Farbe unabhängig vom konfigurierten Standard setzen:
+
+```yaml
+rest_command:
+  redalert_start_custom:
+    url: "http://<ha-ip>:8099/start"
+    method: POST
+    content_type: "application/json"
+    payload: >-
+      {"effect": {{ effect | to_json }}, "color": {{ color | to_json }}
+      {%- if duration is defined %}, "duration": {{ duration | float }}{% endif -%}
+      }
+```
+
+aufgerufen z. B. mit `data: {effect: "glitter", color: "#00FF88", duration: 20}`.
+
+### Automationsbeispiele
+
+Sound + Licht gemeinsam (Standard-Effekt):
 
 ```yaml
 automation:
@@ -209,6 +327,25 @@ automation:
       - service: rest_command.redalert_stop
 ```
 
+Ein bestimmtes Effektset auslösen, z. B. beim Türklingeln kurz das gespeicherte
+Set „Diamant-Funkeln“ statt des Standards:
+
+```yaml
+automation:
+  - alias: "Türklingel – Diamant-Funkeln"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.tuerklingel
+        to: "on"
+    action:
+      - service: rest_command.redalert_start_preset
+        data:
+          preset: "Diamant-Funkeln"
+          duration: 8
+      - delay: "00:00:08"
+      - service: rest_command.redalert_stop   # optionale Absicherung, falls duration nicht greift
+```
+
 ## Protokoll
 
 Das Add-on-**Protokoll** (Log-Tab) zeigt Konfiguration beim Start, Pairing-,
@@ -225,6 +362,8 @@ herunter.
 | `/pair` schlägt fehl | Link-Button nicht rechtzeitig gedrückt (~30 s) oder falsche IP. |
 | `/start` → `already_running` | Erst `/stop` aufrufen. |
 | `/start` → 404 `area_id nicht gefunden` | `/areas` prüfen – Bereich evtl. umbenannt/gelöscht. |
+| `/start` → 404 `Effektset '…' nicht gefunden` | `preset`-Name stimmt nicht exakt (Groß-/Kleinschreibung, Leerzeichen) mit einem gespeicherten Set überein – `GET /presets` bzw. Web-UI-Dropdown „3 · Effektsets“ prüfen. |
+| `rest_command`-Aufruf mit `preset`/`duration`/… ändert nichts | Nach Änderungen an `configuration.yaml` **Entwicklerwerkzeuge → YAML → Alle YAML-Konfigurationen neu laden** (oder HA neu starten); Checkbox „Anfragen einblenden“ im Web-UI-Protokoll bzw. der gesendete Request unter Entwicklerwerkzeuge → Aktionen zeigen den tatsächlich gesendeten `payload`. |
 | `/start` → 502 `Bridge nicht erreichbar` | Bridge-IP geändert? Netzwerk/VLAN zwischen HA-Host und Bridge (UDP 2100). Bei mehreren Bridges bedeutet `502` nur, dass **keine** davon erreichbar war – einzelne Ausfälle stehen in `failed_bridges` der `/start`-Antwort, die übrigen Bridges laufen trotzdem. |
 | Licht startet erst nach einigen Sekunden | Normaler DTLS-Handshake; bei WLAN-Bridges teils ein `ServerHello timeout`-Retry im Protokoll. `/start` selbst antwortet trotzdem sofort. |
 | Lampen reagieren nicht | V1-Bridge (kein Entertainment) oder UDP-Port 2100 zur Bridge blockiert. |
