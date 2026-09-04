@@ -4,9 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A **Home Assistant add-on store repository**. `repository.yaml` at the root makes
-it addable in HA under *Settings → Add-ons → Add-on Store → ⋮ → Repositories*;
-the add-on itself lives in `redalert/`. The add-on drives a Star Trek "Red Alert"
+A **Home Assistant app store repository** (HA renamed "add-ons" to "apps" in
+2026.2 — UI/docs wording only, Supervisor/Core APIs, schemas, and repo
+mechanics are unchanged; this repo's own docs use "app" accordingly, `git
+grep -i add-on` for any spot that still needs it). `repository.yaml` at the
+root makes it addable in HA under *Settings → Apps → App Store → ⋮ →
+Repositories*; the app itself lives in `redalert/`. The app drives a Star Trek "Red Alert"
 scene across ~6 Philips Hue lamps on **up to 3 Hue Bridges simultaneously** via
 the **Hue Entertainment API** (persistent DTLS stream per bridge, ~25 Hz) rather
 than normal Bridge scenes — `effect` is one of `pulse` (default: all lamps on
@@ -30,15 +33,24 @@ Primary docs are German: repo overview in `README.md`, in-HA docs in
 *known HA* config.yaml/build.yaml key left at its default) + a `docker buildx`
 test build for amd64 and (emulated) aarch64. Green in ~4 min. After every push,
 watch it: `RUN=$(gh run list --workflow=build.yaml --branch main -L1 --json databaseId -q '.[0].databaseId'); until [ "$(gh run view $RUN --json status -q .status)" = completed ]; do sleep 30; done; gh run view $RUN --json conclusion,jobs -q '.conclusion, (.jobs[]|"\(.name)=\(.conclusion)")'`
-(run it backgrounded). Releases are tags `vX.Y.Z` on a green commit — see the
-`release` skill.
+(run it backgrounded). `.github/workflows/hacs.yaml` validates the
+`custom_components/redalert` HA integration (`hacs/action` + `hassfest`,
+weekly cron + on push/PR) — same watch pattern, `--workflow=hacs.yaml`.
+Releases are tags `vX.Y.Z` on a green commit — see the `release` skill.
 
 ## Layout
 
 ```
 repository.yaml            store metadata
 README.md                  repo overview (German)
-redalert/                  the add-on
+hacs.json                  makes this repo addable in HACS as a custom
+                            integration repository (category "Integration")
+custom_components/redalert/  HA integration talking to the app's REST API
+  manifest.json, const.py, api.py, coordinator.py, config_flow.py, entity.py
+  binary_sensor.py (running) / switch.py (start+stop) / select.py (pick+load
+  a preset) / sensor.py (currently loaded preset) — one DataUpdateCoordinator
+  polling GET /config every 10s; README.md documents install + entities
+redalert/                  the app
   config.yaml              manifest: options schema, ingress, ports
   build.yaml               base images: ghcr.io/home-assistant/{arch}-base-python
   Dockerfile               installs requirements, copies rootfs, chmods s6 scripts
@@ -53,7 +65,7 @@ redalert/                  the add-on
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.6.1**.
+No build system, linter, or test suite. Current version: **1.7.0**.
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
   after every code change — the only static check available.
@@ -103,7 +115,11 @@ curl -s -X POST $B/start -H 'Content-Type: application/json' \
 Three layers under `redalert/rootfs/app/`:
 
 - **`main.py`** — aiohttp server. Endpoints: `/` (serves `panel.html`),
-  `/health` (also the Docker HEALTHCHECK target), `/config` (effective config for the UI),
+  `/health` (also the Docker HEALTHCHECK target; `{status, paired, running,
+  current_preset}` — `current_preset` is `state["current_preset"]`, the name
+  of the last `preset` started via `/start`, `None` after an ad-hoc start with
+  no `preset`; consumed by `custom_components/redalert`'s select/sensor pair),
+  `/config` (effective config for the UI, same `current_preset` field),
   `/pair` (one-time Bridge link-button pairing, body `bridge_host` — Pflicht bei
   mehr als einer konfigurierten Bridge — → merged into `/data/credentials.json`),
   `/areas` (query `bridge_host` — Pflicht bei mehr als einer gepaarten Bridge),

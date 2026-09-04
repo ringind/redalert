@@ -167,6 +167,6 @@ configuration:
       übersteuerbar). 0 = unbegrenzt, läuft bis zum manuellen Stop.
   log_level:
     name: Log-Level
-    description: Ausführlichkeit des Add-on-Protokolls (trace, debug, info, notice, warning, error, fatal).
+    description: Ausführlichkeit des App-Protokolls (trace, debug, info, notice, warning, error, fatal).
 network:
   8099/tcp: REST-API und Web-UI (nur nötig für Zugriff außerhalb von Ingress, z. B. rest_command)

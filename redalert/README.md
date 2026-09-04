@@ -11,7 +11,7 @@ Vollständige Anleitung: siehe **[DOCS.md](DOCS.md)** (wird in HA als Tab
 
 ## Auf einen Blick
 
-- **Info / Konfiguration / Dokumentation / Protokoll**: Standard-Tabs des Add-ons.
+- **Info / Konfiguration / Dokumentation / Protokoll**: Standard-Tabs der App.
 - **Steuerung**: Seitenleisten-Panel „Red Alert“ (Ingress) – Pairing/Bereiche
   je Bridge (bis zu 3), optional eigener Effekt/Farbe/Timing je Bridge;
   Dauer/fps und Start/Stop gemeinsam für alle Bridges.
@@ -23,7 +23,7 @@ Vollständige Anleitung: siehe **[DOCS.md](DOCS.md)** (wird in HA als Tab
 
 | Datei | Zweck |
 |-------|-------|
-| `config.yaml` | Add-on-Manifest (Optionen, Ingress, Ports). |
+| `config.yaml` | App-Manifest (Optionen, Ingress, Ports). |
 | `build.yaml` | Basis-Images (`home-assistant/base-python`). |
 | `Dockerfile` | Image-Build. |
 | `translations/` | Beschriftung der Konfigurationsoberfläche (de/en). |

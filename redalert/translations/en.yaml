@@ -164,6 +164,6 @@ configuration:
       runs until manually stopped.
   log_level:
     name: Log level
-    description: Verbosity of the add-on log (trace, debug, info, notice, warning, error, fatal).
+    description: Verbosity of the app log (trace, debug, info, notice, warning, error, fatal).
 network:
   8099/tcp: REST API and web UI (only needed for access outside Ingress, e.g. rest_command)

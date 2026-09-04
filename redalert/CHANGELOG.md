@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.7.0
+
+- **Neue Home-Assistant-Integration** (`custom_components/redalert/`, siehe
+  README darin): vier Entities – `binary_sensor` (läuft der Effekt?),
+  `switch` (Animation an/aus), `select` (gespeichertes Effektset auswählen &
+  laden), `sensor` (Name des aktuell geladenen Sets). Eigenständige
+  `custom_component`, kein Bestandteil des App-Containers.
+- **`/health` und `/config` liefern jetzt `current_preset`** (Name des
+  zuletzt per `POST /start {"preset": ...}` geladenen Effektsets, `null` bei
+  Ad-hoc-Start ohne `preset`) – Grundlage für die neue Integration, auch per
+  REST direkt nutzbar.
+- **HACS-fähig:** `hacs.json` im Repo-Wurzelverzeichnis plus
+  `.github/workflows/hacs.yaml` (`hacs/action` + `hassfest`) machen
+  `custom_components/redalert/` als benutzerdefiniertes HACS-Repository
+  (Kategorie *Integration*) installierbar.
+- **Terminologie an Home Assistant 2026.2 angepasst:** „Add-on“ heißt dort
+  jetzt „App“ (rein UI-/Dokutext, technisch unverändert – weiterhin
+  Docker-Container über den Supervisor, `repository.yaml`/`config.yaml`
+  unangetastet). Alle Doku (`README.md`, `DOCS.md`, Integrations-README,
+  Config-Flow-Texte) sowie `repository.yaml`s Anzeigename entsprechend
+  aktualisiert.
+
 ## 1.6.1
 
 - **Web-UI, „2 · Steuerung“: `attack_ms`/`release_ms` jetzt auch als

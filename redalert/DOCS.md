@@ -8,7 +8,7 @@ und eigenem Timing.
 
 ## Voraussetzungen
 
-- Home Assistant **OS** oder **Supervised** (für Add-ons).
+- Home Assistant **OS** oder **Supervised** (für Apps).
 - Eine bis drei Hue Bridge **V2** („quadratisch“) oder Hue Pro Bridge. V1-Bridges
   können kein Entertainment-Streaming.
 - Pro Bridge: mehrere farbfähige Hue-Lampen, einem **Entertainment-Bereich**
@@ -17,11 +17,11 @@ und eigenem Timing.
 
 ## Installation
 
-1. **Einstellungen → Add-ons → Add-on Store → ⋮ (oben rechts) → Repositories**
+1. **Einstellungen → Apps → App Store → ⋮ (oben rechts) → Repositories**
    und die URL dieses GitHub-Repositories hinzufügen.
-2. Das Add-on **Red Alert Entertainment** aus dem Store installieren.
+2. Die App **Red Alert Entertainment** aus dem Store installieren.
 3. Optional „Start beim Booten“ aktivieren (empfohlen).
-4. Add-on **starten**.
+4. App **starten**.
 
 ## Einrichtung
 
@@ -50,8 +50,8 @@ reicht die erste, leer gelassene Karten werden ignoriert.
    Felder übernehmen den Standard aus „2 · Steuerung“.
 
 Trage Bridge-IP, `area_id` (und optional `channel_order` sowie die
-Effekt-Overrides) zusätzlich als Zeile der Add-on-Option **`bridges`** ein,
-damit `rest_command`-Aufrufe ohne Body funktionieren, und starte das Add-on
+Effekt-Overrides) zusätzlich als Zeile der App-Option **`bridges`** ein,
+damit `rest_command`-Aufrufe ohne Body funktionieren, und starte die App
 neu.
 
 Alternativ per REST: `POST /pair` (Body `{"bridge_host": "192.168.1.50"}`),
@@ -64,7 +64,7 @@ Bereichs sein, nur in anderer Reihenfolge.
 
 ### 2 · Steuerung
 
-Im Web-UI unter **„2 · Steuerung“**: Dauer (leer = Standard aus der Add-on-Option
+Im Web-UI unter **„2 · Steuerung“**: Dauer (leer = Standard aus der App-Option
 `duration`, `0` = unbegrenzt) und `fps` gelten immer für **alle** Bridges
 gemeinsam. **Effekt**, `sweep_seconds`,
 `chase_pause`, `glow_low`/`glow_high` und Farbe sind hier der **Standard** für
@@ -90,14 +90,14 @@ eigenes Timing haben (`effect`, `color`, `sweep_seconds`, `chase_pause`,
 `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`,
 `glitter_flash_ms`, `glitter_colors` sind je Bridge überschreibbar; nicht
 überschriebene Werte gelten aus „2 · Steuerung“ bzw. den gleichnamigen
-Add-on-Optionen). Mit `effect: neutral` je Bridge bleibt diese Bridge komplett
+App-Optionen). Mit `effect: neutral` je Bridge bleibt diese Bridge komplett
 aus, während die anderen laufen. `area_id` und `channel_order` sind immer je
 Bridge eigene Werte; `duration`, `fps` und `restore_state` gelten dagegen
 immer für alle Bridges gemeinsam. Ist eine Bridge nicht erreichbar oder nicht
 gepaart, starten die übrigen trotzdem („best effort“) – die fehlgeschlagene
 wird in der `/start`-Antwort unter `failed_bridges` gemeldet.
 
-**Lichtzustand:** Vor dem Effekt sichert das Add-on an/aus, Helligkeit und Farbe
+**Lichtzustand:** Vor dem Effekt sichert die App an/aus, Helligkeit und Farbe
 aller Lampen jedes Bereichs (Hue CLIP v2) und schreibt sie nach dem Effekt zurück
 – auch Lampen, die vorher aus waren, gehen wieder aus. Abschaltbar mit
 `restore_state: false` (dann greift nur die automatische Wiederherstellung der
@@ -132,8 +132,8 @@ Panel-Pfad).
 | Endpoint  | Methode | Zweck |
 |-----------|---------|-------|
 | `/`       | GET     | Web-UI (Ingress-Panel). |
-| `/health` | GET     | `{status, paired, running}` – `paired` ist `true`, sobald mindestens eine Bridge gepaart ist. Auch Ziel des Container-HEALTHCHECK. |
-| `/config` | GET     | Effektive Konfiguration inkl. `bridges` und `presets` (Namen der gespeicherten Effektsets) – für das Web-UI. |
+| `/health` | GET     | `{status, paired, running, current_preset}` – `paired` ist `true`, sobald mindestens eine Bridge gepaart ist; `current_preset` der Name des zuletzt per `preset` gestarteten Effektsets (`null` bei Ad-hoc-Start ohne `preset`). Auch Ziel des Container-HEALTHCHECK. |
+| `/config` | GET     | Effektive Konfiguration inkl. `bridges`, `presets` (Namen der gespeicherten Effektsets) und `current_preset` – für das Web-UI und die Home-Assistant-Integration. |
 | `/pair`   | POST    | Einmalige Kopplung. Body: `{"bridge_host": "..."}` – Pflicht, sobald mehr als eine Bridge konfiguriert ist (bei genau einer, noch ungepaarten, konfigurierten Bridge optional). |
 | `/areas`  | GET     | Entertainment-Bereiche + Kanäle einer Bridge auflisten. Query `?bridge_host=...` – Pflicht, sobald mehr als eine Bridge gepaart ist. |
 | `/start`  | POST    | Effekt auf allen konfigurierten (oder im Body übergebenen) Bridges gleichzeitig starten (antwortet sofort; DTLS-Handshakes laufen im Hintergrund, parallel). Body optional: `duration`, `fps`, `restore_state` gelten für alle Bridges gemeinsam; `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors` sind die **Standardwerte** für Bridges ohne eigene Einstellung. `bridges` (Liste von `{bridge_host, area_id, channel_order, effect?, color?, sweep_seconds?, chase_pause?, attack_ms?, release_ms?, glow_low?, glow_high?, glitter_interval_ms?, glitter_flash_ms?, glitter_colors?}`) übersteuert für diesen Aufruf die Option `bridges` – jede Bridge kann ihre eigenen Effekt-Parameter setzen; `channel_order` als Liste (`[2,3,1,0,5,4]`) oder String (`"2,3,1,0,5,4"`), muss genau die Kanäle des jeweiligen Bereichs enthalten, sonst wird diese eine Bridge übersprungen. `preset` (Name eines gespeicherten Effektsets) lädt dessen Body als Basis; weitere Body-Felder überschreiben ihn. Antwort enthält `bridges` (tatsächlich gestartet, je mit aufgelösten Effekt-Parametern) und `failed_bridges` (übersprungen, mit Fehlergrund); nur wenn **keine** Bridge startet, antwortet `/start` mit `502`. |
@@ -143,7 +143,7 @@ Panel-Pfad).
 | `/presets` | PUT / POST | Ein Effektset speichern/überschreiben (auch Upload-Ziel). Body `{"name": "...", "config": { <start-Body> }}` – `config` sind die kompletten `/start`-Felder inkl. `bridges`; abgelegt unter `/data/presets.json`. |
 | `/presets` | DELETE | Effektset löschen. Query `?name=…` (oder Body `{"name": …}`). `404` wenn unbekannt. |
 
-- `duration` (Sekunden, Standard aus der gleichnamigen Add-on-Option, **`0` =
+- `duration` (Sekunden, Standard aus der gleichnamigen App-Option, **`0` =
   unbegrenzt**) – wie lange der Effekt läuft, bevor er von selbst endet;
   vorher jederzeit per `/stop` abbrechbar.
 
@@ -160,7 +160,7 @@ gespeichertes Set kann man
 - **Hochladen** – eine solche JSON-Datei wieder einlesen und als Set ablegen,
 - **Löschen**.
 
-Die Sets liegen als `/data/presets.json` im Add-on-Datenordner und überstehen
+Die Sets liegen als `/data/presets.json` im App-Datenordner und überstehen
 Neustarts. Per REST: `GET /presets` (alle), `PUT /presets`
 (`{"name", "config"}` – speichern/hochladen), `DELETE /presets?name=…`
 (löschen) und `POST /start {"preset": "<Name>"}` (starten; weitere Body-Felder
@@ -168,9 +168,23 @@ Neustarts. Per REST: `GET /presets` (alle), `PUT /presets`
 
 ## Home Assistant einbinden
 
-Das Add-on hat keine eigene HA-Integration – die REST-API (siehe oben) wird über
-die eingebaute **[`rest_command`](https://www.home-assistant.io/integrations/rest_command/)**-
-Integration als ganz normaler HA-Dienst nutzbar (`rest_command.<name>`). Jeder
+**Fertige Integration (empfohlen):** im Repo unter
+[`custom_components/redalert/`](https://github.com/ringind/redalert/tree/main/custom_components/redalert)
+liegt eine eigenständige `custom_component`, die vier Entities anlegt – ein
+`binary_sensor` (läuft der Effekt gerade?), ein `switch` (Animation an/aus),
+ein `select` (gespeichertes Effektset auswählen & laden) und ein `sensor`
+(Name des aktuell geladenen Sets). Installation über **HACS** (das Repo ist
+HACS-fähig – `hacs.json` im Wurzelverzeichnis – aber nicht im Standard-Store
+gelistet: HACS → *Benutzerdefinierte Repositories* →
+`https://github.com/ringind/redalert`, Kategorie *Integration*) oder manuell
+(Ordner nach `config/custom_components/` kopieren). Danach HA neu starten,
+dann **Einstellungen → Geräte & Dienste → Integration hinzufügen → „Red Alert
+Entertainment App“** (Host + Port 8099). Details: das `README.md` in
+diesem Ordner.
+
+**Ohne Zusatzinstallation:** die REST-API (siehe oben) lässt sich auch direkt
+über die eingebaute **[`rest_command`](https://www.home-assistant.io/integrations/rest_command/)**-
+Integration als ganz normaler HA-Dienst nutzen (`rest_command.<name>`). Jeder
 `rest_command`-Eintrag in `configuration.yaml` wird 1:1 zu einem Dienst, den du
 aus Automationen, Skripten, Dashboard-Buttons oder **Entwicklerwerkzeuge →
 Aktionen** aufrufen kannst.
@@ -185,20 +199,20 @@ jede Kombination eine eigene `rest_command`-Zeile zu brauchen. Für JSON-Bodys
 den Filter `to_json` verwenden (escaped korrekt Anführungszeichen, Sonderzeichen
 und Zahlen) statt Werte per Hand in `"…"` einzubetten. `{% if <name> is
 defined %}…{% endif %}` lässt ein Feld weg, wenn beim Aufruf keine Variable
-dieses Namens mitgegeben wurde – so bleibt z. B. `duration` unangegeben und das
-Add-on nimmt seinen eigenen Standard (Effektset- bzw. Options-Wert), statt dass
+dieses Namens mitgegeben wurde – so bleibt z. B. `duration` unangegeben und die
+App nimmt ihren eigenen Standard (Effektset- bzw. Options-Wert), statt dass
 ein template-seitiger Default (z. B. `0`) das ungewollt überschreibt.
 
 ### `configuration.yaml`
 
 ```yaml
 rest_command:
-  # Startet mit den im Add-on konfigurierten Standardwerten (Options bzw. Web-UI).
+  # Startet mit den in der App konfigurierten Standardwerten (Options bzw. Web-UI).
   redalert_start:
     url: "http://<ha-ip>:8099/start"
     method: POST
     content_type: "application/json"
-    payload: '{}'   # Dauer ohne Angabe: Standard aus der Add-on-Option duration
+    payload: '{}'   # Dauer ohne Angabe: Standard aus der App-Option duration
 
   # Startet ein gespeichertes Effektset (Web-UI "3 · Effektsets" bzw. PUT /presets).
   # Aufruf z. B. mit data: {preset: "Star Trek – Alarmstufe Rot"}
@@ -348,7 +362,7 @@ automation:
 
 ## Protokoll
 
-Das Add-on-**Protokoll** (Log-Tab) zeigt Konfiguration beim Start, Pairing-,
+Das App-**Protokoll** (Log-Tab) zeigt Konfiguration beim Start, Pairing-,
 Start-/Stop-Ereignisse und Fehler. Ausführlichkeit über `log_level`. Das Web-UI
 zeigt zusätzlich die letzten API-Aufrufe im Abschnitt „Protokoll“ – die
 Checkbox „Anfragen einblenden“ zeigt zusätzlich die gesendeten Request-Bodys,
@@ -369,11 +383,11 @@ herunter.
 | Lampen reagieren nicht | V1-Bridge (kein Entertainment) oder UDP-Port 2100 zur Bridge blockiert. |
 | Streaming bricht ab | Jede Bridge erlaubt nur **einen** aktiven Entertainment-Stream (pro Bridge, nicht global) – Hue-Sync-App/andere Clients auf derselben Bridge schließen. |
 | Lauflicht ruckelt | `fps` erhöhen oder Netzlast zur Bridge prüfen. |
-| Start bricht ab mit `/bin/sh: can't open '/init': Permission denied` | Behoben ab 1.0.1 (kein eigenes AppArmor-Profil mehr). Add-on aktualisieren; ältere Version deinstallieren und neu installieren, falls das Update nicht greift. |
+| Start bricht ab mit `/bin/sh: can't open '/init': Permission denied` | Behoben ab 1.0.1 (kein eigenes AppArmor-Profil mehr). App aktualisieren; ältere Version deinstallieren und neu installieren, falls das Update nicht greift. |
 
 ## Rechtlicher Hinweis zur Audiodatei
 
-Das Add-on kümmert sich ausschließlich um das Licht. Spielst du wie im
+Die App kümmert sich ausschließlich um das Licht. Spielst du wie im
 Automations-Beispiel oben zusätzlich einen Alarmstufe-Rot-Sound über einen
 `media_player` ab, musst du diese Audiodatei selbst aus einer legal erworbenen
 Quelle bereitstellen.

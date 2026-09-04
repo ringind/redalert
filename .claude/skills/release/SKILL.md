@@ -1,12 +1,12 @@
 ---
 name: release
-description: Cut a versioned release of the Red Alert Home Assistant add-on — bump the version in both places, update the changelog, push, wait for green CI, tag, and publish the GitHub release. Use when the user says "release", "veröffentliche release", "tag", "cut X.Y.Z", or after a batch of changes that should ship to add-on users.
+description: Cut a versioned release of the Red Alert Home Assistant app — bump the version in both places, update the changelog, push, wait for green CI, tag, and publish the GitHub release. Use when the user says "release", "veröffentliche release", "tag", "cut X.Y.Z", or after a batch of changes that should ship to app users.
 ---
 
-# Cutting a Red Alert add-on release
+# Cutting a Red Alert app release
 
 Semver `MAJOR.MINOR.PATCH`: PATCH = bugfix, MINOR = new option/effect/endpoint,
-MAJOR = breaking. Every pushed commit that changes add-on behaviour should get its
+MAJOR = breaking. Every pushed commit that changes app behaviour should get its
 own version even if it is not released (HA's update mechanism keys on it), so the
 version is often already bumped by the time you release — check first.
 

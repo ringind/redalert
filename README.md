@@ -1,9 +1,9 @@
-# Red Alert Entertainment Add-on
+# Red Alert Entertainment App
 
 [![Build](https://github.com/ringind/redalert/actions/workflows/build.yaml/badge.svg)](https://github.com/ringind/redalert/actions/workflows/build.yaml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Home-Assistant-Add-on für eine Star-Trek-„Alarmstufe Rot“-Szene über mehrere
+Home-Assistant-App für eine Star-Trek-„Alarmstufe Rot“-Szene über mehrere
 Philips-Hue-Lampen, gesteuert über das echte **Hue Entertainment API**
 (DTLS-Streaming, nicht die normale Bridge-Szene). Unterstützt **bis zu 3 Hue
 Bridges**, die gleichzeitig loslegen – jede mit ihrem eigenen Effekt, ihrer
@@ -20,10 +20,12 @@ speichern, wieder laden/starten und als JSON-Datei aus- und einlesen.
 Nutzt die Bibliothek [`hue-entertainment`](https://github.com/music-assistant/hue-entertainment)
 (dieselbe, die auch das Hue-Entertainment-Plugin von Music Assistant antreibt).
 
-> **Dieses Repository ist ein Home-Assistant-Add-on-Store-Repository.**
-> Installation: **Einstellungen → Add-ons → Add-on Store → ⋮ → Repositories**,
+> **Dieses Repository ist ein Home-Assistant-App-Store-Repository**
+> (Home Assistant nennt „Add-ons“ seit Version 2026.2 „Apps“ – rein
+> begrifflich, technisch weiterhin Docker-Container über den Supervisor).
+> Installation: **Einstellungen → Apps → App Store → ⋮ → Repositories**,
 > die URL dieses Repos eintragen, dann **Red Alert Entertainment** installieren.
-> Das eigentliche Add-on liegt im Unterordner [`redalert/`](redalert/); die in
+> Die eigentliche App liegt im Unterordner [`redalert/`](redalert/); die in
 > Home Assistant angezeigte Anleitung ist [`redalert/DOCS.md`](redalert/DOCS.md).
 > Ein Web-UI zur Steuerung (Pairing, Bereiche, Start/Stop) erscheint nach der
 > Installation als Seitenleisten-Eintrag **Red Alert** (Ingress).
@@ -39,10 +41,10 @@ DTLS-Streaming und Start/Stop laufen end-to-end.
 2. [Voraussetzungen](#voraussetzungen)
 3. [Schnellstart](#schnellstart)
 4. [Entertainment-Bereich in der Hue-App anlegen](#1-entertainment-bereich-in-der-hue-app-anlegen)
-5. [Add-on installieren](#2-add-on-installieren)
+5. [App installieren](#2-app-installieren)
 6. [Einmalig mit der Bridge pairen](#3-einmalig-mit-der-bridge-pairen)
 7. [Area-ID und Kanalreihenfolge ermitteln](#4-area-id-und-kanalreihenfolge-ermitteln)
-8. [Add-on-Optionen](#5-add-on-optionen)
+8. [App-Optionen](#5-app-optionen)
 9. [REST-API](#6-rest-api)
 10. [Home Assistant einbinden](#7-home-assistant-einbinden)
 11. [Effekt anpassen](#8-effekt-anpassen)
@@ -58,15 +60,15 @@ Home Assistants normale Hue-Szenen laufen über die REST/CLIP-API der Bridge und
 sind für ein sauberes, frame-genaues Lauflicht zu träge. Für ein echtes,
 niedriglatentes Lauflicht braucht es einen dauerhaften **DTLS-Stream** zur
 Bridge (dasselbe Protokoll, das Hue Sync/Gaming-Sync nutzt). Das leistet
-Home Assistant nicht nativ, deshalb übernimmt das ein kleiner eigenständiger
-Dienst – dieses Add-on:
+Home Assistant nicht nativ, deshalb übernimmt das eine kleine eigenständige
+App:
 
 ```
 HA-Automation ──┬──> media_player.play_media (dein Sound, z. B. Sonos)
-                └──> rest_command → Add-on /start
+                └──> rest_command → App /start
                                         │
                                         ▼
-                         Add-on (Python, aiohttp)
+                           App (Python, aiohttp)
                          hält je Bridge (bis zu 3) einen
                          eigenen DTLS-Stream offen (~25 Hz),
                          jede mit eigenem Effekt/Farbe/Timing
@@ -82,13 +84,13 @@ HA-Automation ──┬──> media_player.play_media (dein Sound, z. B. Sonos)
                           Hue-Lampen  Hue-Lampen  Hue-Lampen
 ```
 
-Das Add-on läuft dauerhaft im Hintergrund und stellt eine kleine REST-API
+Die App läuft dauerhaft im Hintergrund und stellt eine kleine REST-API
 bereit (`/pair`, `/areas`, `/start`, `/stop`), die du aus Home-Assistant-
 Automationen ansprichst.
 
 ## Voraussetzungen
 
-- Home Assistant **OS oder Supervised** (Add-on-Store nötig; bei Core/Container
+- Home Assistant **OS oder Supervised** (App-Store nötig; bei Core/Container
   müsste der Dienst stattdessen separat als Container/Systemd-Service laufen).
 - Eine bis drei Hue Bridge **V2** („quadratisch“) oder Hue Pro Bridge –
   V1-Bridges unterstützen kein Entertainment-Streaming.
@@ -98,18 +100,18 @@ Automationen ansprichst.
   für die Sound-Wiedergabe.
 - Eine eigene, legal erworbene Audiodatei mit dem Alarm-Sound (siehe
   [Rechtlicher Hinweis](#10-rechtlicher-hinweis-zur-audiodatei)).
-- Zugriff auf den HA-Host per Samba- oder SSH-Add-on, um den Add-on-Ordner
+- Zugriff auf den HA-Host per Samba- oder SSH-App, um den App-Ordner
   nach `/addons/` zu kopieren.
 
 ## Schnellstart
 
 1. Entertainment-Bereich(e) in der Hue-App anlegen (einer pro Bridge).
-2. Dieses Repo im Add-on Store als Repository hinzufügen, **Red Alert
+2. Dieses Repo im App Store als Repository hinzufügen, **Red Alert
    Entertainment** installieren und starten.
 3. Pro Bridge: Link-Button drücken, dann im Web-UI **Pairen** klicken
    (oder `POST /pair` aufrufen).
 4. Pro Bridge: `GET /areas?bridge_host=...` aufrufen, Ergebnis als Zeile in
-   die Add-on-Option `bridges` eintragen.
+   die App-Option `bridges` eintragen.
 5. `rest_command` + Automation in Home Assistant anlegen (Vorlage weiter unten).
 6. Fertig – Trigger auslösen, alle konfigurierten Bridges spielen gleichzeitig.
 
@@ -120,19 +122,19 @@ Automationen ansprichst.
 1. Hue-App → Einstellungen → Entertainment-Bereiche → Neuer Bereich.
 2. Alle 6 Lampen hinzufügen und im 3D-Raster grob so platzieren, wie sie
    physisch angeordnet sind (nur für die Hue-App-Vorschau relevant, nicht für
-   dieses Add-on).
+   diese App).
 3. Bereich speichern. Die Reihenfolge, in der du die Lampen hinzufügst,
    bestimmt die `channel_id`-Reihenfolge, die später für den Lauflicht-Effekt
    genutzt wird.
 
-## 2. Add-on installieren
+## 2. App installieren
 
-**Einstellungen → Add-ons → Add-on Store → oben rechts „⋮“ → Repositories**,
-dann die URL dieses GitHub-Repositories eintragen und hinzufügen. Das Add-on
+**Einstellungen → Apps → App Store → oben rechts „⋮“ → Repositories**,
+dann die URL dieses GitHub-Repositories eintragen und hinzufügen. Die App
 erscheint anschließend im Store als **Red Alert Entertainment** – installieren
 und starten. Empfohlen: „Start beim Booten“ aktivieren.
 
-(Alternativ als lokales Add-on: den Unterordner `redalert/` nach
+(Alternativ als lokale App: den Unterordner `redalert/` nach
 `/addons/redalert` auf den HA-Host kopieren und Repositories neu laden.)
 
 ## 3. Einmalig mit jeder Bridge pairen
@@ -148,9 +150,9 @@ curl -X POST http://<home-assistant-ip>:8099/pair \
 ```
 
 Antwort enthält `username` und `clientkey` – werden automatisch (pro Bridge)
-im Add-on-Datenordner gespeichert (`/data/credentials.json`), du musst dir
+im App-Datenordner gespeichert (`/data/credentials.json`), du musst dir
 nichts merken. Pairing muss pro Bridge nur einmal gemacht werden, außer du
-setzt das Add-on komplett zurück.
+setzt die App komplett zurück.
 
 ## 4. Area-ID und Kanalreihenfolge ermitteln
 
@@ -164,17 +166,17 @@ Liefert z. B.:
 [{"id": "abcd-1234", "name": "Red Alert", "channels": [0, 1, 2, 3, 4, 5]}]
 ```
 
-Trage `bridge_host` + die `id` als Zeile der Add-on-Option `bridges` ein
-(Konfiguration-Tab des Add-ons; eine Zeile pro Bridge). Falls die
+Trage `bridge_host` + die `id` als Zeile der App-Option `bridges` ein
+(Konfiguration-Tab der App; eine Zeile pro Bridge). Falls die
 `channels`-Reihenfolge nicht deiner physischen Anordnung entspricht, kannst
 du die gewünschte Reihenfolge in derselben Zeile explizit als
 `channel_order` setzen – als kommagetrennte Liste (z. B. `2,3,1,0,5,4`),
-entweder als Add-on-Option oder direkt im Web-UI in der jeweiligen
+entweder als App-Option oder direkt im Web-UI in der jeweiligen
 Bridge-Karte. Welche `channel_id` welche Lampe ist, findest du in der
 Bridge-Karte unter „Lampen zuordnen“ (leuchtet die Kanäle einzeln auf).
-Add-on nach einer Options-Änderung neu starten.
+App nach einer Options-Änderung neu starten.
 
-## 5. Add-on-Optionen
+## 5. App-Optionen
 
 | Option           | Typ           | Standard | Bedeutung                                                       |
 |-------------------|--------------|----------|-------------------------------------------------------------------|
@@ -193,15 +195,15 @@ Add-on nach einer Options-Änderung neu starten.
 | `glitter_colors`  | String        | `#FFFFFF #CFE8FF #FFF1D0` | Nur `glitter`. Hex-Farben (leerzeichengetrennt), aus denen jeder Funken zufällig zieht. Leer = Bridge-Farbe. Je Bridge überschreibbar. |
 | `restore_state`   | bool          | `true`   | Lampenzustand vor dem Effekt sichern und danach wiederherstellen (für alle Bridges gleich). |
 | `duration`        | float (0–86400) | `0`    | Standard-Laufzeit in Sekunden (für alle Bridges gemeinsam; im `/start`-Body übersteuerbar). `0` = **unbegrenzt**, läuft bis `/stop`. |
-| `log_level`       | Liste         | `info`   | Ausführlichkeit des Add-on-Protokolls (`trace`…`fatal`).           |
+| `log_level`       | Liste         | `info`   | Ausführlichkeit des App-Protokolls (`trace`…`fatal`).           |
 
 ## 6. REST-API
 
 | Endpoint  | Methode | Zweck                                                                                 |
 |-----------|---------|-----------------------------------------------------------------------------------------|
 | `/`       | GET     | Web-UI (Ingress-Panel „Red Alert“)                                                      |
-| `/health` | GET     | Status (mind. eine Bridge gepaart? läuft der Effekt gerade?) – auch Ziel des Container-HEALTHCHECK |
-| `/config` | GET     | Effektive Konfiguration inkl. `bridges` und `presets` (Namen der Effektsets) – für das Web-UI |
+| `/health` | GET     | Status: `{status, paired, running, current_preset}` – mind. eine Bridge gepaart? läuft der Effekt gerade? Name des zuletzt geladenen Effektsets (`null` bei Ad-hoc-Start)? Auch Ziel des Container-HEALTHCHECK |
+| `/config` | GET     | Effektive Konfiguration inkl. `bridges`, `presets` (Namen der Effektsets) und `current_preset` – für das Web-UI und die Home-Assistant-Integration |
 | `/pair`   | POST    | Einmalige Kopplung mit einer Bridge. Body: `{"bridge_host": "..."}` (Pflicht bei mehr als einer konfigurierten Bridge) |
 | `/areas`  | GET     | Entertainment-Bereiche + Kanäle einer Bridge auflisten. Query `?bridge_host=...` (Pflicht bei mehr als einer gepaarten Bridge) |
 | `/start`  | POST    | Effekt auf allen konfigurierten (oder im Body übergebenen) Bridges gleichzeitig starten (antwortet sofort; DTLS-Handshakes laufen parallel im Hintergrund). Body optional: `duration` (Sek., Standard aus der Option `duration`, `0` = unbegrenzt), `fps`, `restore_state` (für alle Bridges gemeinsam); `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors` sind die Standardwerte für Bridges ohne eigene Einstellung. `bridges` (Liste von `{bridge_host, area_id, channel_order, effect?, color?, sweep_seconds?, chase_pause?, attack_ms?, release_ms?, glow_low?, glow_high?, glitter_interval_ms?, glitter_flash_ms?, glitter_colors?}`, `channel_order` als `[2,3,1,0,5,4]` oder `"2,3,1,0,5,4"`) übersteuert für diesen Aufruf die Option `bridges`. `preset` = Name eines gespeicherten Effektsets als Basis (weitere Body-Felder überschreiben es). Antwort enthält `bridges` (gestartet, je mit aufgelösten Parametern) + `failed_bridges` (übersprungen); `502` nur wenn keine Bridge startet. |
@@ -209,7 +211,7 @@ Add-on nach einer Options-Änderung neu starten.
 | `/identify` | POST  | Lampen einer Bridge einzeln durchtesten (`channel_id` → Lampe). Body: `bridge_host` (Pflicht bei mehr als einer konfigurierten Bridge), `area_id` (optional, sonst aus der bridges-Konfiguration), `channel_id` (fehlt = alle nacheinander), `seconds`, `color`, `restore_state`. Ein DTLS-Handshake für den Durchlauf; belegt denselben Slot wie `/start`. |
 | `/presets` | GET / PUT / POST / DELETE | Effektsets verwalten (`/data/presets.json`). `GET` = alle (`{presets, names}`) bzw. `?name=…` eines. `PUT`/`POST` `{"name","config"}` = speichern/überschreiben (auch Datei-Upload). `DELETE ?name=…` = löschen. |
 
-`duration` weglassen → Effekt läuft mit dem Standard aus der Add-on-Option
+`duration` weglassen → Effekt läuft mit dem Standard aus der App-Option
 `duration` (Vorgabe `0` = **unbegrenzt**, läuft bis `/stop`); mit einem
 positiven Wert endet er nach so vielen Sekunden von selbst. Ist eine Bridge
 nicht erreichbar, starten die übrigen trotzdem (best effort) – siehe
@@ -217,7 +219,16 @@ nicht erreichbar, starten die übrigen trotzdem (best effort) – siehe
 
 ## 7. Home Assistant einbinden
 
-`configuration.yaml`:
+**Fertige Integration:** [`custom_components/redalert/`](custom_components/redalert)
+in diesem Repo legt vier Entities an (`binary_sensor` „läuft“, `switch`
+„Animation“, `select` „Effektset“, `sensor` „geladenes Effektset“). Installation
+über **HACS** (repo-Kategorie *Integration* als benutzerdefiniertes Repository
+hinzufügen – `hacs.json` im Wurzelverzeichnis) oder manuell (Ordner nach
+`config/custom_components/` kopieren); danach HA neu starten und
+**Einstellungen → Geräte & Dienste → Integration hinzufügen → „Red Alert
+Entertainment App“**. Details siehe das `README.md` in diesem Ordner.
+
+**Ohne Zusatzinstallation** – `configuration.yaml`:
 
 ```yaml
 rest_command:
@@ -225,7 +236,7 @@ rest_command:
     url: "http://<home-assistant-ip>:8099/start"
     method: POST
     content_type: "application/json"
-    payload: '{}'   # Dauer ohne Angabe: Standard aus der Add-on-Option duration
+    payload: '{}'   # Dauer ohne Angabe: Standard aus der App-Option duration
 
   redalert_stop:
     url: "http://<home-assistant-ip>:8099/stop"
@@ -349,25 +360,28 @@ wieder **Laden**, direkt **Starten**, als JSON-Datei **Herunterladen** /
 | `/start` liefert `already_running`         | Erst `/stop` aufrufen, bevor ein neuer Lauf gestartet wird.                                        |
 | `/start` liefert 502 `keine Bridge verfügbar` | Keine der konfigurierten Bridges war erreichbar/gepaart – bei nur teilweisem Ausfall antwortet `/start` trotzdem `200`, einzelne Fehler stehen in `failed_bridges`. |
 | Lampen einer Bridge reagieren gar nicht    | Diese Bridge unterstützt evtl. kein Entertainment (V1-Bridge), oder UDP-Port 2100 zu ihr ist blockiert (Firewall/VLAN). |
-| Lauflicht ruckelt                          | `fps` in den Add-on-Optionen erhöhen oder Netzwerklast zur Bridge prüfen.                          |
+| Lauflicht ruckelt                          | `fps` in den App-Optionen erhöhen oder Netzwerklast zur Bridge prüfen.                          |
 | Streaming einer Bridge bricht nach kurzer Zeit ab | Jede Bridge erlaubt nur **einen aktiven** Entertainment-Stream gleichzeitig (pro Bridge, nicht global) – Hue-Sync-App oder andere Streaming-Clients auf dieser Bridge währenddessen schließen. |
 
 ## 10. Rechtlicher Hinweis zur Audiodatei
 
-Dieses Add-on kümmert sich ausschließlich um das Licht. Den Alarmstufe-Rot-Sound
+Diese App kümmert sich ausschließlich um das Licht. Den Alarmstufe-Rot-Sound
 aus der Serie musst du selbst aus einer legal erworbenen Quelle bereitstellen
 (z. B. eigene Kaufversion, eigene Aufnahme).
 
 ## Projektstruktur
 
-Add-on-Store-Repository: `repository.yaml` im Wurzelverzeichnis, das Add-on
+App-Store-Repository: `repository.yaml` im Wurzelverzeichnis, die App
 selbst im Unterordner `redalert/`.
 
 ```
 .
-├── repository.yaml              Add-on-Store-Metadaten (name, url, maintainer)
+├── repository.yaml              App-Store-Metadaten (name, url, maintainer)
 ├── README.md                   Diese Datei (Repo-Überblick)
-├── redalert/                   >>> das eigentliche Add-on <<<
+├── custom_components/redalert/ Home-Assistant-Integration (binary_sensor,
+│                                switch, select, sensor – spricht die REST-API
+│                                der App an, siehe README darin)
+├── redalert/                   >>> die eigentliche App <<<
 │   ├── config.yaml              Manifest: Optionen, Ingress, Ports
 │   ├── build.yaml               Basis-Images (home-assistant/base-python)
 │   ├── Dockerfile               Image-Build

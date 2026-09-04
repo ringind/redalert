@@ -8,7 +8,7 @@ Diamant-Gefunkel aus kurzen Farb-Blitzen (``effect: glitter``).
 Effekt, Farbe und Timing sind pro Bridge einzeln einstellbar; alle Bridges
 starten trotzdem gleichzeitig (gemeinsame Start-Uhr nach parallelen
 DTLS-Handshakes). Läuft für ``duration`` Sekunden (Standardwert aus der
-gleichnamigen Add-on-Option, für alle Bridges gemeinsam; `0` = unbegrenzt,
+gleichnamigen App-Option, für alle Bridges gemeinsam; `0` = unbegrenzt,
 läuft bis ``POST /stop``).
 
 Der komplette Satz an Start-Parametern (alle Bridges + Steuerung) lässt sich
@@ -120,7 +120,7 @@ def _parse_channel_order(value) -> list[int] | None:
 
 # Pro-Bridge überschreibbare Effekt-Parameter: Name im bridges-Eintrag -> Cast.
 # Fehlt der Schlüssel (oder ist er leer) in einem Eintrag, gilt der gleichnamige
-# Wert aus dem /start-Body bzw. den Add-on-Optionen als Standard für diese Bridge.
+# Wert aus dem /start-Body bzw. den App-Optionen als Standard für diese Bridge.
 _BRIDGE_NUMERIC_OVERRIDES = (
     ("sweep_seconds", float),
     ("chase_pause", float),
@@ -142,7 +142,7 @@ def _parse_bridges_option(value) -> list[dict]:
     ``sweep_seconds``, ``chase_pause``, ``attack_ms``, ``release_ms``,
     ``glow_low``, ``glow_high``, ``glitter_interval_ms``, ``glitter_flash_ms``,
     ``glitter_colors``) sind optional und überschreiben nur für diese eine
-    Bridge den sonst gültigen Standard (Body bzw. Add-on-Option). Unvollständige
+    Bridge den sonst gültigen Standard (Body bzw. App-Option). Unvollständige
     Einträge werden mit einer Warnung übersprungen, mehr als ``MAX_BRIDGES``
     Einträge werden abgeschnitten.
     """
@@ -241,6 +241,10 @@ state = {
     "duration": max(0.0, float(options.get("duration", 0.0))),
     "task": None,
     "last_start": None,
+    # Name des zuletzt per {"preset": "..."} geladenen Effektsets – None bei
+    # Ad-hoc-Starts ohne preset. Für die Home-Assistant-Integration (Select-
+    # Entity "geladenes Effektset"), siehe /health & /config.
+    "current_preset": None,
 }
 
 log.info(
@@ -368,6 +372,7 @@ async def handle_health(request: web.Request) -> web.Response:
             "status": "ok",
             "paired": bool(state["credentials"]),
             "running": bool(task and not task.done()),
+            "current_preset": state["current_preset"],
         }
     )
 
@@ -419,6 +424,7 @@ async def handle_config(request: web.Request) -> web.Response:
             "restore_state": state["restore_state"],
             "default_duration_s": state["duration"],
             "presets": sorted(state["presets"].keys()),
+            "current_preset": state["current_preset"],
             "running": bool(task and not task.done()),
             "last_start": state["last_start"],
         }
@@ -858,7 +864,7 @@ async def handle_start(request: web.Request) -> web.Response:
         """Eine Bridge auflösen: gepaart? erreichbar? area_id/Kanäle gültig?
 
         Effekt-Parameter, die dieser Bridge-Eintrag nicht selbst setzt, fallen
-        auf ``defaults`` zurück (Body bzw. Add-on-Option).
+        auf ``defaults`` zurück (Body bzw. App-Option).
         """
         host = cfg["bridge_host"]
         creds = state["credentials"].get(host)
@@ -931,6 +937,9 @@ async def handle_start(request: web.Request) -> web.Response:
 
     if not ctxs:
         if neutral and not failed:
+            # Effektset war gültig (nur eben komplett neutral) – gilt für die
+            # HA-Integration (Select/Sensor "geladenes Effektset") als geladen.
+            state["current_preset"] = str(preset_name) if preset_name else None
             state["last_start"] = {
                 "duration": duration, "fps": fps, "restore_state": restore,
                 "bridges": [], "failed_bridges": [], "neutral_bridges": neutral_report,
@@ -941,6 +950,12 @@ async def handle_start(request: web.Request) -> web.Response:
             {"error": "keine Bridge verfügbar", "bridges": failed, "neutral_bridges": neutral_report},
             status=502,
         )
+
+    # Für die HA-Integration (Select-Entity "geladenes Effektset"): erst hier
+    # setzen, nicht schon bei jedem preset-Versuch – ein 400/404/502 vorher
+    # soll "geladenes Effektset" nicht auf einen nie gestarteten Namen setzen.
+    # Ad-hoc-Start ohne preset räumt die Anzeige wieder auf None.
+    state["current_preset"] = str(preset_name) if preset_name else None
 
     # session.start() (DTLS-Handshake, ~einige Sekunden) passiert im Task,
     # damit die HTTP-Antwort nicht blockiert (HA rest_command-Timeout).

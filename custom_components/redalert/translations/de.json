@@ -1,0 +1,44 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Red Alert Entertainment App",
+        "description": "Adresse der App (nicht Ingress – der feste Port aus der App-Konfiguration, Standard 8099).",
+        "data": {
+          "host": "Host / IP",
+          "port": "Port",
+          "ssl": "SSL verwenden",
+          "verify_ssl": "SSL-Zertifikat prüfen"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "App nicht erreichbar. Host/Port prüfen und sicherstellen, dass sie läuft."
+    },
+    "abort": {
+      "already_configured": "Diese App ist bereits eingerichtet."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "running": {
+        "name": "Läuft"
+      }
+    },
+    "sensor": {
+      "current_preset": {
+        "name": "Geladenes Effektset"
+      }
+    },
+    "switch": {
+      "animation": {
+        "name": "Animation"
+      }
+    },
+    "select": {
+      "preset": {
+        "name": "Effektset"
+      }
+    }
+  }
+}

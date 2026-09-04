@@ -1,6 +1,6 @@
 ---
 name: smoke-test
-description: Run the Red Alert add-on locally against the real Hue bridge and confirm an effect actually plays on the lamps. Use when the user asks for a "Testlauf", "test run", "prüfe den Effekt", "20 Sekunden Test", or after changing effect / streaming / sync / restore code and you need real-hardware verification (py_compile alone is not enough).
+description: Run the Red Alert app locally against the real Hue bridge and confirm an effect actually plays on the lamps. Use when the user asks for a "Testlauf", "test run", "prüfe den Effekt", "20 Sekunden Test", or after changing effect / streaming / sync / restore code and you need real-hardware verification (py_compile alone is not enough).
 ---
 
 # Local smoke test against the real bridge
