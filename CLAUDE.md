@@ -36,6 +36,10 @@ watch it: `RUN=$(gh run list --workflow=build.yaml --branch main -L1 --json data
 (run it backgrounded). `.github/workflows/hacs.yaml` validates the
 `custom_components/redalert` HA integration (`hacs/action` + `hassfest`,
 weekly cron + on push/PR) — same watch pattern, `--workflow=hacs.yaml`.
+`hassfest` requires `manifest.json` keys sorted `domain`, `name`, then
+alphabetical — re-check order after adding/removing a key. `hacs/action` also
+requires the GitHub repo itself to have topics set (`gh repo edit --add-topic
+...`, not a repo file) and the `brand/` icon/logo (see Layout above).
 Releases are tags `vX.Y.Z` on a green commit — see the `release` skill.
 
 ## Layout
@@ -50,6 +54,9 @@ custom_components/redalert/  HA integration talking to the app's REST API
   binary_sensor.py (running) / switch.py (start+stop) / select.py (pick+load
   a preset) / sensor.py (currently loaded preset) — one DataUpdateCoordinator
   polling GET /config every 10s; README.md documents install + entities
+  brand/icon.png, brand/logo.png — copies of redalert/{icon,logo}.png; HA
+  2026.3+ shows these inline (no home-assistant/brands PR needed), and the
+  `hacs/action` CI check requires them regardless of HA version
 redalert/                  the app
   config.yaml              manifest: options schema, ingress, ports
   build.yaml               base images: ghcr.io/home-assistant/{arch}-base-python

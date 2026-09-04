@@ -1,12 +1,12 @@
 {
   "domain": "redalert",
   "name": "Red Alert Entertainment",
-  "version": "1.0.0",
+  "codeowners": ["@ringind"],
   "config_flow": true,
   "documentation": "https://github.com/ringind/redalert/blob/main/custom_components/redalert/README.md",
-  "issue_tracker": "https://github.com/ringind/redalert/issues",
-  "codeowners": ["@ringind"],
-  "requirements": [],
+  "integration_type": "service",
   "iot_class": "local_polling",
-  "integration_type": "service"
+  "issue_tracker": "https://github.com/ringind/redalert/issues",
+  "requirements": [],
+  "version": "1.0.0"
 }
