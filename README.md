@@ -10,7 +10,8 @@ Bridges**, die gleichzeitig loslegen – jede mit ihrem eigenen Effekt, ihrer
 eigenen Farbe und eigenem Timing. Zwei Effekte: `pulse` – alle Lampen einer
 Bridge blenden gemeinsam auf und ab (Standard) – und `chase` – ein umlaufender
 Komet, der einen Schweif hinter sich herzieht. Läuft für eine konfigurierbare
-Dauer (Standard 30 s, gilt für alle Bridges gemeinsam).
+Dauer (Option `duration`, gilt für alle Bridges gemeinsam; `0` = unbegrenzt,
+läuft bis `/stop`).
 
 Nutzt die Bibliothek [`hue-entertainment`](https://github.com/music-assistant/hue-entertainment)
 (dieselbe, die auch das Hue-Entertainment-Plugin von Music Assistant antreibt).
@@ -183,6 +184,7 @@ Add-on nach einer Options-Änderung neu starten.
 | `glow_low`        | float (0–1)   | 0.08     | Standard für Bridges ohne eigene Einstellung. **Beide Effekte:** Ruhe-Helligkeit zwischen den Pulsen (`0` = ganz aus). |
 | `glow_high`       | float (0–1)   | 1.0      | Standard für Bridges ohne eigene Einstellung. **Beide Effekte:** Helligkeit im Puls-Maximum (über `glow_low`). |
 | `restore_state`   | bool          | `true`   | Lampenzustand vor dem Effekt sichern und danach wiederherstellen (für alle Bridges gleich). |
+| `duration`        | float (0–86400) | `0`    | Standard-Laufzeit in Sekunden (für alle Bridges gemeinsam; im `/start`-Body übersteuerbar). `0` = **unbegrenzt**, läuft bis `/stop`. |
 | `log_level`       | Liste         | `info`   | Ausführlichkeit des Add-on-Protokolls (`trace`…`fatal`).           |
 
 ## 6. REST-API
@@ -194,13 +196,15 @@ Add-on nach einer Options-Änderung neu starten.
 | `/config` | GET     | Effektive Konfiguration inkl. `bridges` (für das Web-UI)                                |
 | `/pair`   | POST    | Einmalige Kopplung mit einer Bridge. Body: `{"bridge_host": "..."}` (Pflicht bei mehr als einer konfigurierten Bridge) |
 | `/areas`  | GET     | Entertainment-Bereiche + Kanäle einer Bridge auflisten. Query `?bridge_host=...` (Pflicht bei mehr als einer gepaarten Bridge) |
-| `/start`  | POST    | Effekt auf allen konfigurierten (oder im Body übergebenen) Bridges gleichzeitig starten (antwortet sofort; DTLS-Handshakes laufen parallel im Hintergrund). Body optional: `duration` (Sek., Standard 30), `fps`, `restore_state` (für alle Bridges gemeinsam); `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high` sind die Standardwerte für Bridges ohne eigene Einstellung. `bridges` (Liste von `{bridge_host, area_id, channel_order, effect?, color?, sweep_seconds?, chase_pause?, attack_ms?, release_ms?, glow_low?, glow_high?}`, `channel_order` als `[2,3,1,0,5,4]` oder `"2,3,1,0,5,4"`) übersteuert für diesen Aufruf die Option `bridges` – jede Bridge kann ihre eigenen Effekt-Parameter setzen. Antwort enthält `bridges` (gestartet, je mit aufgelösten Parametern) + `failed_bridges` (übersprungen); `502` nur wenn keine Bridge startet. |
+| `/start`  | POST    | Effekt auf allen konfigurierten (oder im Body übergebenen) Bridges gleichzeitig starten (antwortet sofort; DTLS-Handshakes laufen parallel im Hintergrund). Body optional: `duration` (Sek., Standard aus der Option `duration`, `0` = unbegrenzt), `fps`, `restore_state` (für alle Bridges gemeinsam); `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high` sind die Standardwerte für Bridges ohne eigene Einstellung. `bridges` (Liste von `{bridge_host, area_id, channel_order, effect?, color?, sweep_seconds?, chase_pause?, attack_ms?, release_ms?, glow_low?, glow_high?}`, `channel_order` als `[2,3,1,0,5,4]` oder `"2,3,1,0,5,4"`) übersteuert für diesen Aufruf die Option `bridges` – jede Bridge kann ihre eigenen Effekt-Parameter setzen. Antwort enthält `bridges` (gestartet, je mit aufgelösten Parametern) + `failed_bridges` (übersprungen); `502` nur wenn keine Bridge startet. |
 | `/stop`   | POST    | Effekt auf allen laufenden Bridges sofort stoppen                                       |
 | `/identify` | POST  | Lampen einer Bridge einzeln durchtesten (`channel_id` → Lampe). Body: `bridge_host` (Pflicht bei mehr als einer konfigurierten Bridge), `area_id` (optional, sonst aus der bridges-Konfiguration), `channel_id` (fehlt = alle nacheinander), `seconds`, `color`, `restore_state`. Ein DTLS-Handshake für den Durchlauf; belegt denselben Slot wie `/start`. |
 
-`duration` weglassen → Effekt läuft **30 Sekunden**, dann endet er von selbst
-(oder vorher per `/stop`). Ist eine Bridge nicht erreichbar, starten die
-übrigen trotzdem (best effort) – siehe `failed_bridges`.
+`duration` weglassen → Effekt läuft mit dem Standard aus der Add-on-Option
+`duration` (Vorgabe `0` = **unbegrenzt**, läuft bis `/stop`); mit einem
+positiven Wert endet er nach so vielen Sekunden von selbst. Ist eine Bridge
+nicht erreichbar, starten die übrigen trotzdem (best effort) – siehe
+`failed_bridges`.
 
 ## 7. Home Assistant einbinden
 
@@ -212,7 +216,7 @@ rest_command:
     url: "http://<home-assistant-ip>:8099/start"
     method: POST
     content_type: "application/json"
-    payload: '{}'   # Dauer ohne Angabe: 30 s
+    payload: '{}'   # Dauer ohne Angabe: Standard aus der Add-on-Option duration
 
   redalert_stop:
     url: "http://<home-assistant-ip>:8099/stop"

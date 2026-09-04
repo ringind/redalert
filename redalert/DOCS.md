@@ -64,8 +64,9 @@ Bereichs sein, nur in anderer Reihenfolge.
 
 ### 2 · Steuerung
 
-Im Web-UI unter **„2 · Steuerung“**: Dauer (leer = 30 s) und `fps` gelten
-immer für **alle** Bridges gemeinsam. **Effekt**, `sweep_seconds`,
+Im Web-UI unter **„2 · Steuerung“**: Dauer (leer = Standard aus der Add-on-Option
+`duration`, `0` = unbegrenzt) und `fps` gelten immer für **alle** Bridges
+gemeinsam. **Effekt**, `sweep_seconds`,
 `chase_pause`, `glow_low`/`glow_high` und Farbe sind hier der **Standard** für
 jede Bridge, die diese Werte nicht in ihrer eigenen Karte (siehe „1 ·
 Bridges“) überschreibt. **Start** / **Stop** starten/stoppen alle
@@ -113,6 +114,7 @@ Bridge nach dem Stream-Ende).
 | `glow_low`      | float (0–1)        | `0.08`     | Standard für Bridges ohne eigene Einstellung. **Beide Effekte:** Ruhe-Helligkeit zwischen den Pulsen. `0` = ganz aus. |
 | `glow_high`     | float (0–1)        | `1.0`      | Standard für Bridges ohne eigene Einstellung. **Beide Effekte:** Helligkeit im Puls-Maximum. Muss über `glow_low` liegen. |
 | `restore_state` | bool               | `true`     | Lampenzustand (an/aus, Helligkeit, Farbe) vor dem Effekt sichern und danach wiederherstellen (für alle Bridges gleich). |
+| `duration`      | float (0–86400)    | `0`        | Wie lange der Effekt standardmäßig läuft, bevor er von selbst endet (für alle Bridges gemeinsam; im `/start`-Body pro Aufruf übersteuerbar). `0` = **unbegrenzt**, läuft bis `/stop`. |
 | `log_level`     | Liste              | `info`     | `trace`,`debug`,`info`,`notice`,`warning`,`error`,`fatal`. |
 
 ## REST-API
@@ -131,8 +133,9 @@ Panel-Pfad).
 | `/stop`   | POST    | Effekt auf allen laufenden Bridges sofort stoppen. |
 | `/identify` | POST  | Lampen einer Bridge einzeln durchtesten (Zuordnung `channel_id` → Lampe). Body: `bridge_host` (Pflicht, sobald mehr als eine Bridge konfiguriert ist), `area_id` (optional, sonst aus der bridges-Konfiguration), `channel_id` (fehlt = alle Kanäle nacheinander), `seconds` (Standard 3 einzeln / 2 bei „alle“), `color`, `restore_state`. Ein DTLS-Handshake für den ganzen Durchlauf. Belegt denselben Slot wie `/start` (`already_running`, `/stop` bricht ab). |
 
-- `duration` (Sekunden, **Standard 30**) – wie lange der Effekt läuft, bevor er
-  von selbst endet; vorher jederzeit per `/stop` abbrechbar.
+- `duration` (Sekunden, Standard aus der gleichnamigen Add-on-Option, **`0` =
+  unbegrenzt**) – wie lange der Effekt läuft, bevor er von selbst endet;
+  vorher jederzeit per `/stop` abbrechbar.
 
 ## Home Assistant einbinden
 
@@ -144,8 +147,7 @@ rest_command:
     url: "http://<ha-ip>:8099/start"
     method: POST
     content_type: "application/json"
-    payload: >-
-      {"duration": {{ duration | default(30) }}}
+    payload: '{}'   # Dauer ohne Angabe: Standard aus der Add-on-Option duration
   redalert_stop:
     url: "http://<ha-ip>:8099/stop"
     method: POST

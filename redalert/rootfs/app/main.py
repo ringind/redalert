@@ -6,8 +6,9 @@ gemeinsames Auf-/Ab-Blenden aller Lampen einer Bridge (``effect: pulse``,
 Standard) oder das originale Larson-Scanner-Lauflicht (``effect: chase``).
 Effekt, Farbe und Timing sind pro Bridge einzeln einstellbar; alle Bridges
 starten trotzdem gleichzeitig (gemeinsame Start-Uhr nach parallelen
-DTLS-Handshakes). Läuft für ``duration`` Sekunden (Standard 30, für alle
-Bridges gemeinsam) oder bis ``POST /stop``.
+DTLS-Handshakes). Läuft für ``duration`` Sekunden (Standardwert aus der
+gleichnamigen Add-on-Option, für alle Bridges gemeinsam; `0` = unbegrenzt,
+läuft bis ``POST /stop``).
 """
 
 import asyncio
@@ -28,9 +29,6 @@ OPTIONS_FILE = DATA_DIR / "options.json"
 
 APP_DIR = Path(__file__).parent
 PANEL_HTML = (APP_DIR / "panel.html").read_text(encoding="utf-8")
-
-# Kein duration im /start-Body -> Standardlaufzeit in Sekunden.
-DEFAULT_DURATION_S = 30.0
 
 # Mehr konfigurierte bridges-Einträge als das werden beim Laden abgeschnitten.
 MAX_BRIDGES = 3
@@ -183,13 +181,15 @@ state = {
     "glow_high": float(options.get("glow_high", 1.0)),
     "chase_pause": float(options.get("chase_pause", 0.0)),
     "restore_state": bool(options.get("restore_state", True)),
+    # 0 = unbegrenzt (läuft bis POST /stop).
+    "duration": max(0.0, float(options.get("duration", 0.0))),
     "task": None,
     "last_start": None,
 }
 
 log.info(
     "Konfiguration: bridges=%s (Standard) effect=%s color=%s fps=%s sweep=%ss chase_pause=%ss "
-    "attack=%sms release=%sms glow=%s..%s",
+    "attack=%sms release=%sms glow=%s..%s duration=%ss (0=unbegrenzt)",
     [
         {"bridge_host": b["bridge_host"], "area_id": b["area_id"], "channel_order": b["channel_order"],
          **{k: b[k] for k in ("effect", "color", "sweep_seconds", "chase_pause",
@@ -205,6 +205,7 @@ log.info(
     state["release_ms"],
     state["glow_low"],
     state["glow_high"],
+    state["duration"],
 )
 if state["bridges"]:
     paired = [b["bridge_host"] for b in state["bridges"] if b["bridge_host"] in state["credentials"]]
@@ -348,7 +349,7 @@ async def handle_config(request: web.Request) -> web.Response:
             "glow_low": state["glow_low"],
             "glow_high": state["glow_high"],
             "restore_state": state["restore_state"],
-            "default_duration_s": DEFAULT_DURATION_S,
+            "default_duration_s": state["duration"],
             "running": bool(task and not task.done()),
             "last_start": state["last_start"],
         }
@@ -486,13 +487,14 @@ async def _run_effect(
         start = loop.time()
         log.info(
             "Effekt läuft: bridges=%s fps=%s duration=%s",
-            [(c["bridge_host"], c["effect"]) for c in active], fps, duration,
+            [(c["bridge_host"], c["effect"]) for c in active], fps,
+            duration if duration > 0 else "unbegrenzt",
         )
         prev = start
         while True:
             now = loop.time()
             elapsed = now - start
-            if elapsed >= duration:
+            if duration > 0 and elapsed >= duration:
                 break
             dt = now - prev
             prev = now
@@ -711,10 +713,11 @@ async def handle_start(request: web.Request) -> web.Response:
 
     fps = int(body.get("fps") or options.get("fps", 25))
     restore = bool(body.get("restore_state", state["restore_state"]))
+    # 0 = unbegrenzt (läuft bis POST /stop).
     try:
-        duration = max(0.0, float(body.get("duration", DEFAULT_DURATION_S)))
+        duration = max(0.0, float(body.get("duration", state["duration"])))
     except (TypeError, ValueError):
-        duration = DEFAULT_DURATION_S
+        duration = state["duration"]
 
     # Standardwerte für Bridges, die diese Effekt-Parameter nicht selbst setzen.
     defaults = {"effect": _effect_name(body.get("effect") or state["effect"])}

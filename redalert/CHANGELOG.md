@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.0
+
+- **Neue Option `duration`.** Die Standard-Effektdauer (Sekunden, für alle
+  Bridges gemeinsam) ist jetzt in der Add-on-Konfiguration einstellbar, statt
+  fest auf 30 s codiert zu sein. **`0` (Vorgabe im Auslieferungszustand) =
+  unbegrenzt** – der Effekt läuft dann bis `POST /stop`, statt nach 30 s von
+  selbst zu enden. Im `/start`-Body bleibt `duration` weiterhin pro Aufruf
+  übersteuerbar (ebenfalls `0` = unbegrenzt für diesen einen Aufruf).
+  **Achtung:** Bestehende Automationen, die sich auf das automatische Ende
+  nach 30 s verlassen haben, laufen ab dieser Version unbegrenzt weiter, bis
+  entweder `duration` gesetzt oder explizit `/stop` aufgerufen wird.
+
 ## 1.3.0
 
 - **Effekt je Bridge einzeln konfigurierbar.** Jede Zeile der Option

@@ -100,7 +100,7 @@
     </p>
     <div class="row">
       <div><label for="effect">Effekt</label><select id="effect"><option value="pulse">pulse (Takt)</option><option value="chase">chase (Lauflicht)</option></select></div>
-      <div><label for="duration">Dauer (s)</label><input type="number" id="duration" min="0" step="1" placeholder="30"></div>
+      <div><label for="duration">Dauer (s, 0 = unbegrenzt)</label><input type="number" id="duration" min="0" step="1"></div>
       <div><label for="fps">fps</label><input type="number" id="fps" min="5" max="50" step="1"></div>
       <div><label for="sweep">sweep_seconds</label><input type="number" id="sweep" min="0.3" max="5" step="0.1"></div>
       <div><label for="chpause">chase-Pause (s)</label><input type="number" id="chpause" min="0" max="60" step="0.5" placeholder="0"></div>
@@ -109,8 +109,9 @@
       <div><label for="color">Farbe</label><input type="color" id="color" value="#ff0000"></div>
     </div>
     <p class="muted" style="margin:.5rem 0 0">
-      <strong>Dauer</strong> (leer = 30 s): wie lange der Effekt läuft, bevor er von selbst endet
-      (oder vorher per „Stop“).<br>
+      <strong>Dauer</strong> (leer = Standard aus der Add-on-Option <code>duration</code>):
+      wie lange der Effekt läuft, bevor er von selbst endet (oder vorher per „Stop“).
+      <code>0</code> = unbegrenzt, läuft bis „Stop“.<br>
       <strong>glow_low / glow_high</strong> (beide Effekte): Ruhe-Helligkeit zwischen den
       Pulsen bzw. Helligkeit im Puls-Maximum. Zwischen den Pulsen gehen die Lampen auf
       <code>glow_low</code> zurück (nicht auf 0), im Maximum auf <code>glow_high</code>.
@@ -317,6 +318,7 @@
 
     const s = $("status"); s.innerHTML = "";
     const fields = {
+      "Dauer (Standard)": data.default_duration_s > 0 ? `${data.default_duration_s} s` : "unbegrenzt",
       "Effekt (Standard)": data.effect,
       "Farbe (Standard)": data.color,
       "fps": data.fps,
@@ -354,6 +356,8 @@
       renderIdentify(i);
     });
 
+    if (data.default_duration_s != null)
+      $("duration").placeholder = data.default_duration_s > 0 ? data.default_duration_s : "unbegrenzt";
     if (data.effect && !$("effect").dataset.touched) $("effect").value = data.effect;
     if (data.fps && !$("fps").value) $("fps").value = data.fps;
     if (data.sweep_seconds && !$("sweep").value) $("sweep").value = data.sweep_seconds;

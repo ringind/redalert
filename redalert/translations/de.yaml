@@ -119,6 +119,12 @@ configuration:
     description: >-
       Vor dem Effekt den aktuellen Zustand der Lampen (an/aus, Helligkeit, Farbe)
       sichern und danach wiederherstellen.
+  duration:
+    name: Effektdauer (Sekunden)
+    description: >-
+      Wie lange der Effekt standardmäßig läuft, bevor er von selbst endet
+      (gilt für alle Bridges gemeinsam; im /start-Aufruf pro Aufruf
+      übersteuerbar). 0 = unbegrenzt, läuft bis zum manuellen Stop.
   log_level:
     name: Log-Level
     description: Ausführlichkeit des Add-on-Protokolls (trace, debug, info, notice, warning, error, fatal).

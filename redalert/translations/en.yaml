@@ -119,6 +119,12 @@ configuration:
     description: >-
       Snapshot the lamps' current state (on/off, brightness, colour) before the
       effect and put it back afterwards.
+  duration:
+    name: Effect duration (seconds)
+    description: >-
+      How long the effect runs by default before ending on its own (applies
+      to all bridges together; overridable per /start call). 0 = unlimited,
+      runs until manually stopped.
   log_level:
     name: Log level
     description: Verbosity of the add-on log (trace, debug, info, notice, warning, error, fatal).

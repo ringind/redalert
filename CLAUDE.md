@@ -13,8 +13,8 @@ than normal Bridge scenes — two effects, `pulse` (default: all lamps on that
 bridge together, periodic) and `chase` (a comet with a tail). **Effect, colour,
 and timing are configurable per bridge** (falling back to shared defaults when
 not overridden); all bridges still start **simultaneously** (parallel DTLS
-handshakes, shared start epoch) for a configurable `duration` (default 30 s,
-shared across all bridges). It
+handshakes, shared start epoch) for a configurable `duration` (the `duration`
+option, shared across all bridges; `0` = unlimited, runs until `/stop`). It
 ships an aiohttp REST service **and** an Ingress web UI for control. HA builds the
 image locally from `redalert/Dockerfile` (no `image:` key, no prebuilt registry).
 Primary docs are German: repo overview in `README.md`, in-HA docs in
@@ -48,7 +48,7 @@ redalert/                  the add-on
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.3.0**.
+No build system, linter, or test suite. Current version: **1.4.0**.
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
   after every code change — the only static check available.
@@ -113,7 +113,8 @@ Three layers under `redalert/rootfs/app/`:
   transparently migrates the old flat single-bridge file). Options are read
   **once at import** from `/data/options.json`. `REDALERT_LOG_LEVEL` (exported
   by the s6 `run` script from the `log_level` option) sets the logging level.
-  `/start` body: `duration` (default `DEFAULT_DURATION_S` = 30), `fps`,
+  `/start` body: `duration` (default `state["duration"]`, i.e. the `duration`
+  option; `0` = unlimited, runs until `/stop`), `fps`,
   `restore_state` apply to **all** bridges at once (frame rate and run length
   aren't per-bridge concepts); `effect`, `color`, `sweep_seconds`,
   `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high` in the body
@@ -232,8 +233,10 @@ cert). See `_clip` / `capture_light_state` / `restore_light_state`.
   concurrently); the DTLS handshake is 3–9 s per bridge.
 - `MAX_BRIDGES` = 3; extra `bridges` entries (option or `/start` body) beyond
   that are dropped with a warning, not an error.
-- `duration` omitted → `DEFAULT_DURATION_S` (30 s); always self-terminates,
-  never runs until `/stop` implicitly.
+- `duration` omitted → the `duration` option (default `0`). `0` means
+  **unlimited** — runs until `/stop`; any positive value self-terminates after
+  that many seconds. This is the one place `/stop`-only-termination is
+  intentional (opposite of the old cue-era default of always self-ending).
 - The s6 `run` script is `#!/command/with-contenv bashio`; the Dockerfile
   `chmod a+x`s `run` and `finish` (no reliable file mode without git).
 
