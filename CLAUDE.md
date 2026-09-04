@@ -49,6 +49,10 @@ repository.yaml            store metadata
 README.md                  repo overview (German)
 hacs.json                  makes this repo addable in HACS as a custom
                             integration repository (category "Integration")
+info.md                    what HACS renders instead of README.md when
+                            present — integration-only blurb + the standard
+                            my.home-assistant.io HACS-install badge, points
+                            to the app's own docs rather than duplicating them
 custom_components/redalert/  HA integration talking to the app's REST API
   manifest.json, const.py, api.py, coordinator.py, config_flow.py, entity.py
   binary_sensor.py (running) / switch.py (start+stop) / select.py (pick+load

@@ -20,14 +20,18 @@ Config-Entry = eine App-Instanz.
 
 ### Über HACS (empfohlen)
 
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=ringind&repository=redalert&category=integration)
+
 Dieses Repo ist HACS-fähig (`hacs.json` im Wurzelverzeichnis), aber **nicht**
 im HACS-Standard-Store gelistet – als **benutzerdefiniertes Repository**
 hinzufügen:
 
-1. HACS → **⋮** (oben rechts) → **Benutzerdefinierte Repositories**.
-2. URL `https://github.com/ringind/redalert`, Kategorie **Integration**.
-3. „Red Alert Entertainment“ in HACS suchen/öffnen → **Herunterladen**.
-4. Home Assistant neu starten.
+1. Obigen Button klicken – öffnet den Dialog direkt in deiner Home-Assistant-
+   Instanz. **Oder** manuell: HACS → **⋮** (oben rechts) →
+   **Benutzerdefinierte Repositories** → URL
+   `https://github.com/ringind/redalert`, Kategorie **Integration**.
+2. „Red Alert Entertainment“ in HACS suchen/öffnen → **Herunterladen**.
+3. Home Assistant neu starten.
 
 HACS liest dabei denselben Repo-Stand wie der App-Store – ein Release-Tag
 (`vX.Y.Z`, siehe [`redalert/CHANGELOG.md`](../../redalert/CHANGELOG.md)) legt
@@ -69,3 +73,16 @@ jederzeit nachträglich in der App-Web-UI erledigen.
 - `switch.animation` aus schaltet **die gesamte laufende Animation** ab
   (`/stop`) – unabhängig davon, ob sie über das Web-UI, `/start` direkt oder
   diese Integration gestartet wurde.
+
+## Icon/Logo
+
+`custom_components/redalert/brand/{icon,logo}.png` liefern das Marken-Bild
+für diese Integration – seit Home Assistant 2026.3 zeigt HA das direkt an
+(Geräteseite, „Integration hinzufügen“-Suche), ganz ohne Eintrag im
+zentralen [`home-assistant/brands`](https://github.com/home-assistant/brands)-Repo.
+In der **HACS-eigenen** Downloads-Übersicht kann statt dessen noch ein
+Platzhalter erscheinen – bekannter, offener HACS-Bug bei benutzerdefinierten
+(nicht im Standard-Store gelisteten) Repositories mit nur lokalem Marken-Bild
+([hacs/integration#5223](https://github.com/hacs/integration/issues/5223),
+[#5171](https://github.com/hacs/integration/issues/5171)); liegt an HACS, nicht
+an diesem Repo, und behebt sich von selbst, sobald HACS das gefixt hat.
