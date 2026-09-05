@@ -1,6 +1,6 @@
 """Red-Alert light patterns.
 
-Three effects, selected by the ``effect`` option / ``/start`` body:
+Effects, selected by the ``effect`` option / ``/start`` body:
 
 - ``pulse`` (default): every channel rises and falls **together** – bright on
   sound, dim in the pauses. Driven by the audio cue envelope (or a periodic
@@ -14,11 +14,16 @@ Three effects, selected by the ``effect`` option / ``/start`` body:
 - ``glitter``: each lamp sparkles on its own – at random moments it snaps to
   full brightness in a colour picked from a palette and then fades out fast,
   like light glinting off diamonds. Several lamps can be lit at once.
+- ``gradient_chase``: one or more soft-edged two-colour bands sliding along
+  the channels – built for Hue Gradient Lightstrips, where each channel is a
+  coloured segment rather than a separate lamp. See ``RedAlertGradientChase``.
 
 ``RedAlertChase`` / ``RedAlertPulse`` only compute a **0..1 shape**; ``main.py``
 maps it onto the configured ``glow_low`` / ``glow_high`` levels and applies the
 colour + 16-bit scaling. ``RedAlertGlitter`` additionally picks a per-lamp
 colour (``main.py`` still does the level mapping and 16-bit scaling).
+``RedAlertGradientChase`` computes a per-segment **blend** between two colours
+instead (``main.py`` interpolates and layers glow/pulse/glitter on top).
 """
 
 from __future__ import annotations
@@ -271,3 +276,77 @@ class RedAlertGlitter:
                 self._level[i] = 1.0
                 self._color[i] = self.palette[self._rng.randrange(len(self.palette))]
         return list(zip(self._level, self._color))
+
+
+class RedAlertGradientChase:
+    """One or more soft-edged two-colour bands sliding along the channels.
+
+    Built for Hue **Gradient Lightstrips**, where each Entertainment channel
+    is one coloured segment of a continuous strip rather than a separate
+    lamp (several gradient lightstrips can be combined into one longer
+    logical strip simply by putting all their segments in one Entertainment
+    area – ``channel_order`` picks the physical sequence, ``num_lights`` here
+    is just the resulting channel count).
+
+    :meth:`blend_for` returns, per segment, a **0..1 blend** – ``1`` = fully
+    the chase colour, ``0`` = fully the background colour – with a soft
+    raised-cosine edge instead of a hard cut (the "gradient" in the name).
+    ``main.py`` linearly interpolates ``color``/``gc_background_color`` per
+    segment using this blend, and separately layers the optional background
+    pulse (dims/brightens wherever ``blend`` isn't 1) and chase glitter
+    (sparkles wherever ``blend`` is high) on top – this class only computes
+    the geometry, no colour or I/O.
+
+    ``count`` bands run at once, evenly spaced. ``direction``:
+
+    - ``forward`` / ``backward``: the strip is a **loop** – bands wrap
+      seamlessly from the last segment back to the first, like ``chase``.
+    - ``bounce``: the strip is a **line** – bands reflect off both ends
+      instead of wrapping, like a Larson scanner.
+
+    ``length_segments`` is the width of the flat ``1.0`` core of a band, in
+    segments; ``speed_segments_per_s`` is how many segments a band's head
+    crosses per second.
+    """
+
+    def __init__(
+        self,
+        num_lights: int,
+        direction: str = "forward",
+        count: int = 1,
+        length_segments: float = 2.0,
+        speed_segments_per_s: float = 4.0,
+    ) -> None:
+        self.num_lights = max(1, num_lights)
+        self.direction = direction if direction in ("forward", "backward", "bounce") else "forward"
+        self.count = max(1, int(count))
+        self.half_width = min(max(length_segments, 0.2), float(self.num_lights)) / 2.0
+        # Edge softness in segments: about one segment, never wider than the band itself.
+        self.smooth = min(max(self.half_width, 0.3), 1.0)
+        self.speed = max(0.01, speed_segments_per_s)
+
+    def _band(self, dist: float) -> float:
+        """0..1 falloff: flat 1.0 within ``half_width``, 0.0 beyond the soft edge."""
+        if dist <= self.half_width:
+            return 1.0
+        if dist >= self.half_width + self.smooth:
+            return 0.0
+        x = (dist - self.half_width) / self.smooth
+        return 0.5 + 0.5 * math.cos(math.pi * x)  # 1 -> 0, raised cosine
+
+    def blend_for(self, t: float) -> list[float]:
+        """Per-segment 0..1 chase blend at time t (seconds since start)."""
+        n = self.num_lights
+        if self.direction == "bounce":
+            span = max(1, n - 1)  # line length in segments
+            period = 2.0 * span
+            heads = [
+                (t * self.speed + i * period / self.count) % period for i in range(self.count)
+            ]
+            heads = [h if h <= span else period - h for h in heads]
+            return [max(self._band(abs(j - h)) for h in heads) for j in range(n)]
+        sign = -1.0 if self.direction == "backward" else 1.0
+        heads = [(sign * t * self.speed + i * n / self.count) % n for i in range(self.count)]
+        return [
+            max(self._band(min(abs(j - h), n - abs(j - h))) for h in heads) for j in range(n)
+        ]

@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.8.0
+
+- **Neuer Effekt `gradient_chase`** – nur für Hue Gradient Lightstrips (jeder
+  Kanal ein Farb-Segment statt einer eigenen Lampe): ein oder mehrere weich
+  überblendete Zwei-Farben-Bänder laufen über die Segmente. Neue Parameter
+  (Option, `/start`-Body **und** je Bridge in `bridges` überschreibbar, außer
+  `gc_strip_lengths`, das nur je Bridge existiert): `gc_direction`
+  (`forward`/`backward`/`bounce`), `gc_count`, `gc_length`, `gc_speed`,
+  `gc_background_color`, `gc_chase_glitter` (Bänder funkeln zusätzlich wie
+  `glitter`), `gc_background_pulse` (Hintergrund pulsiert zusätzlich wie
+  `pulse`). Mehrere kombinierte Gradient Lightstrips (eine Entertainment Area
+  mit mehreren Geräten) lassen sich über `gc_strip_lengths` wieder in ihre
+  einzelnen physischen Strips aufteilen, jeder mit eigener `gc_direction` (als
+  Liste, eine Richtung je Strip).
+- Web-UI: Effekt-Auswahl (Standard **und** je Bridge) sowie Steuerungsfelder
+  für alle neuen `gc_*`-Parameter, inkl. Strip-Längen je Bridge.
+
 ## 1.7.0
 
 - **Neue Home-Assistant-Integration** (`custom_components/redalert/`, siehe

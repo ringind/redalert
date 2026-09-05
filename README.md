@@ -180,8 +180,8 @@ App nach einer Options-Änderung neu starten.
 
 | Option           | Typ           | Standard | Bedeutung                                                       |
 |-------------------|--------------|----------|-------------------------------------------------------------------|
-| `bridges`         | Liste (max. 3) | leer   | Eine Zeile pro Bridge: `bridge_host` (IP), `area_id` (siehe Schritt 4), optional `channel_order` sowie je Bridge optional `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors` (überschreiben die gleichnamige Option unten nur für diese Bridge). |
-| `effect`          | `pulse`\|`chase`\|`glitter`\|`neutral` | `pulse` | Standard für Bridges ohne eigene Einstellung. `pulse` = alle Lampen zusammen `glow_low` → `glow_high` → `glow_low` im Takt. `chase` = umlaufender Komet mit Schweif. `glitter` = jede Lampe funkelt für sich in kurzen Farb-Blitzen auf. `neutral` (nur je Bridge sinnvoll) = Bridge wird nicht gesteuert. |
+| `bridges`         | Liste (max. 3) | leer   | Eine Zeile pro Bridge: `bridge_host` (IP), `area_id` (siehe Schritt 4), optional `channel_order` sowie je Bridge optional `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors`, `gc_direction`, `gc_strip_lengths`, `gc_count`, `gc_length`, `gc_speed`, `gc_background_color`, `gc_chase_glitter`, `gc_background_pulse` (überschreiben die gleichnamige Option unten nur für diese Bridge). |
+| `effect`          | `pulse`\|`chase`\|`glitter`\|`gradient_chase`\|`neutral` | `pulse` | Standard für Bridges ohne eigene Einstellung. `pulse` = alle Lampen zusammen `glow_low` → `glow_high` → `glow_low` im Takt. `chase` = umlaufender Komet mit Schweif. `glitter` = jede Lampe funkelt für sich in kurzen Farb-Blitzen auf. `gradient_chase` = nur für Gradient Lightstrips: weich überblendete Zwei-Farben-Bänder laufen über die Segmente (siehe §8). `neutral` (nur je Bridge sinnvoll) = Bridge wird nicht gesteuert. |
 | `color`           | Hex-String    | `#FF0000`| Standard-Farbe für Bridges ohne eigene Einstellung.                |
 | `fps`             | int (5–50)    | 25       | Frames/Sekunde des DTLS-Streams (für alle Bridges gleich).         |
 | `sweep_seconds`   | float (0.3–5) | 1.4      | Standard für Bridges ohne eigene Einstellung. `chase`: Dauer einer vollen Umrundung. `pulse`: Zyklusdauer. |
@@ -193,6 +193,14 @@ App nach einer Options-Änderung neu starten.
 | `glitter_interval_ms` | float (5–5000) | 90   | Nur `glitter`. Mittlerer Abstand (ms) zwischen zwei Funkel-Blitzen über alle Lampen einer Bridge. Je Bridge überschreibbar. |
 | `glitter_flash_ms` | float (20–5000) | 260   | Nur `glitter`. Abkling-Zeitkonstante (ms) eines Funkens; > `glitter_interval_ms` ⇒ mehrere Lampen gleichzeitig. Je Bridge überschreibbar. |
 | `glitter_colors`  | String        | `#FFFFFF #CFE8FF #FFF1D0` | Nur `glitter`. Hex-Farben (leerzeichengetrennt), aus denen jeder Funken zufällig zieht. Leer = Bridge-Farbe. Je Bridge überschreibbar. |
+| `gc_direction`    | `forward`\|`backward`\|`bounce` | `forward` | Nur `gradient_chase`. Standard-Chaserichtung. Je Bridge überschreibbar, dort auch als kommagetrennte Liste (eine Richtung je Strip, siehe `gc_strip_lengths`). |
+| `gc_strip_lengths` | String (je Bridge) | leer (ein Strip) | Nur `gradient_chase`, nur je Bridge. Teilt die Kanäle in aufeinanderfolgende Gradient-Lightstrips auf, z. B. `"7,5"`. |
+| `gc_count`        | int (1–8)     | `1`      | Nur `gradient_chase`. Anzahl gleichzeitig laufender Chase-Bänder. Je Bridge überschreibbar. |
+| `gc_length`       | float (0.2–200) | `2.0`  | Nur `gradient_chase`. Breite des vollfarbigen Kerns eines Bands in Segmenten. Je Bridge überschreibbar. |
+| `gc_speed`        | float (0.01–50) | `4.0`  | Nur `gradient_chase`. Segmente pro Sekunde. Je Bridge überschreibbar. |
+| `gc_background_color` | Hex-String | `#000000` | Nur `gradient_chase`. Farbe außerhalb der Chase-Bänder. Je Bridge überschreibbar. |
+| `gc_chase_glitter` | bool         | `false`  | Nur `gradient_chase`. Bänder funkeln zusätzlich wie `glitter`. Je Bridge überschreibbar. |
+| `gc_background_pulse` | bool     | `false`  | Nur `gradient_chase`. Background pulsiert zusätzlich wie `pulse` statt ruhig auf `glow_low` zu bleiben. Je Bridge überschreibbar. |
 | `restore_state`   | bool          | `true`   | Lampenzustand vor dem Effekt sichern und danach wiederherstellen (für alle Bridges gleich). |
 | `duration`        | float (0–86400) | `0`    | Standard-Laufzeit in Sekunden (für alle Bridges gemeinsam; im `/start`-Body übersteuerbar). `0` = **unbegrenzt**, läuft bis `/stop`. |
 | `log_level`       | Liste         | `info`   | Ausführlichkeit des App-Protokolls (`trace`…`fatal`).           |
@@ -206,7 +214,7 @@ App nach einer Options-Änderung neu starten.
 | `/config` | GET     | Effektive Konfiguration inkl. `bridges`, `presets` (Namen der Effektsets) und `current_preset` – für das Web-UI und die Home-Assistant-Integration |
 | `/pair`   | POST    | Einmalige Kopplung mit einer Bridge. Body: `{"bridge_host": "..."}` (Pflicht bei mehr als einer konfigurierten Bridge) |
 | `/areas`  | GET     | Entertainment-Bereiche + Kanäle einer Bridge auflisten. Query `?bridge_host=...` (Pflicht bei mehr als einer gepaarten Bridge) |
-| `/start`  | POST    | Effekt auf allen konfigurierten (oder im Body übergebenen) Bridges gleichzeitig starten (antwortet sofort; DTLS-Handshakes laufen parallel im Hintergrund). Body optional: `duration` (Sek., Standard aus der Option `duration`, `0` = unbegrenzt), `fps`, `restore_state` (für alle Bridges gemeinsam); `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors` sind die Standardwerte für Bridges ohne eigene Einstellung. `bridges` (Liste von `{bridge_host, area_id, channel_order, effect?, color?, sweep_seconds?, chase_pause?, attack_ms?, release_ms?, glow_low?, glow_high?, glitter_interval_ms?, glitter_flash_ms?, glitter_colors?}`, `channel_order` als `[2,3,1,0,5,4]` oder `"2,3,1,0,5,4"`) übersteuert für diesen Aufruf die Option `bridges`. `preset` = Name eines gespeicherten Effektsets als Basis (weitere Body-Felder überschreiben es). Antwort enthält `bridges` (gestartet, je mit aufgelösten Parametern) + `failed_bridges` (übersprungen); `502` nur wenn keine Bridge startet. |
+| `/start`  | POST    | Effekt auf allen konfigurierten (oder im Body übergebenen) Bridges gleichzeitig starten (antwortet sofort; DTLS-Handshakes laufen parallel im Hintergrund). Body optional: `duration` (Sek., Standard aus der Option `duration`, `0` = unbegrenzt), `fps`, `restore_state` (für alle Bridges gemeinsam); `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors`, `gc_direction`, `gc_count`, `gc_length`, `gc_speed`, `gc_background_color`, `gc_chase_glitter`, `gc_background_pulse` sind die Standardwerte für Bridges ohne eigene Einstellung. `bridges` (Liste von `{bridge_host, area_id, channel_order, effect?, color?, sweep_seconds?, chase_pause?, attack_ms?, release_ms?, glow_low?, glow_high?, glitter_interval_ms?, glitter_flash_ms?, glitter_colors?, gc_direction?, gc_strip_lengths?, gc_count?, gc_length?, gc_speed?, gc_background_color?, gc_chase_glitter?, gc_background_pulse?}`, `channel_order` als `[2,3,1,0,5,4]` oder `"2,3,1,0,5,4"`) übersteuert für diesen Aufruf die Option `bridges`; `gc_strip_lengths` (nur `gradient_chase`, je Bridge, z. B. `[7,5]`) teilt die Kanäle dieser Bridge in mehrere Gradient-Lightstrips auf, `gc_direction` darf dann eine Liste sein (eine Richtung je Strip). `preset` = Name eines gespeicherten Effektsets als Basis (weitere Body-Felder überschreiben es). Antwort enthält `bridges` (gestartet, je mit aufgelösten Parametern) + `failed_bridges` (übersprungen); `502` nur wenn keine Bridge startet. |
 | `/stop`   | POST    | Effekt auf allen laufenden Bridges sofort stoppen                                       |
 | `/identify` | POST  | Lampen einer Bridge einzeln durchtesten (`channel_id` → Lampe). Body: `bridge_host` (Pflicht bei mehr als einer konfigurierten Bridge), `area_id` (optional, sonst aus der bridges-Konfiguration), `channel_id` (fehlt = alle nacheinander), `seconds`, `color`, `restore_state`. Ein DTLS-Handshake für den Durchlauf; belegt denselben Slot wie `/start`. |
 | `/presets` | GET / PUT / POST / DELETE | Effektsets verwalten (`/data/presets.json`). `GET` = alle (`{presets, names}`) bzw. `?name=…` eines. `PUT`/`POST` `{"name","config"}` = speichern/überschreiben (auch Datei-Upload). `DELETE ?name=…` = löschen. |
@@ -277,9 +285,10 @@ per Sprachbefehl schalten.
 
 ## 8. Effekt anpassen
 
-Effekt wählen: Option `effect` bzw. `"effect": "pulse"|"chase"|"glitter"` im
-`/start`-Body (Standard für Bridges ohne eigene Einstellung), oder `effect` in
-der jeweiligen Zeile der `bridges`-Option/-Liste für nur eine Bridge.
+Effekt wählen: Option `effect` bzw.
+`"effect": "pulse"|"chase"|"glitter"|"gradient_chase"` im `/start`-Body
+(Standard für Bridges ohne eigene Einstellung), oder `effect` in der
+jeweiligen Zeile der `bridges`-Option/-Liste für nur eine Bridge.
 
 **Beide Effekte:** `glow_low` / `glow_high` (Optionen, `/start`-Body **oder**
 je Bridge in `bridges`, `0`–`1`) legen fest, worauf die Lampen zwischen den
@@ -336,6 +345,36 @@ Die Effektfarbe kommt aus der jeweiligen Bridge-`color` (bzw. der Option/dem
 `/start`-Body-Standard); `chase.py` berechnet nur die Helligkeit, `main.py`
 setzt die Farbe über `LightColorCommand`. Bei `glitter` liefert `chase.py`
 zusätzlich je Funken eine Farbe aus `glitter_colors`.
+
+`gradient_chase` – **nur für Gradient Lightstrips** (jeder Kanal ist ein
+Farb-Segment, keine eigene Lampe): ein oder mehrere weich überblendete Bänder
+in der Bridge-`color` laufen über die Segmente, dazwischen
+`gc_background_color` (`RedAlertGradientChase` in `chase.py`):
+- `gc_count` – Anzahl gleichzeitig laufender Bänder, gleichmäßig verteilt
+  (Standard 1).
+- `gc_length` – Breite des vollfarbigen Kerns eines Bands in Segmenten
+  (Standard 2.0); der Übergang zur Background-Farbe an den Rändern ist weich
+  (~1 Segment) statt hart – daher „Gradient“.
+- `gc_speed` – Segmente pro Sekunde, die ein Band-Kopf zurücklegt
+  (Standard 4.0).
+- `gc_direction` – `forward`/`backward` laufen endlos umlaufend (wie
+  `chase`), `bounce` prallt an beiden Enden ab (Larson-Scanner) statt
+  umzulaufen.
+- `gc_chase_glitter` – lässt die Bänder zusätzlich wie `glitter` funkeln
+  (nutzt `glitter_interval_ms`/`glitter_flash_ms`/`glitter_colors`), Funken
+  nur innerhalb der Bänder.
+- `gc_background_pulse` – lässt den Hintergrund zusätzlich wie `pulse`
+  zwischen `glow_low` und `glow_high` pulsieren (nutzt `attack_ms`/
+  `release_ms`/`sweep_seconds`), statt ruhig auf `glow_low` zu bleiben; die
+  Bänder selbst bleiben davon unberührt auf `glow_high`.
+
+Mehrere Gradient Lightstrips lassen sich kombinieren, indem ihre Segmente in
+einer gemeinsamen Entertainment Area liegen – die Bridge sieht dann einen
+einzigen, durchgehenden `channel_ids`-Strip. `gc_strip_lengths` (nur je
+Bridge, z. B. `[7, 5]` bzw. `"7,5"`) teilt diesen kombinierten Strip wieder in
+die einzelnen physischen Lightstrips auf, sodass sich `gc_direction`
+**je Strip** setzen lässt (als Liste, z. B. `["forward", "backward"]`) – z. B.
+damit zwei gegenüberliegende Strips aufeinander zu oder auseinander laufen.
 
 `neutral` – die Lampen dieser Bridge werden **nicht** angesteuert: kein
 DTLS-Stream, kein Sichern/Wiederherstellen. Sinnvoll nur je Bridge

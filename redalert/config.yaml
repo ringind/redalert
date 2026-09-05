@@ -1,5 +1,5 @@
 name: "Red Alert Entertainment"
-version: "1.7.0"
+version: "1.8.0"
 slug: "redalert"
 description: >-
   Rotes Lauflicht über Philips-Hue-Lampen via Hue Entertainment API
@@ -33,6 +33,13 @@ options:
   glitter_interval_ms: 90.0
   glitter_flash_ms: 260.0
   glitter_colors: "#FFFFFF #CFE8FF #FFF1D0"
+  gc_direction: forward
+  gc_count: 1
+  gc_length: 2.0
+  gc_speed: 4.0
+  gc_background_color: "#000000"
+  gc_chase_glitter: false
+  gc_background_pulse: false
   restore_state: true
   duration: 0.0
   log_level: info
@@ -41,7 +48,7 @@ schema:
     - bridge_host: "str"
       area_id: "str"
       channel_order: "str?"
-      effect: "list(pulse|chase|glitter|neutral)?"
+      effect: "list(pulse|chase|glitter|gradient_chase|neutral)?"
       color: "match(^#[0-9A-Fa-f]{6}$)?"
       sweep_seconds: "float(0.3,5.0)?"
       chase_pause: "float(0,60)?"
@@ -52,7 +59,15 @@ schema:
       glitter_interval_ms: "float(5,5000)?"
       glitter_flash_ms: "float(20,5000)?"
       glitter_colors: "str?"
-  effect: "list(pulse|chase|glitter|neutral)?"
+      gc_direction: "str?"
+      gc_strip_lengths: "str?"
+      gc_count: "int(1,8)?"
+      gc_length: "float(0.2,200)?"
+      gc_speed: "float(0.01,50)?"
+      gc_background_color: "match(^#[0-9A-Fa-f]{6}$)?"
+      gc_chase_glitter: "bool?"
+      gc_background_pulse: "bool?"
+  effect: "list(pulse|chase|glitter|gradient_chase|neutral)?"
   color: "match(^#[0-9A-Fa-f]{6}$)?"
   fps: "int(5,50)"
   sweep_seconds: "float(0.3,5.0)"
@@ -64,6 +79,13 @@ schema:
   glitter_interval_ms: "float(5,5000)?"
   glitter_flash_ms: "float(20,5000)?"
   glitter_colors: "str?"
+  gc_direction: "list(forward|backward|bounce)?"
+  gc_count: "int(1,8)?"
+  gc_length: "float(0.2,200)?"
+  gc_speed: "float(0.01,50)?"
+  gc_background_color: "match(^#[0-9A-Fa-f]{6}$)?"
+  gc_chase_glitter: "bool?"
+  gc_background_pulse: "bool?"
   restore_state: "bool?"
   duration: "float(0,86400)?"
   log_level: "list(trace|debug|info|notice|warning|error|fatal)?"

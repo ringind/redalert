@@ -102,7 +102,7 @@
       Einstellung (siehe „1 · Bridges“).
     </p>
     <div class="row">
-      <div><label for="effect">Effekt</label><select id="effect"><option value="pulse">pulse (Takt)</option><option value="chase">chase (Lauflicht)</option><option value="glitter">glitter (Funkeln)</option><option value="neutral">neutral (nicht steuern)</option></select></div>
+      <div><label for="effect">Effekt</label><select id="effect"><option value="pulse">pulse (Takt)</option><option value="chase">chase (Lauflicht)</option><option value="glitter">glitter (Funkeln)</option><option value="gradient_chase">gradient_chase (Gradient-Strip)</option><option value="neutral">neutral (nicht steuern)</option></select></div>
       <div><label for="duration">Dauer (s, 0 = unbegrenzt)</label><input type="number" id="duration" min="0" step="1"></div>
       <div><label for="fps">fps</label><input type="number" id="fps" min="5" max="50" step="1"></div>
       <div><label for="sweep">sweep_seconds</label><input type="number" id="sweep" min="0.3" max="5" step="0.1"></div>
@@ -119,6 +119,16 @@
       <div style="flex:1 1 100%"><label for="gcolors">glitter: Farben (Hex, mit Leerzeichen getrennt – leer = Farbe oben)</label>
         <input type="text" id="gcolors" placeholder="#FFFFFF #CFE8FF #FFF1D0" style="width:100%"></div>
     </div>
+    <div class="row" style="margin-top:.6rem">
+      <div><label for="gcdir">gradient_chase: Richtung</label>
+        <select id="gcdir"><option value="forward">forward</option><option value="backward">backward</option><option value="bounce">bounce</option></select></div>
+      <div><label for="gccount">gradient_chase: Anzahl Chases</label><input type="number" id="gccount" min="1" max="8" step="1" placeholder="1"></div>
+      <div><label for="gclength">gradient_chase: Länge (Segmente)</label><input type="number" id="gclength" min="0.2" max="200" step="0.5" placeholder="2"></div>
+      <div><label for="gcspeed">gradient_chase: Geschwindigkeit (Segm./s)</label><input type="number" id="gcspeed" min="0.01" max="50" step="0.5" placeholder="4"></div>
+      <div><label for="gcbg">gradient_chase: Background-Farbe</label><input type="color" id="gcbg" value="#000000"></div>
+      <div><label><input type="checkbox" id="gcglitter"> Chases funkeln</label></div>
+      <div><label><input type="checkbox" id="gcpulse"> Background pulsiert</label></div>
+    </div>
     <p class="muted" style="margin:.5rem 0 0">
       <strong>Dauer</strong> (leer = Standard aus der App-Option <code>duration</code>):
       wie lange der Effekt läuft, bevor er von selbst endet (oder vorher per „Stop“).
@@ -134,6 +144,20 @@
       hektischer), <code>Blitzdauer</code> = wie schnell ein Funken abklingt (größer als
       das Intervall ⇒ mehrere Lampen gleichzeitig), <code>Farben</code> = Hex-Liste, aus
       der jeder Funken zufällig zieht (leer = Farbe oben).<br>
+      <strong>gradient_chase</strong> (nur <code>effect: gradient_chase</code>, für
+      Gradient Lightstrips): ein oder mehrere weich überblendete Bänder in der
+      Farbe oben laufen über die Segmente, dazwischen die
+      Background-Farbe. <code>Anzahl Chases</code>/<code>Länge</code> = wie viele
+      Bänder gleichzeitig und wie breit (in Segmenten); <code>Geschwindigkeit</code>
+      = Segmente pro Sekunde; <code>Richtung</code> = <code>forward</code>/
+      <code>backward</code> (umlaufend) oder <code>bounce</code> (prallt an
+      beiden Enden ab). Mit <code>Chases funkeln</code> sparkeln die Bänder
+      zusätzlich (wie <code>glitter</code>), mit <code>Background pulsiert</code>
+      atmet der Hintergrund zwischen <code>glow_low</code> und
+      <code>glow_high</code> (wie <code>pulse</code>) statt ruhig auf
+      <code>glow_low</code> zu bleiben. Mehrere kombinierte Gradient Lightstrips
+      (ein Entertainment-Bereich mit mehreren Geräten) und je Strip eine eigene
+      Richtung: siehe „Strip-Längen“ in der jeweiligen Bridge-Karte.<br>
       <strong>neutral</strong>: die Bridge wird nicht angefasst – so kann ein Effektset
       z. B. Bridge 1 laufen lassen und Bridge 2 auslassen.
     </p>
@@ -259,6 +283,7 @@
                 <option value="pulse">pulse (Takt)</option>
                 <option value="chase">chase (Lauflicht)</option>
                 <option value="glitter">glitter (Funkeln)</option>
+                <option value="gradient_chase">gradient_chase (Gradient-Strip)</option>
                 <option value="neutral">neutral (nicht steuern)</option>
               </select></div>
             <div><label for="b${i}-color">Farbe (Hex, leer = wie oben)</label>
@@ -281,6 +306,20 @@
               <input type="number" id="b${i}-gflash" min="20" max="5000" step="10" placeholder="wie oben"></div>
             <div style="flex:1 1 100%"><label for="b${i}-gcolors">glitter: Farben (Hex, leer = wie oben)</label>
               <input type="text" id="b${i}-gcolors" placeholder="#FFFFFF #CFE8FF #FFF1D0" style="width:100%"></div>
+            <div><label for="b${i}-gcdir">gradient_chase: Richtung(en)</label>
+              <input type="text" id="b${i}-gcdir" placeholder="wie oben, z. B. forward,backward"></div>
+            <div><label for="b${i}-gcstrips">gradient_chase: Strip-Längen</label>
+              <input type="text" id="b${i}-gcstrips" placeholder="1 Strip, z. B. 7,5"></div>
+            <div><label for="b${i}-gccount">gradient_chase: Anzahl Chases</label>
+              <input type="number" id="b${i}-gccount" min="1" max="8" step="1" placeholder="wie oben"></div>
+            <div><label for="b${i}-gclength">gradient_chase: Länge (Segmente)</label>
+              <input type="number" id="b${i}-gclength" min="0.2" max="200" step="0.5" placeholder="wie oben"></div>
+            <div><label for="b${i}-gcspeed">gradient_chase: Geschwindigkeit (Segm./s)</label>
+              <input type="number" id="b${i}-gcspeed" min="0.01" max="50" step="0.5" placeholder="wie oben"></div>
+            <div><label for="b${i}-gcbg">gradient_chase: Background-Farbe (leer = wie oben)</label>
+              <input type="text" id="b${i}-gcbg" placeholder="#000000"></div>
+            <div><label><input type="checkbox" id="b${i}-gcglitter"> Chases funkeln</label></div>
+            <div><label><input type="checkbox" id="b${i}-gcpulse"> Background pulsiert</label></div>
           </div>
         </details>
         <details style="margin-top:.5rem">
@@ -387,6 +426,9 @@
       "glow low / high (Standard)": `${data.glow_low} / ${data.glow_high}`,
       "glitter (Standard)": `${data.glitter_interval_ms} / ${data.glitter_flash_ms} ms · `
         + (data.glitter_colors ? data.glitter_colors : "Bridge-Farbe"),
+      "gradient_chase (Standard)": `${data.gc_direction} · ${data.gc_count}× · ${data.gc_length} Seg. · `
+        + `${data.gc_speed} Seg./s · bg ${data.gc_background_color}`
+        + (data.gc_chase_glitter ? " · Chases funkeln" : "") + (data.gc_background_pulse ? " · bg pulsiert" : ""),
       "Effektsets": (data.presets && data.presets.length) ? data.presets.join(", ") : "keine",
     };
     bridges.forEach((b, i) => {
@@ -417,6 +459,16 @@
       if (b.glitter_interval_ms != null && !$(`b${i}-ginterval`).value) $(`b${i}-ginterval`).value = b.glitter_interval_ms;
       if (b.glitter_flash_ms != null && !$(`b${i}-gflash`).value) $(`b${i}-gflash`).value = b.glitter_flash_ms;
       if (b.glitter_colors && !$(`b${i}-gcolors`).value) $(`b${i}-gcolors`).value = b.glitter_colors;
+      if (b.gc_direction && !$(`b${i}-gcdir`).value)
+        $(`b${i}-gcdir`).value = Array.isArray(b.gc_direction) ? b.gc_direction.join(",") : b.gc_direction;
+      if (b.gc_strip_lengths && b.gc_strip_lengths.length && !$(`b${i}-gcstrips`).value)
+        $(`b${i}-gcstrips`).value = b.gc_strip_lengths.join(",");
+      if (b.gc_count != null && !$(`b${i}-gccount`).value) $(`b${i}-gccount`).value = b.gc_count;
+      if (b.gc_length != null && !$(`b${i}-gclength`).value) $(`b${i}-gclength`).value = b.gc_length;
+      if (b.gc_speed != null && !$(`b${i}-gcspeed`).value) $(`b${i}-gcspeed`).value = b.gc_speed;
+      if (b.gc_background_color && !$(`b${i}-gcbg`).value) $(`b${i}-gcbg`).value = b.gc_background_color;
+      if (b.gc_chase_glitter != null) $(`b${i}-gcglitter`).checked = !!b.gc_chase_glitter;
+      if (b.gc_background_pulse != null) $(`b${i}-gcpulse`).checked = !!b.gc_background_pulse;
       setPill($(`b${i}-pill`), b.paired, b.paired ? "gepaart" : "nicht gepaart");
       renderIdentify(i);
     });
@@ -434,6 +486,13 @@
     if (data.glitter_interval_ms != null && !$("ginterval").value) $("ginterval").value = data.glitter_interval_ms;
     if (data.glitter_flash_ms != null && !$("gflash").value) $("gflash").value = data.glitter_flash_ms;
     if (data.glitter_colors && !$("gcolors").value) $("gcolors").value = data.glitter_colors;
+    if (data.gc_direction && !$("gcdir").dataset.touched) $("gcdir").value = data.gc_direction;
+    if (data.gc_count != null && !$("gccount").value) $("gccount").value = data.gc_count;
+    if (data.gc_length != null && !$("gclength").value) $("gclength").value = data.gc_length;
+    if (data.gc_speed != null && !$("gcspeed").value) $("gcspeed").value = data.gc_speed;
+    if (data.gc_background_color && !$("gcbg").dataset.touched) $("gcbg").value = data.gc_background_color.toLowerCase();
+    if (data.gc_chase_glitter != null && !$("gcglitter").dataset.touched) $("gcglitter").checked = !!data.gc_chase_glitter;
+    if (data.gc_background_pulse != null && !$("gcpulse").dataset.touched) $("gcpulse").checked = !!data.gc_background_pulse;
     if (data.color && !$("color").dataset.touched) $("color").value = data.color.toLowerCase();
     loadPresets();
   }
@@ -441,6 +500,10 @@
   $("btn-refresh").onclick = refresh;
   $("effect").onchange = () => { $("effect").dataset.touched = "1"; };
   $("color").oninput = () => { $("color").dataset.touched = "1"; };
+  $("gcdir").onchange = () => { $("gcdir").dataset.touched = "1"; };
+  $("gcbg").oninput = () => { $("gcbg").dataset.touched = "1"; };
+  $("gcglitter").onchange = () => { $("gcglitter").dataset.touched = "1"; };
+  $("gcpulse").onchange = () => { $("gcpulse").dataset.touched = "1"; };
 
   // Formular (Bridges + Steuerung) -> /start-Body. Basis für Start und Set-Speichern.
   function collectBody() {
@@ -450,6 +513,7 @@
       ["attack", "attack_ms"], ["release", "release_ms"],
       ["glowlow", "glow_low"], ["glowhigh", "glow_high"],
       ["ginterval", "glitter_interval_ms"], ["gflash", "glitter_flash_ms"],
+      ["gccount", "gc_count"], ["gclength", "gc_length"], ["gcspeed", "gc_speed"],
     ];
     const bridges = [];
     for (let i = 0; i < BRIDGE_COUNT; i++) {
@@ -467,14 +531,20 @@
       if (ownColor) entry.color = ownColor;
       const ownGcolors = $(`b${i}-gcolors`).value.trim();
       if (ownGcolors) entry.glitter_colors = ownGcolors;
-      for (const [suf, key] of [["sweep", "sweep_seconds"], ["chpause", "chase_pause"],
-        ["attack", "attack_ms"], ["release", "release_ms"], ["glowlow", "glow_low"],
-        ["glowhigh", "glow_high"], ["ginterval", "glitter_interval_ms"], ["gflash", "glitter_flash_ms"]]) {
+      const ownGcDir = $(`b${i}-gcdir`).value.trim();
+      if (ownGcDir) entry.gc_direction = ownGcDir;
+      const ownGcStrips = $(`b${i}-gcstrips`).value.trim();
+      if (ownGcStrips) entry.gc_strip_lengths = ownGcStrips;
+      const ownGcBg = $(`b${i}-gcbg`).value.trim();
+      if (ownGcBg) entry.gc_background_color = ownGcBg;
+      if ($(`b${i}-gcglitter`).checked) entry.gc_chase_glitter = true;
+      if ($(`b${i}-gcpulse`).checked) entry.gc_background_pulse = true;
+      for (const [suf, key] of sharedNum) {
         if ($(`b${i}-${suf}`).value !== "") entry[key] = Number($(`b${i}-${suf}`).value);
       }
       bridges.push(entry);
     }
-    const body = { color: $("color").value, effect: $("effect").value };
+    const body = { color: $("color").value, effect: $("effect").value, gc_direction: $("gcdir").value };
     if (bridges.length) body.bridges = bridges;
     if ($("duration").value !== "") body.duration = Number($("duration").value);
     if ($("fps").value !== "") body.fps = Number($("fps").value);
@@ -483,6 +553,9 @@
     }
     const gcolors = $("gcolors").value.trim();
     if (gcolors) body.glitter_colors = gcolors;
+    body.gc_background_color = $("gcbg").value;
+    body.gc_chase_glitter = $("gcglitter").checked;
+    body.gc_background_pulse = $("gcpulse").checked;
     return body;
   }
 
@@ -503,6 +576,13 @@
     setVal("ginterval", b.glitter_interval_ms);
     setVal("gflash", b.glitter_flash_ms);
     $("gcolors").value = b.glitter_colors || "";
+    if (b.gc_direction) { $("gcdir").value = b.gc_direction; $("gcdir").dataset.touched = "1"; }
+    setVal("gccount", b.gc_count);
+    setVal("gclength", b.gc_length);
+    setVal("gcspeed", b.gc_speed);
+    if (b.gc_background_color) { $("gcbg").value = b.gc_background_color; $("gcbg").dataset.touched = "1"; }
+    $("gcglitter").checked = !!b.gc_chase_glitter; $("gcglitter").dataset.touched = "1";
+    $("gcpulse").checked = !!b.gc_background_pulse; $("gcpulse").dataset.touched = "1";
     const arr = Array.isArray(b.bridges) ? b.bridges : [];
     for (let i = 0; i < BRIDGE_COUNT; i++) {
       const e = arr[i] || {};
@@ -513,6 +593,11 @@
       $(`b${i}-effect`).value = e.effect || "";
       $(`b${i}-color`).value = e.color || "";
       $(`b${i}-gcolors`).value = e.glitter_colors || "";
+      $(`b${i}-gcdir`).value = Array.isArray(e.gc_direction) ? e.gc_direction.join(",") : (e.gc_direction || "");
+      $(`b${i}-gcstrips`).value = Array.isArray(e.gc_strip_lengths) ? e.gc_strip_lengths.join(",") : (e.gc_strip_lengths || "");
+      $(`b${i}-gcbg`).value = e.gc_background_color || "";
+      $(`b${i}-gcglitter`).checked = !!e.gc_chase_glitter;
+      $(`b${i}-gcpulse`).checked = !!e.gc_background_pulse;
       setVal(`b${i}-sweep`, e.sweep_seconds);
       setVal(`b${i}-chpause`, e.chase_pause);
       setVal(`b${i}-attack`, e.attack_ms);
@@ -521,6 +606,9 @@
       setVal(`b${i}-glowhigh`, e.glow_high);
       setVal(`b${i}-ginterval`, e.glitter_interval_ms);
       setVal(`b${i}-gflash`, e.glitter_flash_ms);
+      setVal(`b${i}-gccount`, e.gc_count);
+      setVal(`b${i}-gclength`, e.gc_length);
+      setVal(`b${i}-gcspeed`, e.gc_speed);
       renderIdentify(i);
     }
   }

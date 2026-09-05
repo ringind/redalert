@@ -27,7 +27,7 @@ import aiohttp
 from aiohttp import web
 from hue_entertainment import EntertainmentSession, HueEntertainmentAPI, LightColorCommand
 
-from chase import RedAlertChase, RedAlertGlitter, RedAlertPulse
+from chase import RedAlertChase, RedAlertGlitter, RedAlertGradientChase, RedAlertPulse
 
 DATA_DIR = Path(os.environ.get("REDALERT_DATA_DIR", "/data"))
 CRED_FILE = DATA_DIR / "credentials.json"
@@ -78,7 +78,30 @@ options = load_json(OPTIONS_FILE, {})
 
 def _effect_name(value) -> str:
     v = str(value or "").lower()
-    return v if v in ("pulse", "chase", "glitter", "neutral") else "pulse"
+    return v if v in ("pulse", "chase", "glitter", "gradient_chase", "neutral") else "pulse"
+
+
+_GC_DIRECTIONS = ("forward", "backward", "bounce")
+
+
+def _gc_direction(value) -> str:
+    v = str(value or "").lower()
+    return v if v in _GC_DIRECTIONS else "forward"
+
+
+def _parse_gc_directions(value) -> str | list[str] | None:
+    """``gc_direction`` aus Option/Body: eine Richtung (gilt für alle Strips
+    dieser Bridge) oder eine Liste/kommagetrennte Liste (eine je Strip, siehe
+    ``gc_strip_lengths``). ``None``/leer -> ``None`` (Standard "forward")."""
+    if not value:
+        return None
+    if isinstance(value, (list, tuple)):
+        parts = [str(x) for x in value]
+    else:
+        parts = [p for p in str(value).replace(",", " ").split() if p]
+    if not parts:
+        return None
+    return _gc_direction(parts[0]) if len(parts) == 1 else [_gc_direction(p) for p in parts]
 
 
 def _parse_color_list(value) -> list[tuple[int, int, int]]:
@@ -102,10 +125,12 @@ def _colors_to_hex(colors) -> str:
     return " ".join("#{:02X}{:02X}{:02X}".format(*c) for c in colors)
 
 
-def _parse_channel_order(value) -> list[int] | None:
-    """Kanalreihenfolge aus Option/Body: Liste[int] oder "3,1,0,2,5,4".
+def _parse_int_list(value) -> list[int] | None:
+    """Liste[int] aus Option/Body: Liste[int] oder "3,1,0,2,5,4".
 
-    ``None`` / leer -> ``None`` (Bereichs-Standard). Ungültiges -> ``ValueError``.
+    Für ``channel_order`` (Kanalreihenfolge) und ``gc_strip_lengths``
+    (Segmentzahl je Gradient-Lightstrip innerhalb einer Bridge) genutzt.
+    ``None`` / leer -> ``None`` (Standard). Ungültiges -> ``ValueError``.
     """
     if value is None:
         return None
@@ -113,7 +138,7 @@ def _parse_channel_order(value) -> list[int] | None:
         parts = [p for p in value.replace(",", " ").split() if p]
         value = parts
     if not isinstance(value, (list, tuple)):
-        raise ValueError("channel_order muss eine Liste sein")
+        raise ValueError("muss eine Liste sein")
     order = [int(x) for x in value]  # wirft ValueError bei Nicht-Zahlen
     return order or None
 
@@ -130,6 +155,9 @@ _BRIDGE_NUMERIC_OVERRIDES = (
     ("glow_high", float),
     ("glitter_interval_ms", float),
     ("glitter_flash_ms", float),
+    ("gc_count", int),
+    ("gc_length", float),
+    ("gc_speed", float),
 )
 
 
@@ -141,8 +169,14 @@ def _parse_bridges_option(value) -> list[dict]:
     ``channel_order`` und die Effekt-Parameter (``effect``, ``color``,
     ``sweep_seconds``, ``chase_pause``, ``attack_ms``, ``release_ms``,
     ``glow_low``, ``glow_high``, ``glitter_interval_ms``, ``glitter_flash_ms``,
-    ``glitter_colors``) sind optional und überschreiben nur für diese eine
-    Bridge den sonst gültigen Standard (Body bzw. App-Option). Unvollständige
+    ``glitter_colors``, ``gc_direction``, ``gc_strip_lengths``, ``gc_count``,
+    ``gc_length``, ``gc_speed``, ``gc_background_color``, ``gc_chase_glitter``,
+    ``gc_background_pulse``) sind optional und überschreiben nur für diese eine
+    Bridge den sonst gültigen Standard (Body bzw. App-Option). ``gc_strip_lengths``
+    teilt die Kanäle dieser Bridge (nach ``channel_order``) in aufeinanderfolgende
+    Gradient-Lightstrips auf, z. B. ``[7, 5]`` für zwei kombinierte Strips zu 7 bzw.
+    5 Segmenten; ``gc_direction`` kann dann ebenfalls eine Liste sein (eine
+    Richtung je Strip) statt eines einzelnen Werts für alle Strips. Unvollständige
     Einträge werden mit einer Warnung übersprungen, mehr als ``MAX_BRIDGES``
     Einträge werden abgeschnitten.
     """
@@ -160,7 +194,7 @@ def _parse_bridges_option(value) -> list[dict]:
             log.warning("bridges-Eintrag ohne bridge_host/area_id ignoriert: %r", entry)
             continue
         try:
-            order = _parse_channel_order(entry.get("channel_order"))
+            order = _parse_int_list(entry.get("channel_order"))
         except (TypeError, ValueError):
             log.warning("channel_order für Bridge %s ungültig – ignoriert", host)
             order = None
@@ -173,6 +207,24 @@ def _parse_bridges_option(value) -> list[dict]:
             palette = _parse_color_list(entry["glitter_colors"])
             if palette:
                 norm["glitter_colors"] = palette
+        if entry.get("gc_direction"):
+            direction = _parse_gc_directions(entry["gc_direction"])
+            if direction is not None:
+                norm["gc_direction"] = direction
+        if entry.get("gc_strip_lengths"):
+            try:
+                lengths = _parse_int_list(entry["gc_strip_lengths"])
+            except (TypeError, ValueError):
+                log.warning("Bridge %s: gc_strip_lengths ungültig – ignoriert", host)
+                lengths = None
+            if lengths:
+                norm["gc_strip_lengths"] = lengths
+        if entry.get("gc_background_color"):
+            norm["gc_background_color"] = hex_to_rgb(entry["gc_background_color"])
+        if "gc_chase_glitter" in entry:
+            norm["gc_chase_glitter"] = bool(entry["gc_chase_glitter"])
+        if "gc_background_pulse" in entry:
+            norm["gc_background_pulse"] = bool(entry["gc_background_pulse"])
         for key, cast in _BRIDGE_NUMERIC_OVERRIDES:
             raw = entry.get(key)
             if raw is None or raw == "":
@@ -236,6 +288,14 @@ state = {
     "glitter_flash_ms": max(1.0, float(options.get("glitter_flash_ms", 260.0))),
     # Roh-String wie konfiguriert; leer -> je Bridge die Einzelfarbe.
     "glitter_colors": str(options.get("glitter_colors", "") or ""),
+    # Nur effect gradient_chase (Gradient Lightstrips):
+    "gc_direction": _gc_direction(options.get("gc_direction", "forward")),
+    "gc_count": max(1, int(options.get("gc_count", 1))),
+    "gc_length": min(max(float(options.get("gc_length", 2.0)), 0.2), 200.0),
+    "gc_speed": max(0.01, float(options.get("gc_speed", 4.0))),
+    "gc_background_color": hex_to_rgb(options.get("gc_background_color", "#000000")),
+    "gc_chase_glitter": bool(options.get("gc_chase_glitter", False)),
+    "gc_background_pulse": bool(options.get("gc_background_pulse", False)),
     "restore_state": bool(options.get("restore_state", True)),
     # 0 = unbegrenzt (läuft bis POST /stop).
     "duration": max(0.0, float(options.get("duration", 0.0))),
@@ -249,13 +309,17 @@ state = {
 
 log.info(
     "Konfiguration: bridges=%s (Standard) effect=%s color=%s fps=%s sweep=%ss chase_pause=%ss "
-    "attack=%sms release=%sms glow=%s..%s glitter=%sms/%sms colors=%r duration=%ss (0=unbegrenzt) "
-    "presets=%s",
+    "attack=%sms release=%sms glow=%s..%s glitter=%sms/%sms colors=%r "
+    "gradient_chase=dir=%s/count=%s/length=%s/speed=%s bg=%s glitter=%s pulse=%s "
+    "duration=%ss (0=unbegrenzt) presets=%s",
     [
         {"bridge_host": b["bridge_host"], "area_id": b["area_id"], "channel_order": b["channel_order"],
          **{k: b[k] for k in ("effect", "color", "sweep_seconds", "chase_pause",
                                "attack_ms", "release_ms", "glow_low", "glow_high",
-                               "glitter_interval_ms", "glitter_flash_ms", "glitter_colors") if k in b}}
+                               "glitter_interval_ms", "glitter_flash_ms", "glitter_colors",
+                               "gc_direction", "gc_strip_lengths", "gc_count", "gc_length",
+                               "gc_speed", "gc_background_color", "gc_chase_glitter",
+                               "gc_background_pulse") if k in b}}
         for b in state["bridges"]
     ],
     state["effect"],
@@ -270,6 +334,13 @@ log.info(
     state["glitter_interval_ms"],
     state["glitter_flash_ms"],
     state["glitter_colors"] or "(Bridge-Farbe)",
+    state["gc_direction"],
+    state["gc_count"],
+    state["gc_length"],
+    state["gc_speed"],
+    "#{:02X}{:02X}{:02X}".format(*state["gc_background_color"]),
+    state["gc_chase_glitter"],
+    state["gc_background_pulse"],
     state["duration"],
     sorted(state["presets"].keys()) or "(keine)",
 )
@@ -384,6 +455,13 @@ def _bridge_color_hex(b: dict) -> str | None:
     return f"#{cr:02X}{cg:02X}{cb:02X}"
 
 
+def _bridge_field_hex(b: dict, key: str) -> str | None:
+    if key not in b:
+        return None
+    cr, cg, cb = b[key]
+    return f"#{cr:02X}{cg:02X}{cb:02X}"
+
+
 async def handle_config(request: web.Request) -> web.Response:
     task = state["task"]
     r, g, b = state["color"]
@@ -406,6 +484,14 @@ async def handle_config(request: web.Request) -> web.Response:
                     "glitter_interval_ms": bg.get("glitter_interval_ms"),
                     "glitter_flash_ms": bg.get("glitter_flash_ms"),
                     "glitter_colors": _colors_to_hex(bg["glitter_colors"]) if "glitter_colors" in bg else None,
+                    "gc_direction": bg.get("gc_direction"),
+                    "gc_strip_lengths": bg.get("gc_strip_lengths"),
+                    "gc_count": bg.get("gc_count"),
+                    "gc_length": bg.get("gc_length"),
+                    "gc_speed": bg.get("gc_speed"),
+                    "gc_background_color": _bridge_field_hex(bg, "gc_background_color"),
+                    "gc_chase_glitter": bg.get("gc_chase_glitter"),
+                    "gc_background_pulse": bg.get("gc_background_pulse"),
                 }
                 for bg in state["bridges"]
             ],
@@ -421,6 +507,13 @@ async def handle_config(request: web.Request) -> web.Response:
             "glitter_interval_ms": state["glitter_interval_ms"],
             "glitter_flash_ms": state["glitter_flash_ms"],
             "glitter_colors": state["glitter_colors"],
+            "gc_direction": state["gc_direction"],
+            "gc_count": state["gc_count"],
+            "gc_length": state["gc_length"],
+            "gc_speed": state["gc_speed"],
+            "gc_background_color": "#{:02X}{:02X}{:02X}".format(*state["gc_background_color"]),
+            "gc_chase_glitter": state["gc_chase_glitter"],
+            "gc_background_pulse": state["gc_background_pulse"],
             "restore_state": state["restore_state"],
             "default_duration_s": state["duration"],
             "presets": sorted(state["presets"].keys()),
@@ -509,6 +602,49 @@ async def handle_areas(request: web.Request) -> web.Response:
 # --------------------------------------------------------------------------- #
 # Effekt starten / stoppen
 # --------------------------------------------------------------------------- #
+def _gradient_chase_chans(
+    ctx: dict, elapsed: float, dt: float, glow_low: float, glow_span: float
+) -> list[tuple[float, float, float, float]]:
+    """Ein Frame ``effect: gradient_chase`` als ``(r, g, b, scaled_level)`` je Kanal.
+
+    Holt pro Strip (``ctx["gradient_chase"]``, je eine ``RedAlertGradientChase``-
+    Instanz) den 0..1-Blend und reiht die Ergebnisse in Kanalreihenfolge
+    aneinander; interpoliert je Kanal zwischen ``gc_background_color`` (Blend 0)
+    und ``color`` (Blend 1). Die Chase-Bänder liegen dabei immer auf
+    ``glow_high`` (wie der Kopf bei ``chase``); der Background ruht ohne
+    ``gc_background_pulse`` auf ``glow_low`` und pulsiert mit gesetztem
+    Parameter stattdessen zwischen ``glow_low`` und ``glow_high`` (gleiches
+    Timing wie ``effect: pulse``). Chase-Glitter legt zusätzlich Funken nur
+    innerhalb der Bänder (Blend > 0.5) obendrauf.
+    """
+    blend: list[float] = []
+    for gc in ctx["gradient_chase"]:
+        blend.extend(gc.blend_for(elapsed))
+    if ctx["gc_background_pulse"]:
+        target = RedAlertPulse.periodic(elapsed, ctx["sweep_seconds"])
+        bg_level = ctx["pulse"].step(target, dt)[0]
+    else:
+        bg_level = 0.0
+    cr, cg, cb = ctx["color"]
+    br, bgc, bb = ctx["gc_background_color"]
+    glitter_vals = ctx["glitter"].step(dt) if ctx["gc_chase_glitter"] else None
+    chans = []
+    for idx, bl in enumerate(blend):
+        r = br + (cr - br) * bl
+        g = bgc + (cg - bgc) * bl
+        b = bb + (cb - bb) * bl
+        level = bl + (1.0 - bl) * bg_level
+        if glitter_vals is not None and bl > 0.5:
+            glvl, (gr, gg, gb) = glitter_vals[idx]
+            if glvl > 0:
+                r += (gr - r) * glvl
+                g += (gg - g) * glvl
+                b += (gb - b) * glvl
+                level = max(level, glvl)
+        chans.append((r, g, b, glow_low + glow_span * level))
+    return chans
+
+
 async def _run_effect(
     bridge_ctxs: list[dict],
     duration: float,
@@ -519,11 +655,12 @@ async def _run_effect(
     Effekt/Farbe/Timing (siehe ``handle_start._resolve``).
 
     Jede Bridge bekommt ihre eigenen ``RedAlertChase``/``RedAlertPulse``/
-    ``RedAlertGlitter``-Instanzen (Kanalzahl, Timing und Effekt-Art können pro
-    Bridge unterschiedlich sein). Damit sie trotzdem **gleichzeitig** loslegen statt
-    nacheinander, starten alle DTLS-Handshakes parallel, und die gemeinsame
-    ``elapsed``-Uhr beginnt erst, wenn alle fertig sind (oder fehlgeschlagen
-    sind – eine fehlschlagende Bridge fliegt best-effort raus).
+    ``RedAlertGlitter``/``RedAlertGradientChase``-Instanzen (Kanalzahl, Timing
+    und Effekt-Art können pro Bridge unterschiedlich sein). Damit sie trotzdem
+    **gleichzeitig** loslegen statt nacheinander, starten alle DTLS-Handshakes
+    parallel, und die gemeinsame ``elapsed``-Uhr beginnt erst, wenn alle fertig
+    sind (oder fehlgeschlagen sind – eine fehlschlagende Bridge fliegt
+    best-effort raus).
     """
     for ctx in bridge_ctxs:
         n = len(ctx["channel_ids"])
@@ -537,6 +674,19 @@ async def _run_effect(
             flash_s=ctx["glitter_flash_ms"] / 1000.0,
             palette=ctx["glitter_palette"],
         )
+        # Ein RedAlertGradientChase je Gradient-Lightstrip dieser Bridge (siehe
+        # gc_strips in handle_start._resolve) – jeder mit seiner eigenen
+        # Chase-Richtung, aber gemeinsamer count/length/speed.
+        ctx["gradient_chase"] = [
+            RedAlertGradientChase(
+                num_lights=strip["length"],
+                direction=strip["direction"],
+                count=ctx["gc_count"],
+                length_segments=ctx["gc_length"],
+                speed_segments_per_s=ctx["gc_speed"],
+            )
+            for strip in ctx["gc_strips"]
+        ]
     frames = 0
     snapshots: dict[str, list[dict]] = {}
     loop = asyncio.get_event_loop()
@@ -589,6 +739,8 @@ async def _run_effect(
                         (r, g, b, glow_low + glow_span * lvl)
                         for lvl, (r, g, b) in ctx["glitter"].step(dt)
                     ]
+                elif ctx["effect"] == "gradient_chase":
+                    chans = _gradient_chase_chans(ctx, elapsed, dt, glow_low, glow_span)
                 else:
                     if ctx["effect"] == "chase":
                         levels = ctx["chase"].brightness_for(elapsed)
@@ -773,13 +925,21 @@ async def handle_start(request: web.Request) -> web.Response:
     Body optional: ``duration``, ``fps``, ``restore_state`` gelten für **alle**
     Bridges gemeinsam. ``effect``, ``color``, ``sweep_seconds``, ``chase_pause``,
     ``attack_ms``, ``release_ms``, ``glow_low``, ``glow_high``,
-    ``glitter_interval_ms``, ``glitter_flash_ms``, ``glitter_colors`` im Body
-    sind die **Standardwerte** für Bridges, die diese Parameter nicht selbst
-    setzen. ``bridges`` (Liste von ``{bridge_host, area_id, channel_order,
-    effect?, color?, sweep_seconds?, chase_pause?, attack_ms?, release_ms?,
-    glow_low?, glow_high?, glitter_interval_ms?, glitter_flash_ms?,
-    glitter_colors?}``) übersteuert für diesen Aufruf die Option ``bridges`` –
-    jede Bridge kann ihren eigenen Effekt/Farbe/Timing haben. ``effect:
+    ``glitter_interval_ms``, ``glitter_flash_ms``, ``glitter_colors``,
+    ``gc_direction``, ``gc_count``, ``gc_length``, ``gc_speed``,
+    ``gc_background_color``, ``gc_chase_glitter``, ``gc_background_pulse`` im
+    Body sind die **Standardwerte** für Bridges, die diese Parameter nicht
+    selbst setzen. ``bridges`` (Liste von ``{bridge_host, area_id,
+    channel_order, effect?, color?, sweep_seconds?, chase_pause?, attack_ms?,
+    release_ms?, glow_low?, glow_high?, glitter_interval_ms?,
+    glitter_flash_ms?, glitter_colors?, gc_direction?, gc_strip_lengths?,
+    gc_count?, gc_length?, gc_speed?, gc_background_color?, gc_chase_glitter?,
+    gc_background_pulse?}``) übersteuert für diesen Aufruf die Option
+    ``bridges`` – jede Bridge kann ihren eigenen Effekt/Farbe/Timing haben.
+    ``gc_strip_lengths`` (nur ``effect: gradient_chase``, je Bridge, z. B.
+    ``[7, 5]``) teilt die Kanäle dieser Bridge in aufeinanderfolgende Gradient-
+    Lightstrips auf; ``gc_direction`` kann dann ebenfalls eine Liste sein
+    (eine Chase-Richtung je Strip statt eines Werts für alle). ``effect:
     neutral`` (als Standard oder je Bridge) lässt die betreffende(n) Bridge(s)
     komplett unangetastet – kein Stream, kein Sichern/Wiederherstellen –, sodass
     in einem Effektset eine Bridge laufen und eine andere aus sein kann. Sind
@@ -859,6 +1019,27 @@ async def handle_start(request: web.Request) -> web.Response:
     defaults["glitter_palette"] = _parse_color_list(
         _gc if _gc is not None else state["glitter_colors"]
     )
+    # Nur effect gradient_chase (Gradient Lightstrips).
+    defaults["gc_direction"] = _parse_gc_directions(body.get("gc_direction")) or state["gc_direction"]
+    try:
+        defaults["gc_count"] = max(1, int(body.get("gc_count") or state["gc_count"]))
+    except (TypeError, ValueError):
+        defaults["gc_count"] = state["gc_count"]
+    try:
+        defaults["gc_length"] = min(max(float(body.get("gc_length") or state["gc_length"]), 0.2), 200.0)
+    except (TypeError, ValueError):
+        defaults["gc_length"] = state["gc_length"]
+    try:
+        defaults["gc_speed"] = max(0.01, float(body.get("gc_speed") or state["gc_speed"]))
+    except (TypeError, ValueError):
+        defaults["gc_speed"] = state["gc_speed"]
+    defaults["gc_background_color"] = (
+        hex_to_rgb(body["gc_background_color"])
+        if body.get("gc_background_color")
+        else state["gc_background_color"]
+    )
+    defaults["gc_chase_glitter"] = bool(body.get("gc_chase_glitter", state["gc_chase_glitter"]))
+    defaults["gc_background_pulse"] = bool(body.get("gc_background_pulse", state["gc_background_pulse"]))
 
     async def _resolve(cfg: dict) -> dict:
         """Eine Bridge auflösen: gepaart? erreichbar? area_id/Kanäle gültig?
@@ -900,6 +1081,34 @@ async def handle_start(request: web.Request) -> web.Response:
         glow_high = max(glow_high, glow_low)
         color = cfg.get("color", defaults["color"])
         palette = cfg.get("glitter_colors", defaults["glitter_palette"]) or [color]
+
+        # gradient_chase: Kanäle dieser Bridge in aufeinanderfolgende Gradient-
+        # Lightstrips aufteilen (gc_strip_lengths), jeder mit eigener
+        # Chase-Richtung (gc_direction darf eine Liste sein, eine je Strip).
+        # Passt die Summe nicht zur tatsächlichen Kanalzahl, gilt best-effort
+        # ein einzelner Strip über alle Kanäle dieser Bridge.
+        gc_strip_lengths = cfg.get("gc_strip_lengths")
+        if gc_strip_lengths and sum(gc_strip_lengths) == len(channel_ids):
+            strip_lengths = list(gc_strip_lengths)
+        else:
+            if gc_strip_lengths:
+                log.warning(
+                    "Bridge %s: gc_strip_lengths %s ergibt nicht %d Kanäle – "
+                    "ein einzelner Strip wird verwendet",
+                    host, gc_strip_lengths, len(channel_ids),
+                )
+            strip_lengths = [len(channel_ids)]
+        gc_direction_cfg = cfg.get("gc_direction", defaults["gc_direction"])
+        directions = list(gc_direction_cfg) if isinstance(gc_direction_cfg, list) else [gc_direction_cfg]
+        if len(directions) < len(strip_lengths):
+            directions += [directions[-1]] * (len(strip_lengths) - len(directions))
+        elif len(directions) > len(strip_lengths):
+            directions = directions[: len(strip_lengths)]
+        gc_strips = [
+            {"length": length, "direction": direction}
+            for length, direction in zip(strip_lengths, directions)
+        ]
+
         return {
             "bridge_host": host,
             "area_id": cfg["area_id"],
@@ -917,6 +1126,13 @@ async def handle_start(request: web.Request) -> web.Response:
             "glitter_interval_ms": max(1.0, cfg.get("glitter_interval_ms", defaults["glitter_interval_ms"])),
             "glitter_flash_ms": max(1.0, cfg.get("glitter_flash_ms", defaults["glitter_flash_ms"])),
             "glitter_palette": palette,
+            "gc_strips": gc_strips,
+            "gc_count": max(1, cfg.get("gc_count", defaults["gc_count"])),
+            "gc_length": min(max(cfg.get("gc_length", defaults["gc_length"]), 0.2), 200.0),
+            "gc_speed": max(0.01, cfg.get("gc_speed", defaults["gc_speed"])),
+            "gc_background_color": cfg.get("gc_background_color", defaults["gc_background_color"]),
+            "gc_chase_glitter": cfg.get("gc_chase_glitter", defaults["gc_chase_glitter"]),
+            "gc_background_pulse": cfg.get("gc_background_pulse", defaults["gc_background_pulse"]),
         }
 
     # "neutral": diese Bridge wird gar nicht angefasst (kein DTLS, kein
@@ -981,6 +1197,13 @@ async def handle_start(request: web.Request) -> web.Response:
                 "glitter_interval_ms": round(c["glitter_interval_ms"]),
                 "glitter_flash_ms": round(c["glitter_flash_ms"]),
                 "glitter_colors": _colors_to_hex(c["glitter_palette"]),
+                "gc_strips": c["gc_strips"],
+                "gc_count": c["gc_count"],
+                "gc_length": c["gc_length"],
+                "gc_speed": c["gc_speed"],
+                "gc_background_color": "#{:02X}{:02X}{:02X}".format(*c["gc_background_color"]),
+                "gc_chase_glitter": c["gc_chase_glitter"],
+                "gc_background_pulse": c["gc_background_pulse"],
             }
             for c in ctxs
         ],

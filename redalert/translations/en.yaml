@@ -4,9 +4,11 @@ configuration:
     description: >-
       Up to 3 Hue Bridges that play simultaneously. Add one row per bridge;
       effect/color/sweep_seconds/chase_pause/attack_ms/release_ms/glow_low/
-      glow_high/glitter_interval_ms/glitter_flash_ms/glitter_colors are
-      optional per bridge – leave empty and the like-named option below is used
-      as this bridge's default.
+      glow_high/glitter_interval_ms/glitter_flash_ms/glitter_colors/
+      gc_direction/gc_strip_lengths/gc_count/gc_length/gc_speed/
+      gc_background_color/gc_chase_glitter/gc_background_pulse are optional
+      per bridge – leave empty and the like-named option below is used as
+      this bridge's default.
     bridge_host:
       name: Hue Bridge IP
       description: >-
@@ -78,6 +80,52 @@ configuration:
       description: >-
         Overrides the glitter_colors option for this one bridge (hex colours
         separated by spaces). Empty = use the default below.
+    gc_direction:
+      name: gradient_chase direction(s) (this bridge)
+      description: >-
+        Overrides the gc_direction option for this one bridge. A single value
+        (forward/backward/bounce) applies to every strip on this bridge; once
+        split into several strips with gc_strip_lengths, this can also be a
+        comma-separated list (one direction per strip, e.g.
+        "forward,backward"). Empty = use the default below.
+    gc_strip_lengths:
+      name: gradient_chase strip lengths (this bridge)
+      description: >-
+        effect gradient_chase only. Splits this bridge's channels (after
+        channel_order) into consecutive Gradient Lightstrips, as a
+        comma-separated list of segment counts, e.g. "7,5" for two combined
+        strips of 7 and 5 segments. Must sum to the channel count, otherwise
+        a single strip spanning all channels is used. Empty = one strip.
+    gc_count:
+      name: gradient_chase chase count (this bridge)
+      description: >-
+        Overrides the gc_count option for this one bridge. Empty = use the
+        default below.
+    gc_length:
+      name: gradient_chase chase length (this bridge)
+      description: >-
+        Overrides the gc_length option for this one bridge. Empty = use the
+        default below.
+    gc_speed:
+      name: gradient_chase speed (this bridge)
+      description: >-
+        Overrides the gc_speed option for this one bridge. Empty = use the
+        default below.
+    gc_background_color:
+      name: gradient_chase background colour (this bridge)
+      description: >-
+        Overrides the gc_background_color option for this one bridge. Empty =
+        use the default below.
+    gc_chase_glitter:
+      name: gradient_chase chases sparkle (this bridge)
+      description: >-
+        Overrides the gc_chase_glitter option for this one bridge. Empty =
+        use the default below.
+    gc_background_pulse:
+      name: gradient_chase background pulses (this bridge)
+      description: >-
+        Overrides the gc_background_pulse option for this one bridge. Empty =
+        use the default below.
   effect:
     name: Effect (default)
     description: >-
@@ -85,8 +133,10 @@ configuration:
       together: 0 to 100 % on the beat, back to 0 between pulses (fall faster
       than rise). chase = a comet runs evenly around the channels, dragging a
       tail behind it. glitter = each lamp sparkles on its own in very short
-      bursts of changing colour (diamond twinkle). neutral = the lamps are not
-      driven at all (e.g. for an effect set where only some bridges run).
+      bursts of changing colour (diamond twinkle). gradient_chase = Gradient
+      Lightstrips only: one or more soft-edged two-colour bands slide along
+      the segments, see the gc_* options. neutral = the lamps are not driven
+      at all (e.g. for an effect set where only some bridges run).
   color:
     name: Colour (default)
     description: >-
@@ -151,6 +201,47 @@ configuration:
       effect glitter only. List of hex colours (space-separated, e.g.
       "#FFFFFF #CFE8FF #FFF1D0") each spark picks from at random. Empty = the
       colour of the respective bridge.
+  gc_direction:
+    name: gradient_chase direction (default)
+    description: >-
+      effect gradient_chase only. Default chase direction for bridges without
+      their own setting: forward (looping), backward (looping) or bounce
+      (reflects off both ends like a Larson scanner instead of looping).
+  gc_count:
+    name: gradient_chase chase count (default)
+    description: >-
+      effect gradient_chase only. How many chase bands run at once, evenly
+      spaced along the strip (default 1).
+  gc_length:
+    name: gradient_chase chase length (default)
+    description: >-
+      effect gradient_chase only. Width of a chase band's solid-colour core
+      in segments (default 2.0), with a soft edge fading to the background
+      colour.
+  gc_speed:
+    name: gradient_chase speed (default)
+    description: >-
+      effect gradient_chase only. How many segments a chase head crosses per
+      second (default 4.0).
+  gc_background_color:
+    name: gradient_chase background colour (default)
+    description: >-
+      effect gradient_chase only. Default hex colour outside the chase bands
+      (default #000000, off). The chase colour comes from the color
+      option/field.
+  gc_chase_glitter:
+    name: gradient_chase chases sparkle (default)
+    description: >-
+      effect gradient_chase only. Makes the chase bands additionally sparkle
+      like effect glitter (uses glitter_interval_ms/glitter_flash_ms/
+      glitter_colors), sparks only inside the bands.
+  gc_background_pulse:
+    name: gradient_chase background pulses (default)
+    description: >-
+      effect gradient_chase only. Makes the background additionally pulse
+      between glow_low and glow_high like effect pulse (uses attack_ms/
+      release_ms/sweep_seconds), instead of resting quietly at glow_low. The
+      chase bands stay unaffected at glow_high.
   restore_state:
     name: Restore light state
     description: >-
