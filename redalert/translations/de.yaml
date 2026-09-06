@@ -6,7 +6,9 @@ configuration:
       hinzufügen; effect/color/sweep_seconds/chase_pause/attack_ms/release_ms/
       glow_low/glow_high/glitter_interval_ms/glitter_flash_ms/glitter_colors/
       gc_direction/gc_strip_lengths/gc_count/gc_length/gc_speed/
-      gc_background_color/gc_chase_glitter/gc_background_pulse sind je Bridge
+      gc_background_color/gc_chase_glitter/gc_background_pulse/
+      police_color2/lightning_interval_ms/lightning_flash_ms/meteor_count/
+      meteor_speed/firework_interval_ms/firework_speed sind je Bridge
       optional – leer gelassen gilt der gleichnamige Wert weiter unten als
       Standard für diese Bridge.
     bridge_host:
@@ -127,6 +129,41 @@ configuration:
       description: >-
         Überschreibt die Option gc_background_pulse für diese eine Bridge.
         Leer = Standard weiter unten.
+    police_color2:
+      name: police – zweite Farbe (diese Bridge)
+      description: >-
+        Überschreibt die Option police_color2 für diese eine Bridge. Leer =
+        Standard weiter unten.
+    lightning_interval_ms:
+      name: lightning – Blitz-Intervall ms (diese Bridge)
+      description: >-
+        Überschreibt die Option lightning_interval_ms für diese eine Bridge.
+        Leer = Standard weiter unten.
+    lightning_flash_ms:
+      name: lightning – Blitzdauer ms (diese Bridge)
+      description: >-
+        Überschreibt die Option lightning_flash_ms für diese eine Bridge.
+        Leer = Standard weiter unten.
+    meteor_count:
+      name: meteor – Anzahl (diese Bridge)
+      description: >-
+        Überschreibt die Option meteor_count für diese eine Bridge. Leer =
+        Standard weiter unten.
+    meteor_speed:
+      name: meteor – Geschwindigkeit (diese Bridge)
+      description: >-
+        Überschreibt die Option meteor_speed für diese eine Bridge. Leer =
+        Standard weiter unten.
+    firework_interval_ms:
+      name: firework – Intervall ms (diese Bridge)
+      description: >-
+        Überschreibt die Option firework_interval_ms für diese eine Bridge.
+        Leer = Standard weiter unten.
+    firework_speed:
+      name: firework – Geschwindigkeit (diese Bridge)
+      description: >-
+        Überschreibt die Option firework_speed für diese eine Bridge. Leer =
+        Standard weiter unten.
   effect:
     name: Effekt (Standard)
     description: >-
@@ -135,11 +172,20 @@ configuration:
       (Abfallen schneller als Aufblenden). comet = ein Komet läuft gleichmäßig
       umlaufend über die Kanäle und zieht einen Schweif hinter sich her.
       glitter = jede Lampe funkelt für sich in sehr kurzen Abständen in
-      wechselnden Farben auf (Diamant-Gefunkel). chase = nur für
-      Gradient Lightstrips: ein oder mehrere weich überblendete Zwei-Farben-
-      Bänder laufen über die Segmente, siehe die gc_*-Optionen. neutral = die
-      Lampen werden nicht gesteuert (z. B. für ein Effektset, in dem nur
-      einzelne Bridges laufen).
+      wechselnden Farben auf (Diamant-Gefunkel). police = zwei Lampengruppen
+      blinken abwechselnd in zwei Farben (Alarmlicht). lightning = alle
+      Lampen blitzen gemeinsam in zufälligen Abständen auf, manchmal ein
+      Doppelblitz (Gewitter). heartbeat = ein Doppelpuls (lub-dub) wie ein
+      Herzschlag. aurora = langsame, weiche Farbwellen wandern über die
+      Lampen (Polarlicht). rainbow = ein durchgehender, phasenversetzter
+      Regenbogen-Farbumlauf über die Lampen. meteor = mehrere unabhängige
+      Meteore mit zufälliger Geschwindigkeit und Helligkeit. wipe = ein
+      Auffüll-Balken läuft einmal über die Kanäle, hält kurz voll und beginnt
+      von vorn. firework = wiederkehrende Feuerwerk-Ausbrüche von der Mitte
+      aus. chase = nur für Gradient Lightstrips: ein oder mehrere weich
+      überblendete Zwei-Farben-Bänder laufen über die Segmente, siehe die
+      gc_*-Optionen. neutral = die Lampen werden nicht gesteuert (z. B. für
+      ein Effektset, in dem nur einzelne Bridges laufen).
   color:
     name: Farbe (Standard)
     description: >-
@@ -246,6 +292,45 @@ configuration:
       effect pulse zwischen glow_low und glow_high pulsieren (nutzt
       attack_ms/release_ms/sweep_seconds), statt ruhig auf glow_low zu
       bleiben. Die Chase-Bänder bleiben davon unberührt auf glow_high.
+  police_color2:
+    name: police – zweite Farbe (Standard)
+    description: >-
+      Nur effect police. Standard-Hex-Farbe der zweiten Lampengruppe (die
+      erste nutzt die Option/das Feld color). Vorgabe #0000FF (Blau), zusammen
+      mit dem roten Standard also klassisches Blaulicht.
+  lightning_interval_ms:
+    name: lightning – Blitz-Intervall ms (Standard)
+    description: >-
+      Nur effect lightning. Mittlerer Abstand in Millisekunden zwischen zwei
+      Blitzen, die alle Lampen einer Bridge gemeinsam aufleuchten lassen
+      (Standard 4000 = alle ~4 s ein Blitz, gelegentlich mit Doppelschlag).
+  lightning_flash_ms:
+    name: lightning – Blitzdauer ms (Standard)
+    description: >-
+      Nur effect lightning. Abkling-Zeitkonstante eines Blitzes in
+      Millisekunden – wie schnell er nach dem Aufleuchten wieder verblasst
+      (Standard 500).
+  meteor_count:
+    name: meteor – Anzahl (Standard)
+    description: >-
+      Nur effect meteor. Wie viele unabhängige Meteore gleichzeitig über die
+      Kanäle laufen, jeder mit eigener zufälliger Geschwindigkeit, Richtung
+      und Helligkeit (Standard 3).
+  meteor_speed:
+    name: meteor – Geschwindigkeit (Standard)
+    description: >-
+      Nur effect meteor. Mittlere Geschwindigkeit der Meteore in Kanälen pro
+      Sekunde – jeder Meteor weicht zufällig davon ab (Standard 1.2).
+  firework_interval_ms:
+    name: firework – Intervall ms (Standard)
+    description: >-
+      Nur effect firework. Wie oft (in Millisekunden) ein neuer
+      Feuerwerk-Ausbruch von der Mitte der Kanäle losläuft (Standard 3000).
+  firework_speed:
+    name: firework – Geschwindigkeit (Standard)
+    description: >-
+      Nur effect firework. Wie schnell sich der Ausbruch von der Mitte nach
+      außen ausbreitet, in Kanälen pro Sekunde (Standard 6.0).
   restore_state:
     name: Lichtzustand wiederherstellen
     description: >-

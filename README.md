@@ -12,12 +12,19 @@ Timing je Bridge) lassen sich benannt speichern und per Knopfdruck, Sprache
 oder Automation abrufen, von der namensgebenden roten Alarmstufe bis zu einer
 ruhigen Ambiente-Beleuchtung oder einem Diamant-Funkeln zur Party. Unterstützt
 **bis zu 3 Hue Bridges**, die gleichzeitig loslegen – jede mit ihrem eigenen
-Effekt, ihrer eigenen Farbe und eigenem Timing. Effekte: `pulse` – alle Lampen
-einer Bridge blenden gemeinsam auf und ab (Standard) –, `comet` – ein
+Effekt, ihrer eigenen Farbe und eigenem Timing. Zwölf Effekte: `pulse` – alle
+Lampen einer Bridge blenden gemeinsam auf und ab (Standard) –, `comet` – ein
 umlaufender Komet, der einen Schweif hinter sich herzieht –, `glitter` – jede
 Lampe funkelt für sich in sehr kurzen Abständen in wechselnden Farben auf
-(Diamant-Gefunkel) – und `chase` – für Gradient Lightstrips: weich
-überblendete Farbbänder laufen über die Segmente. Farbe(n), Timing und
+(Diamant-Gefunkel) –, `police` – zwei Lampengruppen blinken abwechselnd in
+zwei Farben (Alarmlicht) –, `lightning` – alle Lampen blitzen gemeinsam in
+zufälligen Abständen auf (Gewitter) –, `heartbeat` – ein Doppelpuls wie ein
+Herzschlag –, `aurora` – langsame Farbwellen wandern über die Lampen
+(Polarlicht) –, `rainbow` – ein phasenversetzter Regenbogen-Farbumlauf –,
+`meteor` – mehrere unabhängige Meteore mit zufälliger Geschwindigkeit –,
+`wipe` – ein Auffüll-Balken läuft über die Kanäle –, `firework` –
+wiederkehrende Ausbrüche von der Mitte aus – und `chase` – für Gradient
+Lightstrips: weich überblendete Farbbänder laufen über die Segmente. Farbe(n), Timing und
 Helligkeit sind für jeden Effekt frei einstellbar (Web-UI-Farbwähler, App-
 Option oder REST-Body), nicht nur Rot. Mit `effect: neutral` je Bridge bleibt
 eine Bridge ganz unangetastet, während die anderen laufen. Läuft für eine
@@ -81,10 +88,9 @@ HA-Automation ──┬──> media_player.play_media (optional: dein Sound, z.
                          hält je Bridge (bis zu 3) einen
                          eigenen DTLS-Stream offen (~25 Hz),
                          jede mit eigenem Effekt/Farbe/Timing
-                         (pulse: alle Lampen im Takt;
-                          comet: umlaufender Komet mit Schweif;
-                          glitter: Diamant-Gefunkel;
-                          chase: Gradient-Lightstrip-Bänder)
+                         (12 Effekte: pulse, comet, glitter, police,
+                          lightning, heartbeat, aurora, rainbow, meteor,
+                          wipe, firework, chase – siehe §8)
                                         │
                               ┌─────────┼─────────┐
                               ▼         ▼         ▼
@@ -194,8 +200,8 @@ App nach einer Options-Änderung neu starten.
 
 | Option           | Typ           | Standard | Bedeutung                                                       |
 |-------------------|--------------|----------|-------------------------------------------------------------------|
-| `bridges`         | Liste (max. 3) | leer   | Eine Zeile pro Bridge: `bridge_host` (IP), `area_id` (siehe Schritt 4), optional `channel_order` sowie je Bridge optional `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors`, `gc_direction`, `gc_strip_lengths`, `gc_count`, `gc_length`, `gc_speed`, `gc_background_color`, `gc_chase_glitter`, `gc_background_pulse` (überschreiben die gleichnamige Option unten nur für diese Bridge). |
-| `effect`          | `pulse`\|`comet`\|`glitter`\|`chase`\|`neutral` | `pulse` | Standard für Bridges ohne eigene Einstellung. `pulse` = alle Lampen zusammen `glow_low` → `glow_high` → `glow_low` im Takt. `comet` = umlaufender Komet mit Schweif. `glitter` = jede Lampe funkelt für sich in kurzen Farb-Blitzen auf. `chase` = nur für Gradient Lightstrips: weich überblendete Zwei-Farben-Bänder laufen über die Segmente (siehe §8). `neutral` (nur je Bridge sinnvoll) = Bridge wird nicht gesteuert. |
+| `bridges`         | Liste (max. 3) | leer   | Eine Zeile pro Bridge: `bridge_host` (IP), `area_id` (siehe Schritt 4), optional `channel_order` sowie je Bridge optional `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors`, `gc_direction`, `gc_strip_lengths`, `gc_count`, `gc_length`, `gc_speed`, `gc_background_color`, `gc_chase_glitter`, `gc_background_pulse`, `police_color2`, `lightning_interval_ms`, `lightning_flash_ms`, `meteor_count`, `meteor_speed`, `firework_interval_ms`, `firework_speed` (überschreiben die gleichnamige Option unten nur für diese Bridge). |
+| `effect`          | `pulse`\|`comet`\|`glitter`\|`police`\|`lightning`\|`heartbeat`\|`aurora`\|`rainbow`\|`meteor`\|`wipe`\|`firework`\|`chase`\|`neutral` | `pulse` | Standard für Bridges ohne eigene Einstellung, siehe §8 für alle Effekte im Detail. `neutral` (nur je Bridge sinnvoll) = Bridge wird nicht gesteuert. |
 | `color`           | Hex-String    | `#FF0000`| Standard-Farbe für Bridges ohne eigene Einstellung.                |
 | `fps`             | int (5–50)    | 25       | Frames/Sekunde des DTLS-Streams (für alle Bridges gleich).         |
 | `sweep_seconds`   | float (0.3–5) | 1.4      | Standard für Bridges ohne eigene Einstellung. `comet`: Dauer einer vollen Umrundung. `pulse`: Zyklusdauer. |
@@ -215,6 +221,13 @@ App nach einer Options-Änderung neu starten.
 | `gc_background_color` | Hex-String | `#000000` | Nur `chase`. Farbe außerhalb der Chase-Bänder. Je Bridge überschreibbar. |
 | `gc_chase_glitter` | bool         | `false`  | Nur `chase`. Bänder funkeln zusätzlich wie `glitter`. Je Bridge überschreibbar. |
 | `gc_background_pulse` | bool     | `false`  | Nur `chase`. Background pulsiert zusätzlich wie `pulse` statt ruhig auf `glow_low` zu bleiben. Je Bridge überschreibbar. |
+| `police_color2`   | Hex-String    | `#0000FF`| Nur `police`. Farbe der zweiten Lampengruppe (erste nutzt `color`). Je Bridge überschreibbar. |
+| `lightning_interval_ms` | float (50–60000) | `4000` | Nur `lightning`. Mittlerer Abstand (ms) zwischen zwei gemeinsamen Blitzen. Je Bridge überschreibbar. |
+| `lightning_flash_ms` | float (20–5000) | `500` | Nur `lightning`. Abkling-Zeitkonstante (ms) eines Blitzes. Je Bridge überschreibbar. |
+| `meteor_count`    | int (1–8)     | `3`      | Nur `meteor`. Anzahl unabhängiger Meteore. Je Bridge überschreibbar. |
+| `meteor_speed`    | float (0.05–20) | `1.2`  | Nur `meteor`. Mittlere Geschwindigkeit in Kanälen/Sekunde. Je Bridge überschreibbar. |
+| `firework_interval_ms` | float (200–60000) | `3000` | Nur `firework`. Wie oft (ms) ein neuer Ausbruch startet. Je Bridge überschreibbar. |
+| `firework_speed`  | float (0.5–50) | `6.0`   | Nur `firework`. Ausbreitungsgeschwindigkeit in Kanälen/Sekunde. Je Bridge überschreibbar. |
 | `restore_state`   | bool          | `true`   | Lampenzustand vor dem Effekt sichern und danach wiederherstellen (für alle Bridges gleich). |
 | `duration`        | float (0–86400) | `0`    | Standard-Laufzeit in Sekunden (für alle Bridges gemeinsam; im `/start`-Body übersteuerbar). `0` = **unbegrenzt**, läuft bis `/stop`. |
 | `log_level`       | Liste         | `info`   | Ausführlichkeit des App-Protokolls (`trace`…`fatal`).           |
@@ -228,7 +241,7 @@ App nach einer Options-Änderung neu starten.
 | `/config` | GET     | Effektive Konfiguration inkl. `bridges`, `presets` (Namen der Effektsets) und `current_preset` – für das Web-UI und die Home-Assistant-Integration |
 | `/pair`   | POST    | Einmalige Kopplung mit einer Bridge. Body: `{"bridge_host": "..."}` (Pflicht bei mehr als einer konfigurierten Bridge) |
 | `/areas`  | GET     | Entertainment-Bereiche + Kanäle einer Bridge auflisten. Query `?bridge_host=...` (Pflicht bei mehr als einer gepaarten Bridge) |
-| `/start`  | POST    | Effekt auf allen konfigurierten (oder im Body übergebenen) Bridges gleichzeitig starten (antwortet sofort; DTLS-Handshakes laufen parallel im Hintergrund). Body optional: `duration` (Sek., Standard aus der Option `duration`, `0` = unbegrenzt), `fps`, `restore_state` (für alle Bridges gemeinsam); `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors`, `gc_direction`, `gc_count`, `gc_length`, `gc_speed`, `gc_background_color`, `gc_chase_glitter`, `gc_background_pulse` sind die Standardwerte für Bridges ohne eigene Einstellung. `bridges` (Liste von `{bridge_host, area_id, channel_order, effect?, color?, sweep_seconds?, chase_pause?, attack_ms?, release_ms?, glow_low?, glow_high?, glitter_interval_ms?, glitter_flash_ms?, glitter_colors?, gc_direction?, gc_strip_lengths?, gc_count?, gc_length?, gc_speed?, gc_background_color?, gc_chase_glitter?, gc_background_pulse?}`, `channel_order` als `[2,3,1,0,5,4]` oder `"2,3,1,0,5,4"`) übersteuert für diesen Aufruf die Option `bridges`; `gc_strip_lengths` (nur `chase`, je Bridge, z. B. `[7,5]`) teilt die Kanäle dieser Bridge in mehrere Gradient-Lightstrips auf, `gc_direction` darf dann eine Liste sein (eine Richtung je Strip). `preset` = Name eines gespeicherten Effektsets als Basis (weitere Body-Felder überschreiben es). Antwort enthält `bridges` (gestartet, je mit aufgelösten Parametern) + `failed_bridges` (übersprungen); `502` nur wenn keine Bridge startet. |
+| `/start`  | POST    | Effekt auf allen konfigurierten (oder im Body übergebenen) Bridges gleichzeitig starten (antwortet sofort; DTLS-Handshakes laufen parallel im Hintergrund). Body optional: `duration` (Sek., Standard aus der Option `duration`, `0` = unbegrenzt), `fps`, `restore_state` (für alle Bridges gemeinsam); `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors`, `gc_direction`, `gc_count`, `gc_length`, `gc_speed`, `gc_background_color`, `gc_chase_glitter`, `gc_background_pulse`, `police_color2`, `lightning_interval_ms`, `lightning_flash_ms`, `meteor_count`, `meteor_speed`, `firework_interval_ms`, `firework_speed` sind die Standardwerte für Bridges ohne eigene Einstellung. `bridges` (Liste von `{bridge_host, area_id, channel_order, effect?, color?, sweep_seconds?, chase_pause?, attack_ms?, release_ms?, glow_low?, glow_high?, glitter_interval_ms?, glitter_flash_ms?, glitter_colors?, gc_direction?, gc_strip_lengths?, gc_count?, gc_length?, gc_speed?, gc_background_color?, gc_chase_glitter?, gc_background_pulse?, police_color2?, lightning_interval_ms?, lightning_flash_ms?, meteor_count?, meteor_speed?, firework_interval_ms?, firework_speed?}`, `channel_order` als `[2,3,1,0,5,4]` oder `"2,3,1,0,5,4"`) übersteuert für diesen Aufruf die Option `bridges`; `gc_strip_lengths` (nur `chase`, je Bridge, z. B. `[7,5]`) teilt die Kanäle dieser Bridge in mehrere Gradient-Lightstrips auf, `gc_direction` darf dann eine Liste sein (eine Richtung je Strip). `preset` = Name eines gespeicherten Effektsets als Basis (weitere Body-Felder überschreiben es). Antwort enthält `bridges` (gestartet, je mit aufgelösten Parametern) + `failed_bridges` (übersprungen); `502` nur wenn keine Bridge startet. |
 | `/stop`   | POST    | Effekt auf allen laufenden Bridges sofort stoppen                                       |
 | `/identify` | POST  | Lampen einer Bridge einzeln durchtesten (`channel_id` → Lampe). Body: `bridge_host` (Pflicht bei mehr als einer konfigurierten Bridge), `area_id` (optional, sonst aus der bridges-Konfiguration), `channel_id` (fehlt = alle nacheinander), `seconds`, `color`, `restore_state`. Ein DTLS-Handshake für den Durchlauf; belegt denselben Slot wie `/start`. |
 | `/presets` | GET / PUT / POST / DELETE | Effektsets verwalten (`/data/presets.json`). `GET` = alle (`{presets, names}`) bzw. `?name=…` eines. `PUT`/`POST` `{"name","config"}` = speichern/überschreiben (auch Datei-Upload). `DELETE ?name=…` = löschen. |
@@ -303,7 +316,7 @@ per Sprachbefehl schalten.
 ## 8. Effekt anpassen
 
 Effekt wählen: Option `effect` bzw.
-`"effect": "pulse"|"comet"|"glitter"|"chase"` im `/start`-Body
+`"effect": "pulse"|"comet"|"glitter"|"police"|"lightning"|"heartbeat"|"aurora"|"rainbow"|"meteor"|"wipe"|"firework"|"chase"` im `/start`-Body
 (Standard für Bridges ohne eigene Einstellung), oder `effect` in der
 jeweiligen Zeile der `bridges`-Option/-Liste für nur eine Bridge.
 
@@ -362,6 +375,65 @@ Die Effektfarbe kommt aus der jeweiligen Bridge-`color` (bzw. der Option/dem
 `/start`-Body-Standard); `chase.py` berechnet nur die Helligkeit, `main.py`
 setzt die Farbe über `LightColorCommand`. Bei `glitter` liefert `chase.py`
 zusätzlich je Funken eine Farbe aus `glitter_colors`.
+
+`police` – Alarmlicht; jede zweite Lampe (nach Kanalreihenfolge) bildet eine
+Gruppe, die beiden Gruppen blinken abwechselnd (`RedAlertPolice` in
+`chase.py`):
+- `sweep_seconds` – Dauer eines vollen Wechsels (beide Gruppen einmal an).
+- `police_color2` – Farbe der zweiten Gruppe (Option, `/start`-Body **oder**
+  je Bridge in `bridges`, Standard `#0000FF`); die erste Gruppe nutzt die
+  normale Bridge-`color`.
+
+`lightning` – Gewitter; alle Lampen einer Bridge blitzen **gemeinsam** auf
+(anders als `glitter`, wo jede Lampe für sich funkelt), mit gelegentlichem
+Doppelblitz (`RedAlertLightning` in `chase.py`):
+- `lightning_interval_ms` – mittlerer Abstand in Millisekunden zwischen zwei
+  Blitzen (Option, `/start`-Body **oder** je Bridge in `bridges`, Standard
+  4000).
+- `lightning_flash_ms` – Abkling-Zeitkonstante eines Blitzes in Millisekunden
+  (Standard 500).
+
+`heartbeat` – ein Doppelpuls („lub-dub“) statt eines einzelnen Pulses,
+läuft durch dasselbe Beat-Gate/Slew wie `pulse` (`RedAlertPulse.heartbeat`
+in `chase.py`):
+- `sweep_seconds` – Dauer eines vollen Herzschlags (beide Beats).
+- `attack_ms` / `release_ms` – wie bei `pulse` die Auf-/Abblendzeit der
+  beiden Beats.
+
+`aurora` – Polarlicht; langsame, weich überblendete Farbwellen wandern über
+die Lampen (`RedAlertAurora` in `chase.py`, berechnet die Farbe direkt statt
+einer Helligkeitskurve):
+- `glitter_colors` – Palette, durch die die Welle blendet (leer = nur die
+  Bridge-`color`, dann ohne Farbwechsel).
+- `sweep_seconds` – eine volle Welle dauert `4 × sweep_seconds`.
+
+`rainbow` – ein durchgehender Regenbogen-Farbumlauf, je Lampe phasenversetzt,
+sodass ein Farbverlauf sichtbar über die Lampen wandert statt dass alle
+gleichzeitig die Farbe wechseln (`RedAlertRainbow` in `chase.py`):
+- `sweep_seconds` – eine volle Umdrehung dauert `4 × sweep_seconds`;
+  Helligkeit ist konstant auf `glow_high`.
+
+`meteor` – mehrere unabhängige Kometen mit zufälliger Geschwindigkeit,
+Richtung und Spitzenhelligkeit – eine dichtere, unregelmäßigere Variante von
+`comet` (`RedAlertMeteor` in `chase.py`):
+- `meteor_count` – Anzahl gleichzeitig laufender Meteore (Option,
+  `/start`-Body **oder** je Bridge in `bridges`, Standard 3).
+- `meteor_speed` – mittlere Geschwindigkeit in Kanälen/Sekunde, jeder Meteor
+  weicht zufällig davon ab, auch rückwärts (Standard 1.2).
+
+`wipe` – ein Auffüll-Balken läuft einmal über die Kanäle, hält kurz voll und
+beginnt von vorn (`RedAlertWipe` in `chase.py`):
+- `sweep_seconds` – Dauer des Auffüllens von Kanal 0 bis zum letzten Kanal.
+- `chase_pause` – wie lange der Balken voll gefüllt hält, bevor er
+  zurückgesetzt wird (Standard 0).
+
+`firework` – wiederkehrende Ausbrüche von der mittleren Lampe/dem mittleren
+Kanal aus, die nach außen laufen und verblassen (`RedAlertFirework` in
+`chase.py`):
+- `firework_interval_ms` – wie oft ein neuer Ausbruch startet (Option,
+  `/start`-Body **oder** je Bridge in `bridges`, Standard 3000).
+- `firework_speed` – Ausbreitungsgeschwindigkeit in Kanälen/Sekunde
+  (Standard 6.0).
 
 `chase` – **nur für Gradient Lightstrips** (jeder Kanal ist ein
 Farb-Segment, keine eigene Lampe): ein oder mehrere weich überblendete Bänder
@@ -450,6 +522,6 @@ selbst im Unterordner `redalert/`.
 │       ├── etc/s6-overlay/…      Service-Definition (Start, bashio-Logging)
 │       └── app/
 │           ├── main.py           REST-Server + Streaming-Loop + Ingress-Panel
-│           ├── chase.py          Effekt-Mathematik (Komet, pulse, glitter-Funkeln, Gradient-chase)
+│           ├── chase.py          Effekt-Mathematik (12 Effekte, siehe §8)
 │           └── panel.html        Web-UI (Steuerung)
 ```

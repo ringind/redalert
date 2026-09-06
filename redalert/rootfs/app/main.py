@@ -4,7 +4,14 @@ Der Dienst hält pro konfigurierter Hue Bridge (bis zu 3) einen eigenen
 DTLS-Stream offen und schiebt ~25 Frames/s an die Kanäle: ein gemeinsames
 Auf-/Ab-Blenden aller Lampen einer Bridge (``effect: pulse``, Standard), ein
 umlaufender Komet mit Schweif (``effect: comet``), ein Diamant-Gefunkel aus
-kurzen Farb-Blitzen (``effect: glitter``) oder – für Gradient Lightstrips –
+kurzen Farb-Blitzen (``effect: glitter``), ein Alarmlicht-Blinken zweier
+Lampengruppen (``effect: police``), ein Gewitter aus zufälligen
+Sammel-Blitzen (``effect: lightning``), ein Herzschlag-Doppelpuls
+(``effect: heartbeat``), langsam wandernde Polarlicht-Farbwellen
+(``effect: aurora``), ein phasenversetzter Regenbogen-Farbumlauf
+(``effect: rainbow``), mehrere unabhängige Meteore (``effect: meteor``), ein
+sequenzieller Auffüll-Balken (``effect: wipe``), wiederkehrende
+Feuerwerk-Ausbrüche (``effect: firework``) oder – für Gradient Lightstrips –
 weich überblendete Farbbänder (``effect: chase``).
 Effekt, Farbe und Timing sind pro Bridge einzeln einstellbar; alle Bridges
 starten trotzdem gleichzeitig (gemeinsame Start-Uhr nach parallelen
@@ -28,7 +35,19 @@ import aiohttp
 from aiohttp import web
 from hue_entertainment import EntertainmentSession, HueEntertainmentAPI, LightColorCommand
 
-from chase import RedAlertChase, RedAlertComet, RedAlertGlitter, RedAlertPulse
+from chase import (
+    RedAlertAurora,
+    RedAlertChase,
+    RedAlertComet,
+    RedAlertFirework,
+    RedAlertGlitter,
+    RedAlertLightning,
+    RedAlertMeteor,
+    RedAlertPolice,
+    RedAlertPulse,
+    RedAlertRainbow,
+    RedAlertWipe,
+)
 
 DATA_DIR = Path(os.environ.get("REDALERT_DATA_DIR", "/data"))
 CRED_FILE = DATA_DIR / "credentials.json"
@@ -81,9 +100,26 @@ def hex_to_rgb(value: str) -> tuple[int, int, int]:
 options = load_json(OPTIONS_FILE, {})
 
 
+_EFFECTS = (
+    "pulse",
+    "comet",
+    "glitter",
+    "chase",
+    "police",
+    "lightning",
+    "heartbeat",
+    "aurora",
+    "rainbow",
+    "meteor",
+    "wipe",
+    "firework",
+    "neutral",
+)
+
+
 def _effect_name(value) -> str:
     v = str(value or "").lower()
-    return v if v in ("pulse", "comet", "glitter", "chase", "neutral") else "pulse"
+    return v if v in _EFFECTS else "pulse"
 
 
 _GC_DIRECTIONS = ("forward", "backward", "bounce")
@@ -163,6 +199,12 @@ _BRIDGE_NUMERIC_OVERRIDES = (
     ("gc_count", int),
     ("gc_length", float),
     ("gc_speed", float),
+    ("meteor_count", int),
+    ("meteor_speed", float),
+    ("firework_interval_ms", float),
+    ("firework_speed", float),
+    ("lightning_interval_ms", float),
+    ("lightning_flash_ms", float),
 )
 
 
@@ -176,7 +218,10 @@ def _parse_bridges_option(value) -> list[dict]:
     ``glow_low``, ``glow_high``, ``glitter_interval_ms``, ``glitter_flash_ms``,
     ``glitter_colors``, ``gc_direction``, ``gc_strip_lengths``, ``gc_count``,
     ``gc_length``, ``gc_speed``, ``gc_background_color``, ``gc_chase_glitter``,
-    ``gc_background_pulse``) sind optional und überschreiben nur für diese eine
+    ``gc_background_pulse``, ``police_color2``, ``meteor_count``,
+    ``meteor_speed``, ``firework_interval_ms``, ``firework_speed``,
+    ``lightning_interval_ms``, ``lightning_flash_ms``) sind
+    optional und überschreiben nur für diese eine
     Bridge den sonst gültigen Standard (Body bzw. App-Option). ``gc_strip_lengths``
     teilt die Kanäle dieser Bridge (nach ``channel_order``) in aufeinanderfolgende
     Gradient-Lightstrips auf, z. B. ``[7, 5]`` für zwei kombinierte Strips zu 7 bzw.
@@ -226,6 +271,8 @@ def _parse_bridges_option(value) -> list[dict]:
                 norm["gc_strip_lengths"] = lengths
         if entry.get("gc_background_color"):
             norm["gc_background_color"] = hex_to_rgb(entry["gc_background_color"])
+        if entry.get("police_color2"):
+            norm["police_color2"] = hex_to_rgb(entry["police_color2"])
         if "gc_chase_glitter" in entry:
             norm["gc_chase_glitter"] = bool(entry["gc_chase_glitter"])
         if "gc_background_pulse" in entry:
@@ -301,6 +348,17 @@ state = {
     "gc_background_color": hex_to_rgb(options.get("gc_background_color", "#000000")),
     "gc_chase_glitter": bool(options.get("gc_chase_glitter", False)),
     "gc_background_pulse": bool(options.get("gc_background_pulse", False)),
+    # Nur effect police (zweite Farbe der zweiten Lampengruppe):
+    "police_color2": hex_to_rgb(options.get("police_color2", "#0000FF")),
+    # Nur effect meteor:
+    "meteor_count": max(1, int(options.get("meteor_count", 3))),
+    "meteor_speed": max(0.05, float(options.get("meteor_speed", 1.2))),
+    # Nur effect firework:
+    "firework_interval_ms": max(1.0, float(options.get("firework_interval_ms", 3000.0))),
+    "firework_speed": max(0.5, float(options.get("firework_speed", 6.0))),
+    # Nur effect lightning:
+    "lightning_interval_ms": max(1.0, float(options.get("lightning_interval_ms", 4000.0))),
+    "lightning_flash_ms": max(1.0, float(options.get("lightning_flash_ms", 500.0))),
     "restore_state": bool(options.get("restore_state", True)),
     # 0 = unbegrenzt (läuft bis POST /stop).
     "duration": max(0.0, float(options.get("duration", 0.0))),
@@ -316,6 +374,8 @@ log.info(
     "Konfiguration: bridges=%s (Standard) effect=%s color=%s fps=%s sweep=%ss chase_pause=%ss "
     "attack=%sms release=%sms glow=%s..%s glitter=%sms/%sms colors=%r "
     "chase=dir=%s/count=%s/length=%s/speed=%s bg=%s glitter=%s pulse=%s "
+    "police_color2=%s meteor=count=%s/speed=%s firework=interval=%sms/speed=%s "
+    "lightning=interval=%sms/flash=%sms "
     "duration=%ss (0=unbegrenzt) presets=%s",
     [
         {"bridge_host": b["bridge_host"], "area_id": b["area_id"], "channel_order": b["channel_order"],
@@ -324,7 +384,9 @@ log.info(
                                "glitter_interval_ms", "glitter_flash_ms", "glitter_colors",
                                "gc_direction", "gc_strip_lengths", "gc_count", "gc_length",
                                "gc_speed", "gc_background_color", "gc_chase_glitter",
-                               "gc_background_pulse") if k in b}}
+                               "gc_background_pulse", "police_color2", "meteor_count",
+                               "meteor_speed", "firework_interval_ms", "firework_speed",
+                               "lightning_interval_ms", "lightning_flash_ms") if k in b}}
         for b in state["bridges"]
     ],
     state["effect"],
@@ -346,6 +408,13 @@ log.info(
     "#{:02X}{:02X}{:02X}".format(*state["gc_background_color"]),
     state["gc_chase_glitter"],
     state["gc_background_pulse"],
+    "#{:02X}{:02X}{:02X}".format(*state["police_color2"]),
+    state["meteor_count"],
+    state["meteor_speed"],
+    state["firework_interval_ms"],
+    state["firework_speed"],
+    state["lightning_interval_ms"],
+    state["lightning_flash_ms"],
     state["duration"],
     sorted(state["presets"].keys()) or "(keine)",
 )
@@ -500,6 +569,13 @@ async def handle_config(request: web.Request) -> web.Response:
                     "gc_background_color": _bridge_field_hex(bg, "gc_background_color"),
                     "gc_chase_glitter": bg.get("gc_chase_glitter"),
                     "gc_background_pulse": bg.get("gc_background_pulse"),
+                    "police_color2": _bridge_field_hex(bg, "police_color2"),
+                    "meteor_count": bg.get("meteor_count"),
+                    "meteor_speed": bg.get("meteor_speed"),
+                    "firework_interval_ms": bg.get("firework_interval_ms"),
+                    "firework_speed": bg.get("firework_speed"),
+                    "lightning_interval_ms": bg.get("lightning_interval_ms"),
+                    "lightning_flash_ms": bg.get("lightning_flash_ms"),
                 }
                 for bg in state["bridges"]
             ],
@@ -522,6 +598,13 @@ async def handle_config(request: web.Request) -> web.Response:
             "gc_background_color": "#{:02X}{:02X}{:02X}".format(*state["gc_background_color"]),
             "gc_chase_glitter": state["gc_chase_glitter"],
             "gc_background_pulse": state["gc_background_pulse"],
+            "police_color2": "#{:02X}{:02X}{:02X}".format(*state["police_color2"]),
+            "meteor_count": state["meteor_count"],
+            "meteor_speed": state["meteor_speed"],
+            "firework_interval_ms": state["firework_interval_ms"],
+            "firework_speed": state["firework_speed"],
+            "lightning_interval_ms": state["lightning_interval_ms"],
+            "lightning_flash_ms": state["lightning_flash_ms"],
             "restore_state": state["restore_state"],
             "log_level": str(options.get("log_level", "info")),
             "default_duration_s": state["duration"],
@@ -696,6 +779,24 @@ async def _run_effect(
             )
             for strip in ctx["gc_strips"]
         ]
+        ctx["police"] = RedAlertPolice(num_lights=n, period_s=ctx["sweep_seconds"])
+        ctx["lightning"] = RedAlertLightning(
+            interval_s=ctx["lightning_interval_ms"] / 1000.0,
+            flash_s=ctx["lightning_flash_ms"] / 1000.0,
+        )
+        ctx["aurora"] = RedAlertAurora(
+            num_lights=n, palette=ctx["glitter_palette"], period_s=ctx["sweep_seconds"] * 4.0
+        )
+        ctx["rainbow"] = RedAlertRainbow(num_lights=n, period_s=ctx["sweep_seconds"] * 4.0)
+        ctx["meteor"] = RedAlertMeteor(num_lights=n, count=ctx["meteor_count"], speed=ctx["meteor_speed"])
+        ctx["wipe"] = RedAlertWipe(
+            num_lights=n, sweep_seconds=ctx["sweep_seconds"], pause_seconds=ctx["chase_pause"]
+        )
+        ctx["firework"] = RedAlertFirework(
+            num_lights=n,
+            interval_s=ctx["firework_interval_ms"] / 1000.0,
+            speed=ctx["firework_speed"],
+        )
     frames = 0
     snapshots: dict[str, list[dict]] = {}
     loop = asyncio.get_event_loop()
@@ -742,17 +843,52 @@ async def _run_effect(
             for ctx in active:
                 glow_low, glow_high = ctx["glow_low"], ctx["glow_high"]
                 glow_span = glow_high - glow_low
-                if ctx["effect"] == "glitter":
+                effect = ctx["effect"]
+                if effect == "glitter":
                     # jede Lampe eigene Farbe + eigener Pegel (Diamant-Gefunkel)
                     chans = [
                         (r, g, b, glow_low + glow_span * lvl)
                         for lvl, (r, g, b) in ctx["glitter"].step(dt)
                     ]
-                elif ctx["effect"] == "chase":
+                elif effect == "chase":
                     chans = _chase_chans(ctx, elapsed, dt, glow_low, glow_span)
+                elif effect == "police":
+                    # zwei Lampengruppen blinken abwechselnd in zwei Farben
+                    levels = ctx["police"].brightness_for(elapsed)
+                    ca, cb = ctx["color"], ctx["police_color2"]
+                    chans = [
+                        (*(ca if is_a else cb), glow_low + glow_span * lvl)
+                        for lvl, is_a in zip(levels, ctx["police"].group_a)
+                    ]
+                elif effect == "lightning":
+                    # alle Lampen zusammen blitzen (Gewitter), nicht je Lampe einzeln wie glitter
+                    lvl = ctx["lightning"].step(dt)
+                    cr, cg, cb = ctx["color"]
+                    chans = [(cr, cg, cb, glow_low + glow_span * lvl)] * len(ctx["channel_ids"])
+                elif effect == "aurora":
+                    # Farbe kommt aus der Palette, Helligkeit atmet langsam mit
+                    lvl = RedAlertPulse.periodic(elapsed, ctx["sweep_seconds"] * 4.0)
+                    chans = [
+                        (r, g, b, glow_low + glow_span * lvl)
+                        for r, g, b in ctx["aurora"].colors_for(elapsed)
+                    ]
+                elif effect == "rainbow":
+                    # reine Farbrotation, konstant auf glow_high
+                    chans = [(r, g, b, glow_high) for r, g, b in ctx["rainbow"].colors_for(elapsed)]
                 else:
-                    if ctx["effect"] == "comet":
+                    # Effekte, die nur eine 0..1-Helligkeitskurve je Lampe liefern
+                    # und dabei die gemeinsame Bridge-Farbe verwenden.
+                    if effect == "comet":
                         levels = ctx["comet"].brightness_for(elapsed)
+                    elif effect == "meteor":
+                        levels = ctx["meteor"].brightness_for(elapsed)
+                    elif effect == "wipe":
+                        levels = ctx["wipe"].brightness_for(elapsed)
+                    elif effect == "firework":
+                        levels = ctx["firework"].brightness_for(elapsed)
+                    elif effect == "heartbeat":
+                        target = RedAlertPulse.heartbeat(elapsed, ctx["sweep_seconds"])
+                        levels = ctx["pulse"].step(target, dt)
                     else:  # pulse
                         target = RedAlertPulse.periodic(elapsed, ctx["sweep_seconds"])
                         levels = ctx["pulse"].step(target, dt)
@@ -936,14 +1072,18 @@ async def handle_start(request: web.Request) -> web.Response:
     ``attack_ms``, ``release_ms``, ``glow_low``, ``glow_high``,
     ``glitter_interval_ms``, ``glitter_flash_ms``, ``glitter_colors``,
     ``gc_direction``, ``gc_count``, ``gc_length``, ``gc_speed``,
-    ``gc_background_color``, ``gc_chase_glitter``, ``gc_background_pulse`` im
+    ``gc_background_color``, ``gc_chase_glitter``, ``gc_background_pulse``,
+    ``police_color2``, ``meteor_count``, ``meteor_speed``,
+    ``firework_interval_ms``, ``firework_speed`` im
     Body sind die **Standardwerte** für Bridges, die diese Parameter nicht
     selbst setzen. ``bridges`` (Liste von ``{bridge_host, area_id,
     channel_order, effect?, color?, sweep_seconds?, chase_pause?, attack_ms?,
     release_ms?, glow_low?, glow_high?, glitter_interval_ms?,
     glitter_flash_ms?, glitter_colors?, gc_direction?, gc_strip_lengths?,
     gc_count?, gc_length?, gc_speed?, gc_background_color?, gc_chase_glitter?,
-    gc_background_pulse?}``) übersteuert für diesen Aufruf die Option
+    gc_background_pulse?, police_color2?, meteor_count?, meteor_speed?,
+    firework_interval_ms?, firework_speed?, lightning_interval_ms?,
+    lightning_flash_ms?}``) übersteuert für diesen Aufruf die Option
     ``bridges`` – jede Bridge kann ihren eigenen Effekt/Farbe/Timing haben.
     ``gc_strip_lengths`` (nur ``effect: chase``, je Bridge, z. B.
     ``[7, 5]``) teilt die Kanäle dieser Bridge in aufeinanderfolgende Gradient-
@@ -1049,6 +1189,43 @@ async def handle_start(request: web.Request) -> web.Response:
     )
     defaults["gc_chase_glitter"] = bool(body.get("gc_chase_glitter", state["gc_chase_glitter"]))
     defaults["gc_background_pulse"] = bool(body.get("gc_background_pulse", state["gc_background_pulse"]))
+    # Nur effect police (zweite Lampengruppe).
+    defaults["police_color2"] = (
+        hex_to_rgb(body["police_color2"]) if body.get("police_color2") else state["police_color2"]
+    )
+    # Nur effect meteor.
+    try:
+        defaults["meteor_count"] = max(1, int(body.get("meteor_count") or state["meteor_count"]))
+    except (TypeError, ValueError):
+        defaults["meteor_count"] = state["meteor_count"]
+    try:
+        defaults["meteor_speed"] = max(0.05, float(body.get("meteor_speed") or state["meteor_speed"]))
+    except (TypeError, ValueError):
+        defaults["meteor_speed"] = state["meteor_speed"]
+    # Nur effect firework.
+    try:
+        defaults["firework_interval_ms"] = max(
+            1.0, float(body.get("firework_interval_ms") or state["firework_interval_ms"])
+        )
+    except (TypeError, ValueError):
+        defaults["firework_interval_ms"] = state["firework_interval_ms"]
+    try:
+        defaults["firework_speed"] = max(0.5, float(body.get("firework_speed") or state["firework_speed"]))
+    except (TypeError, ValueError):
+        defaults["firework_speed"] = state["firework_speed"]
+    # Nur effect lightning.
+    try:
+        defaults["lightning_interval_ms"] = max(
+            1.0, float(body.get("lightning_interval_ms") or state["lightning_interval_ms"])
+        )
+    except (TypeError, ValueError):
+        defaults["lightning_interval_ms"] = state["lightning_interval_ms"]
+    try:
+        defaults["lightning_flash_ms"] = max(
+            1.0, float(body.get("lightning_flash_ms") or state["lightning_flash_ms"])
+        )
+    except (TypeError, ValueError):
+        defaults["lightning_flash_ms"] = state["lightning_flash_ms"]
 
     async def _resolve(cfg: dict) -> dict:
         """Eine Bridge auflösen: gepaart? erreichbar? area_id/Kanäle gültig?
@@ -1142,6 +1319,19 @@ async def handle_start(request: web.Request) -> web.Response:
             "gc_background_color": cfg.get("gc_background_color", defaults["gc_background_color"]),
             "gc_chase_glitter": cfg.get("gc_chase_glitter", defaults["gc_chase_glitter"]),
             "gc_background_pulse": cfg.get("gc_background_pulse", defaults["gc_background_pulse"]),
+            "police_color2": cfg.get("police_color2", defaults["police_color2"]),
+            "meteor_count": max(1, cfg.get("meteor_count", defaults["meteor_count"])),
+            "meteor_speed": max(0.05, cfg.get("meteor_speed", defaults["meteor_speed"])),
+            "firework_interval_ms": max(
+                1.0, cfg.get("firework_interval_ms", defaults["firework_interval_ms"])
+            ),
+            "firework_speed": max(0.5, cfg.get("firework_speed", defaults["firework_speed"])),
+            "lightning_interval_ms": max(
+                1.0, cfg.get("lightning_interval_ms", defaults["lightning_interval_ms"])
+            ),
+            "lightning_flash_ms": max(
+                1.0, cfg.get("lightning_flash_ms", defaults["lightning_flash_ms"])
+            ),
         }
 
     # "neutral": diese Bridge wird gar nicht angefasst (kein DTLS, kein
@@ -1213,6 +1403,13 @@ async def handle_start(request: web.Request) -> web.Response:
                 "gc_background_color": "#{:02X}{:02X}{:02X}".format(*c["gc_background_color"]),
                 "gc_chase_glitter": c["gc_chase_glitter"],
                 "gc_background_pulse": c["gc_background_pulse"],
+                "police_color2": "#{:02X}{:02X}{:02X}".format(*c["police_color2"]),
+                "meteor_count": c["meteor_count"],
+                "meteor_speed": c["meteor_speed"],
+                "firework_interval_ms": round(c["firework_interval_ms"]),
+                "firework_speed": c["firework_speed"],
+                "lightning_interval_ms": round(c["lightning_interval_ms"]),
+                "lightning_flash_ms": round(c["lightning_flash_ms"]),
             }
             for c in ctxs
         ],

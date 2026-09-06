@@ -6,7 +6,9 @@ configuration:
       effect/color/sweep_seconds/chase_pause/attack_ms/release_ms/glow_low/
       glow_high/glitter_interval_ms/glitter_flash_ms/glitter_colors/
       gc_direction/gc_strip_lengths/gc_count/gc_length/gc_speed/
-      gc_background_color/gc_chase_glitter/gc_background_pulse are optional
+      gc_background_color/gc_chase_glitter/gc_background_pulse/
+      police_color2/lightning_interval_ms/lightning_flash_ms/meteor_count/
+      meteor_speed/firework_interval_ms/firework_speed are optional
       per bridge – leave empty and the like-named option below is used as
       this bridge's default.
     bridge_host:
@@ -126,6 +128,41 @@ configuration:
       description: >-
         Overrides the gc_background_pulse option for this one bridge. Empty =
         use the default below.
+    police_color2:
+      name: police second colour (this bridge)
+      description: >-
+        Overrides the police_color2 option for this one bridge. Empty = use
+        the default below.
+    lightning_interval_ms:
+      name: lightning strike interval ms (this bridge)
+      description: >-
+        Overrides the lightning_interval_ms option for this one bridge.
+        Empty = use the default below.
+    lightning_flash_ms:
+      name: lightning flash time ms (this bridge)
+      description: >-
+        Overrides the lightning_flash_ms option for this one bridge. Empty =
+        use the default below.
+    meteor_count:
+      name: meteor count (this bridge)
+      description: >-
+        Overrides the meteor_count option for this one bridge. Empty = use
+        the default below.
+    meteor_speed:
+      name: meteor speed (this bridge)
+      description: >-
+        Overrides the meteor_speed option for this one bridge. Empty = use
+        the default below.
+    firework_interval_ms:
+      name: firework interval ms (this bridge)
+      description: >-
+        Overrides the firework_interval_ms option for this one bridge. Empty
+        = use the default below.
+    firework_speed:
+      name: firework speed (this bridge)
+      description: >-
+        Overrides the firework_speed option for this one bridge. Empty = use
+        the default below.
   effect:
     name: Effect (default)
     description: >-
@@ -133,7 +170,16 @@ configuration:
       together: 0 to 100 % on the beat, back to 0 between pulses (fall faster
       than rise). comet = a comet runs evenly around the channels, dragging a
       tail behind it. glitter = each lamp sparkles on its own in very short
-      bursts of changing colour (diamond twinkle). chase = Gradient
+      bursts of changing colour (diamond twinkle). police = two lamp groups
+      alternately flash two colours (emergency lights). lightning = every
+      lamp flashes together at random moments, occasionally a quick
+      double-strike (storm). heartbeat = a two-beat "lub-dub" pulse like a
+      resting heart rate. aurora = slow, soft colour waves drift across the
+      lamps (northern lights). rainbow = a continuous, phase-offset rainbow
+      hue-cycle sweeps across the lamps. meteor = several independent
+      meteors at randomised speed and brightness. wipe = a fill bar runs
+      once across the channels, holds briefly, then starts over. firework =
+      recurring bursts radiating outward from the centre. chase = Gradient
       Lightstrips only: one or more soft-edged two-colour bands slide along
       the segments, see the gc_* options. neutral = the lamps are not driven
       at all (e.g. for an effect set where only some bridges run).
@@ -242,6 +288,45 @@ configuration:
       between glow_low and glow_high like effect pulse (uses attack_ms/
       release_ms/sweep_seconds), instead of resting quietly at glow_low. The
       chase bands stay unaffected at glow_high.
+  police_color2:
+    name: police second colour (default)
+    description: >-
+      effect police only. Default hex colour of the second lamp group (the
+      first uses the color option/field). Default #0000FF (blue), so
+      together with the red default this gives classic red/blue emergency
+      lights.
+  lightning_interval_ms:
+    name: lightning strike interval ms (default)
+    description: >-
+      effect lightning only. Mean gap in milliseconds between two strikes
+      that light every lamp of a bridge together (default 4000 = roughly one
+      strike every 4 s, occasionally with a quick double-strike).
+  lightning_flash_ms:
+    name: lightning flash time ms (default)
+    description: >-
+      effect lightning only. Decay time constant of a strike in
+      milliseconds – how fast it fades after flashing (default 500).
+  meteor_count:
+    name: meteor count (default)
+    description: >-
+      effect meteor only. How many independent meteors cross the channels at
+      once, each with its own randomised speed, direction and brightness
+      (default 3).
+  meteor_speed:
+    name: meteor speed (default)
+    description: >-
+      effect meteor only. Average meteor speed in channels per second – each
+      meteor varies randomly around it (default 1.2).
+  firework_interval_ms:
+    name: firework interval ms (default)
+    description: >-
+      effect firework only. How often (in milliseconds) a new burst starts
+      from the centre of the channels (default 3000).
+  firework_speed:
+    name: firework speed (default)
+    description: >-
+      effect firework only. How fast the burst expands outward from the
+      centre, in channels per second (default 6.0).
   restore_state:
     name: Restore light state
     description: >-

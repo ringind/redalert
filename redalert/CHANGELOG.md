@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.10.0
+
+- **8 neue Effekte.** Die App ist damit kein reiner Star-Trek-Effekt mehr,
+  sondern ein allgemeiner Hue-Entertainment-Lichteffekt-Player:
+  - **`police`** – Alarmlicht: jede zweite Lampe bildet eine Gruppe, die
+    beiden Gruppen blinken abwechselnd in `color` bzw. der neuen Option
+    `police_color2` (Standard Blau).
+  - **`lightning`** – Gewitter: alle Lampen einer Bridge blitzen gemeinsam
+    auf (statt wie `glitter` unabhängig je Lampe), mit gelegentlichem
+    Doppelblitz. Neue Optionen `lightning_interval_ms` (Standard 4000),
+    `lightning_flash_ms` (Standard 500).
+  - **`heartbeat`** – ein Doppelpuls („lub-dub“) statt eines einzelnen
+    Pulses, im Takt von `sweep_seconds`; nutzt dieselben `attack_ms`/
+    `release_ms` wie `pulse`.
+  - **`aurora`** – Polarlicht: langsame, weiche Farbwellen aus `glitter_colors`
+    wandern über die Lampen; eine volle Welle dauert `4 × sweep_seconds`.
+  - **`rainbow`** – ein durchgehender, phasenversetzter Regenbogen-Farbumlauf
+    über die Lampen; eine volle Umdrehung dauert `4 × sweep_seconds`.
+  - **`meteor`** – mehrere unabhängige Kometen mit zufälliger Geschwindigkeit,
+    Richtung und Helligkeit. Neue Optionen `meteor_count` (Standard 3),
+    `meteor_speed` (Standard 1.2).
+  - **`wipe`** – ein Auffüll-Balken läuft einmal über die Kanäle, hält kurz
+    voll (`chase_pause`) und beginnt von vorn (Dauer `sweep_seconds`).
+  - **`firework`** – wiederkehrende Ausbrüche von der Kanalmitte aus. Neue
+    Optionen `firework_interval_ms` (Standard 3000), `firework_speed`
+    (Standard 6.0).
+
+  Alle neuen Parameter sind wie gehabt in der App-Konfiguration, im
+  `/start`-Body und je Bridge in `bridges` einstellbar. Web-UI: neue
+  Effekt-Optionen in der Auswahl jeder Bridge-Karte, neue Eingabefelder
+  (inkl. Farbwähler für `police_color2`), Status zeigt die neuen
+  Konfigurationswerte.
+- **README.md/info.md:** Effekt-Liste und Optionstabellen um die 8 neuen
+  Effekte ergänzt.
+
 ## 1.9.2
 
 - **Web-UI:** das Feld „chase: Richtung(en)“ (`gc_direction`) beschreibt jetzt

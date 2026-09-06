@@ -130,6 +130,35 @@
       hektischer), <code>Blitzdauer</code> = wie schnell ein Funken abklingt (größer als
       das Intervall ⇒ mehrere Lampen gleichzeitig), <code>Farben</code> = bis zu drei
       Farben, aus denen jeder Funken zufällig zieht.<br>
+      <strong>police</strong> (nur <code>effect: police</code>): zwei Lampengruppen
+      (jede zweite Lampe) blinken abwechselnd – die erste Gruppe in der Bridge-Farbe,
+      die zweite in <code>zweite Farbe</code>; <code>sweep_seconds</code> steuert das
+      Tempo des Wechsels.<br>
+      <strong>lightning</strong> (nur <code>effect: lightning</code>): alle Lampen einer
+      Bridge blitzen gemeinsam in der Bridge-Farbe auf, in zufälligen Abständen
+      (<code>Blitz-Intervall</code>) und klingen mit <code>Blitzdauer</code> wieder ab;
+      gelegentlich folgt ein schneller zweiter Blitz.<br>
+      <strong>heartbeat</strong> (nur <code>effect: heartbeat</code>): ein Doppelpuls
+      (lub-dub) statt eines einzelnen Pulses, im Takt von <code>sweep_seconds</code>;
+      nutzt dieselben <code>Attack</code>/<code>Release</code> wie <code>pulse</code>.<br>
+      <strong>aurora</strong> (nur <code>effect: aurora</code>): langsame, weiche
+      Farbwellen wandern über die Lampen, geblendet aus den <code>Glitter-Farben</code>
+      (bzw. der Bridge-Farbe, falls keine gesetzt sind); <code>sweep_seconds</code>
+      bestimmt das Tempo.<br>
+      <strong>rainbow</strong> (nur <code>effect: rainbow</code>): ein durchgehender
+      Regenbogen-Farbumlauf, phasenversetzt je Lampe, sodass ein Farbverlauf sichtbar
+      über die Lampen wandert; <code>sweep_seconds</code> bestimmt das Tempo.<br>
+      <strong>meteor</strong> (nur <code>effect: meteor</code>): mehrere unabhängige
+      Meteore in der Bridge-Farbe laufen mit zufälliger Geschwindigkeit und Richtung
+      um die Kanäle; <code>Anzahl</code>/<code>Geschwindigkeit</code> steuern wie
+      viele und wie schnell im Mittel.<br>
+      <strong>wipe</strong> (nur <code>effect: wipe</code>): ein Auffüll-Balken in der
+      Bridge-Farbe läuft einmal über die Kanäle (Dauer <code>sweep_seconds</code>),
+      hält kurz voll (<code>chase-Pause</code>) und beginnt von vorn.<br>
+      <strong>firework</strong> (nur <code>effect: firework</code>): wiederkehrende
+      Ausbrüche in der Bridge-Farbe breiten sich von der Mitte der Kanäle nach außen
+      aus und verblassen; <code>Intervall</code>/<code>Geschwindigkeit</code> steuern
+      wie oft und wie schnell.<br>
       <strong>chase</strong> (nur <code>effect: chase</code>, für
       Gradient Lightstrips): ein oder mehrere weich überblendete Bänder in der
       Bridge-Farbe laufen über die Segmente, dazwischen die
@@ -276,6 +305,14 @@
                 <option value="pulse">pulse (Takt)</option>
                 <option value="comet">comet (Komet)</option>
                 <option value="glitter">glitter (Funkeln)</option>
+                <option value="police">police (Alarmlicht)</option>
+                <option value="lightning">lightning (Gewitter)</option>
+                <option value="heartbeat">heartbeat (Herzschlag)</option>
+                <option value="aurora">aurora (Polarlicht)</option>
+                <option value="rainbow">rainbow (Regenbogen)</option>
+                <option value="meteor">meteor (Meteore)</option>
+                <option value="wipe">wipe (Auffüllen)</option>
+                <option value="firework">firework (Feuerwerk)</option>
                 <option value="chase">chase (Lauflicht)</option>
                 <option value="neutral">neutral (nicht steuern)</option>
               </select></div>
@@ -326,6 +363,23 @@
               </div></div>
             <div><label><input type="checkbox" id="b${i}-gcglitter"> Chases funkeln</label></div>
             <div><label><input type="checkbox" id="b${i}-gcpulse"> Background pulsiert</label></div>
+            <div><label for="b${i}-police2">police: zweite Farbe (diese Bridge)</label>
+              <div class="color-row">
+                <input type="checkbox" id="b${i}-police2-en" title="eigene zweite Farbe verwenden">
+                <input type="color" id="b${i}-police2" value="#0000ff" disabled>
+              </div></div>
+            <div><label for="b${i}-lightint">lightning: Blitz-Intervall (ms)</label>
+              <input type="number" id="b${i}-lightint" min="50" max="60000" step="50" placeholder="wie Konfiguration"></div>
+            <div><label for="b${i}-lightflash">lightning: Blitzdauer (ms)</label>
+              <input type="number" id="b${i}-lightflash" min="20" max="5000" step="10" placeholder="wie Konfiguration"></div>
+            <div><label for="b${i}-mcount">meteor: Anzahl</label>
+              <input type="number" id="b${i}-mcount" min="1" max="8" step="1" placeholder="wie Konfiguration"></div>
+            <div><label for="b${i}-mspeed">meteor: Geschwindigkeit (Kanäle/s)</label>
+              <input type="number" id="b${i}-mspeed" min="0.05" max="20" step="0.1" placeholder="wie Konfiguration"></div>
+            <div><label for="b${i}-fwint">firework: Intervall (ms)</label>
+              <input type="number" id="b${i}-fwint" min="200" max="60000" step="100" placeholder="wie Konfiguration"></div>
+            <div><label for="b${i}-fwspeed">firework: Geschwindigkeit (Kanäle/s)</label>
+              <input type="number" id="b${i}-fwspeed" min="0.5" max="50" step="0.5" placeholder="wie Konfiguration"></div>
           </div>
         </details>
         <details style="margin-top:.5rem">
@@ -423,6 +477,9 @@
       const on = $(`b${i}-gcolors-en`).checked;
       $(`b${i}-gcolor0`).disabled = $(`b${i}-gcolor1`).disabled = $(`b${i}-gcolor2`).disabled = !on;
     });
+    $(`b${i}-police2-en`).addEventListener("change", () => {
+      $(`b${i}-police2`).disabled = !$(`b${i}-police2-en`).checked;
+    });
     $(`b${i}-pair`).onclick = async () => {
       const body = {};
       if ($(`b${i}-host`).value.trim()) body.bridge_host = $(`b${i}-host`).value.trim();
@@ -511,6 +568,10 @@
       "chase (Konfiguration)": `${data.gc_direction} · ${data.gc_count}× · ${data.gc_length} Seg. · `
         + `${data.gc_speed} Seg./s · bg ${data.gc_background_color}`
         + (data.gc_chase_glitter ? " · Chases funkeln" : "") + (data.gc_background_pulse ? " · bg pulsiert" : ""),
+      "police (Konfiguration)": `${data.color} / ${data.police_color2}`,
+      "lightning (Konfiguration)": `${data.lightning_interval_ms} / ${data.lightning_flash_ms} ms`,
+      "meteor (Konfiguration)": `${data.meteor_count}× · ${data.meteor_speed} Kanäle/s`,
+      "firework (Konfiguration)": `${data.firework_interval_ms} ms / ${data.firework_speed} Kanäle/s`,
       "Lichtzustand wiederherstellen": data.restore_state ? "ja" : "nein",
       "Log-Level": data.log_level,
       "Effektsets": (data.presets && data.presets.length) ? data.presets.join(", ") : "keine",
@@ -550,6 +611,13 @@
       syncColorOverride(`b${i}-gcbg-en`, [`b${i}-gcbg`], b.gc_background_color);
       syncCheckboxIfUntouched(`b${i}-gcglitter`, b.gc_chase_glitter);
       syncCheckboxIfUntouched(`b${i}-gcpulse`, b.gc_background_pulse);
+      syncColorOverride(`b${i}-police2-en`, [`b${i}-police2`], b.police_color2);
+      syncIfUntouched(`b${i}-lightint`, b.lightning_interval_ms);
+      syncIfUntouched(`b${i}-lightflash`, b.lightning_flash_ms);
+      syncIfUntouched(`b${i}-mcount`, b.meteor_count);
+      syncIfUntouched(`b${i}-mspeed`, b.meteor_speed);
+      syncIfUntouched(`b${i}-fwint`, b.firework_interval_ms);
+      syncIfUntouched(`b${i}-fwspeed`, b.firework_speed);
       setPill($(`b${i}-pill`), b.paired, b.paired ? "gepaart" : "nicht gepaart");
       renderIdentify(i);
     });
@@ -573,6 +641,9 @@
       ["glowlow", "glow_low"], ["glowhigh", "glow_high"],
       ["ginterval", "glitter_interval_ms"], ["gflash", "glitter_flash_ms"],
       ["gccount", "gc_count"], ["gclength", "gc_length"], ["gcspeed", "gc_speed"],
+      ["lightint", "lightning_interval_ms"], ["lightflash", "lightning_flash_ms"],
+      ["mcount", "meteor_count"], ["mspeed", "meteor_speed"],
+      ["fwint", "firework_interval_ms"], ["fwspeed", "firework_speed"],
     ];
     const bridges = [];
     for (let i = 0; i < BRIDGE_COUNT; i++) {
@@ -599,6 +670,8 @@
       if (ownGcBg) entry.gc_background_color = ownGcBg;
       if ($(`b${i}-gcglitter`).checked) entry.gc_chase_glitter = true;
       if ($(`b${i}-gcpulse`).checked) entry.gc_background_pulse = true;
+      const ownPolice2 = colorOverride(`b${i}-police2-en`, `b${i}-police2`);
+      if (ownPolice2) entry.police_color2 = ownPolice2;
       for (const [suf, key] of bridgeNum) {
         if ($(`b${i}-${suf}`).value !== "") entry[key] = Number($(`b${i}-${suf}`).value);
       }
@@ -642,6 +715,13 @@
       setVal(`b${i}-gccount`, e.gc_count);
       setVal(`b${i}-gclength`, e.gc_length);
       setVal(`b${i}-gcspeed`, e.gc_speed);
+      setColorOverride(`b${i}-police2-en`, [`b${i}-police2`], e.police_color2);
+      setVal(`b${i}-lightint`, e.lightning_interval_ms);
+      setVal(`b${i}-lightflash`, e.lightning_flash_ms);
+      setVal(`b${i}-mcount`, e.meteor_count);
+      setVal(`b${i}-mspeed`, e.meteor_speed);
+      setVal(`b${i}-fwint`, e.firework_interval_ms);
+      setVal(`b${i}-fwspeed`, e.firework_speed);
       renderIdentify(i);
     }
   }

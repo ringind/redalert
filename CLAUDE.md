@@ -14,7 +14,14 @@ scene across ~6 Philips Hue lamps on **up to 3 Hue Bridges simultaneously** via
 the **Hue Entertainment API** (persistent DTLS stream per bridge, ~25 Hz) rather
 than normal Bridge scenes — `effect` is one of `pulse` (default: all lamps on
 that bridge together, periodic), `comet` (a comet with a tail), `glitter`
-(per-lamp random colour sparkle), `chase` (Gradient Lightstrips only —
+(per-lamp random colour sparkle), `police` (two lamp groups alternately
+strobe two colours), `lightning` (whole array flashes together at random,
+occasional double-strike), `heartbeat` (pulse driven by a two-beat "lub-dub"
+instead of one cosine hump), `aurora` (slow colour waves blended from a
+palette, drifting across lamps), `rainbow` (phase-offset hue-cycle sweeping
+across lamps), `meteor` (several randomised independent comets), `wipe`
+(sequential fill-and-hold, repeating), `firework` (one-shot bursts radiating
+from the centre channel, repeating), `chase` (Gradient Lightstrips only —
 soft-edged two-colour bands sliding along the segments) or `neutral` (bridge
 left untouched — no stream/restore; per-bridge only, for effect sets where
 some bridges run and others don't). **Effect, colour, and timing are
@@ -72,13 +79,20 @@ redalert/                  the app
   icon.png / logo.png      store graphics (generated, solid-red beacon)
   rootfs/etc/s6-overlay/s6-rc.d/redalert/{type,run,finish}  s6 service (bashio)
   rootfs/app/main.py        REST server + streaming loop + serves panel.html
-  rootfs/app/chase.py       RedAlertPulse (beat gate) + RedAlertComet (comet+tail) + RedAlertGlitter (per-lamp sparkle) + RedAlertChase (Gradient Lightstrip bands), no I/O
+  rootfs/app/chase.py       12 effects' pure math, no I/O: RedAlertPulse
+    (pulse beat-gate, also drives heartbeat via .heartbeat()) +
+    RedAlertComet (comet+tail) + RedAlertGlitter (per-lamp sparkle) +
+    RedAlertChase (Gradient Lightstrip bands) + RedAlertPolice (two-group
+    strobe) + RedAlertLightning (shared flash, stateful) + RedAlertAurora /
+    RedAlertRainbow (per-lamp colour, no brightness shape) + RedAlertMeteor
+    (randomised multi-comet) + RedAlertWipe (fill-and-hold) + RedAlertFirework
+    (radiating one-shot bursts)
   rootfs/app/panel.html     Ingress web UI (vanilla JS, relative fetch URLs)
 ```
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.9.2**.
+No build system, linter, or test suite. Current version: **1.10.0**.
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
   after every code change — the only static check available.

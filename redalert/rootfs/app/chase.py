@@ -17,17 +17,44 @@ Effects, selected by the ``effect`` option / ``/start`` body:
 - ``chase``: one or more soft-edged two-colour bands sliding along the
   channels – built for Hue Gradient Lightstrips, where each channel is a
   coloured segment rather than a separate lamp. See ``RedAlertChase``.
+- ``police``: two lamp groups (even/odd position) alternately strobe two
+  colours, like emergency lights. See ``RedAlertPolice``.
+- ``lightning``: the whole array flashes bright together at random moments
+  (occasionally a quick double-strike), then fades – a distant storm rather
+  than glitter's continuous per-lamp sparkle. See ``RedAlertLightning``.
+- ``heartbeat``: a ``pulse`` variant driven by a two-beat "lub-dub" input
+  instead of a single cosine hump. See ``RedAlertPulse.heartbeat``.
+- ``aurora``: slow, soft colour waves blending through a palette, drifting
+  across the lamps – a calm ambient look. See ``RedAlertAurora``.
+- ``rainbow``: a continuous hue-cycle, phase-offset per lamp so a spectrum
+  visibly sweeps across the array. See ``RedAlertRainbow``.
+- ``meteor``: several independent comets crossing at randomised speeds and
+  brightness – a busier, less orderly cousin of ``comet``. See
+  ``RedAlertMeteor``.
+- ``wipe``: a sequential fill across the channels that holds once full, then
+  resets and fills again – a one-shot motif repeated on a loop. See
+  ``RedAlertWipe``.
+- ``firework``: one-shot bursts radiating outward from the centre channel,
+  then fading, repeating every interval. See ``RedAlertFirework``.
 
-``RedAlertComet`` / ``RedAlertPulse`` only compute a **0..1 shape**; ``main.py``
-maps it onto the configured ``glow_low`` / ``glow_high`` levels and applies the
-colour + 16-bit scaling. ``RedAlertGlitter`` additionally picks a per-lamp
-colour (``main.py`` still does the level mapping and 16-bit scaling).
-``RedAlertChase`` computes a per-segment **blend** between two colours
-instead (``main.py`` interpolates and layers glow/pulse/glitter on top).
+``RedAlertComet`` / ``RedAlertPulse`` / ``RedAlertMeteor`` / ``RedAlertWipe`` /
+``RedAlertFirework`` / ``RedAlertPolice`` only compute a **0..1 shape**;
+``main.py`` maps it onto the configured ``glow_low`` / ``glow_high`` levels
+and applies the colour + 16-bit scaling (``RedAlertPolice`` additionally
+picks colour A/B per lamp from its ``group_a`` list). ``RedAlertGlitter`` and
+``RedAlertLightning`` are stateful and time-stepped (``step(dt)``) rather
+than pure functions of ``t``; glitter additionally picks a per-lamp colour
+(main.py still does the level mapping and 16-bit scaling). ``RedAlertChase``
+computes a per-segment **blend** between two colours instead (main.py
+interpolates and layers glow/pulse/glitter on top); ``RedAlertAurora`` /
+``RedAlertRainbow`` instead compute a per-lamp **colour** directly (0..255
+float RGB) with no separate brightness shape – main.py applies glow scaling
+on top of that colour.
 """
 
 from __future__ import annotations
 
+import colorsys
 import math
 import random
 
@@ -223,6 +250,26 @@ class RedAlertPulse:
             return 1.0
         return 0.5 - 0.5 * math.cos(2.0 * math.pi * (t % period_s) / period_s)
 
+    @staticmethod
+    def heartbeat(t: float, period_s: float) -> float:
+        """"Lub-dub" 0..1 input for :meth:`step`: a bigger beat then a smaller
+        one per ``period_s``, then rest – like a resting heart rate. Feeding
+        this through the same gate + slew as :meth:`periodic` turns each bump
+        into a clean double flash instead of a single smooth pulse.
+        """
+        if period_s <= 0:
+            return 1.0
+        phase = (t % period_s) / period_s
+
+        def _bump(center: float, width: float, amp: float) -> float:
+            d = abs(phase - center)
+            d = min(d, 1.0 - d)  # wrap-around distance
+            if d >= width:
+                return 0.0
+            return amp * math.cos((d / width) * (math.pi / 2)) ** 2
+
+        return max(_bump(0.08, 0.10, 1.0), _bump(0.24, 0.08, 0.6))
+
 
 class RedAlertGlitter:
     """Independent sparkle per lamp – short bright flashes in random colours.
@@ -350,3 +397,235 @@ class RedAlertChase:
         return [
             max(self._band(min(abs(j - h), n - abs(j - h))) for h in heads) for j in range(n)
         ]
+
+
+class RedAlertPolice:
+    """Two lamp groups alternately flash two colours (emergency-lights strobe).
+
+    Lamps at even positions (``group_a``) show colour A for the first half of
+    ``period_s``, lamps at odd positions show colour B for that same half
+    (i.e. are dark), then it flips for the second half – so the two groups
+    strobe back and forth rather than both lamps cycling through both
+    colours. This class only computes the shared 0/1 on/off shape;
+    ``main.py`` looks up ``group_a`` to pick colour A or B per lamp and maps
+    the shape onto ``[glow_low, glow_high]`` like the other effects.
+    """
+
+    def __init__(self, num_lights: int, period_s: float = 0.6) -> None:
+        self.num_lights = max(1, num_lights)
+        self.period_s = max(0.05, period_s)
+        self.group_a = [i % 2 == 0 for i in range(self.num_lights)]
+
+    def brightness_for(self, t: float) -> list[float]:
+        """Per-light 0/1 shape at time ``t`` – 1.0 while that lamp's group is lit."""
+        on_a = (t % self.period_s) < (self.period_s / 2.0)
+        return [1.0 if (on_a == is_a) else 0.0 for is_a in self.group_a]
+
+
+class RedAlertLightning:
+    """A distant storm: the whole array flashes bright together at random
+    moments, then fades – unlike :class:`RedAlertGlitter`'s continuous,
+    independent per-lamp sparkle, a lightning flash lights every lamp at
+    once, like the sky briefly lighting up. Occasionally followed by a quick
+    second flash (a double-strike), as real lightning often does.
+
+    Stateful and time-stepped like :class:`RedAlertGlitter`: :meth:`step`
+    advances by ``dt`` seconds and returns the single shared 0..1 level for
+    every lamp – ``main.py`` maps it onto ``[glow_low, glow_high]`` and
+    applies the configured colour.
+    """
+
+    _DOUBLE_STRIKE_CHANCE = 0.35
+    _DOUBLE_STRIKE_GAP_S = 0.09
+
+    def __init__(
+        self, interval_s: float = 4.0, flash_s: float = 0.5, seed: int | None = None
+    ) -> None:
+        self.interval_s = max(1e-3, interval_s)
+        self.flash_s = max(1e-3, flash_s)
+        self._rng = random.Random(seed)
+        self._level = 0.0
+        self._carry = 0.0
+        self._next_echo_s: float | None = None
+
+    def step(self, dt: float) -> float:
+        """Advance by ``dt`` s; return the shared 0..1 level for this frame."""
+        dt = max(0.0, dt)
+        if dt > 0.0:
+            decay = math.exp(-dt / self.flash_s)
+            self._level = self._level * decay if self._level > 1e-3 else 0.0
+            if self._next_echo_s is not None:
+                self._next_echo_s -= dt
+                if self._next_echo_s <= 0:
+                    self._level = 1.0
+                    self._next_echo_s = None
+            # Expected number of strikes this frame; keep the fraction for next.
+            self._carry += dt / self.interval_s
+            ignitions = int(self._carry)
+            self._carry -= ignitions
+            for _ in range(ignitions):
+                self._level = 1.0
+                if self._next_echo_s is None and self._rng.random() < self._DOUBLE_STRIKE_CHANCE:
+                    self._next_echo_s = self._DOUBLE_STRIKE_GAP_S
+        return self._level
+
+
+class RedAlertAurora:
+    """Slow, soft colour waves drifting across the lamps – a calm ambient
+    look, unlike ``glitter``'s fast per-lamp sparkle or ``chase``'s hard
+    two-colour bands. Continuously blends through a palette of colours, each
+    lamp offset in phase (by its position) so the blend visibly drifts along
+    the array instead of every lamp changing colour in lockstep.
+
+    Computes a per-lamp **colour** directly, not a brightness shape;
+    ``main.py`` layers its own slow brightness breathing
+    (:meth:`RedAlertPulse.periodic`) and the ``[glow_low, glow_high]`` mapping
+    on top.
+    """
+
+    def __init__(
+        self,
+        num_lights: int,
+        palette: list[tuple[int, int, int]] | None = None,
+        period_s: float = 6.0,
+    ) -> None:
+        self.num_lights = max(1, num_lights)
+        self.palette = [tuple(c) for c in palette] if palette else [(0, 200, 120)]
+        self.period_s = max(0.5, period_s)
+
+    def colors_for(self, t: float) -> list[tuple[float, float, float]]:
+        """Per-lamp ``(r, g, b)`` in 0..255 (float), blended from the palette."""
+        n = len(self.palette)
+        out: list[tuple[float, float, float]] = []
+        for i in range(self.num_lights):
+            phase = (t / self.period_s + i / self.num_lights) % 1.0
+            pos = phase * n
+            idx = int(pos) % n
+            nxt = (idx + 1) % n
+            frac = pos - int(pos)
+            c0, c1 = self.palette[idx], self.palette[nxt]
+            out.append(tuple(c0[k] + (c1[k] - c0[k]) * frac for k in range(3)))
+        return out
+
+
+class RedAlertRainbow:
+    """Continuous rainbow hue-cycle, phase-offset per lamp so a spectrum
+    visibly sweeps across the array – a colour-loop that stays phase-locked
+    across lamps, unlike each Hue lamp cycling through colours independently.
+
+    Computes a per-lamp **colour** directly (full saturation/value), not a
+    brightness shape; ``main.py`` maps a constant level through
+    ``[glow_low, glow_high]`` on top (usually ``glow_high``, i.e. full colour).
+    """
+
+    def __init__(self, num_lights: int, period_s: float = 6.0) -> None:
+        self.num_lights = max(1, num_lights)
+        self.period_s = max(0.2, period_s)
+
+    def colors_for(self, t: float) -> list[tuple[float, float, float]]:
+        """Per-lamp ``(r, g, b)`` in 0..255 (float), full saturation/value."""
+        n = self.num_lights
+        out: list[tuple[float, float, float]] = []
+        for i in range(n):
+            hue = ((t / self.period_s) + i / n) % 1.0
+            r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+            out.append((r * 255.0, g * 255.0, b * 255.0))
+        return out
+
+
+class RedAlertMeteor:
+    """Several independent comets crossing the channels at randomised speeds,
+    directions and peak brightness – a busier, less orderly cousin of
+    :class:`RedAlertComet`, which runs a single deterministic sweep.
+
+    Each meteor's start position/speed/brightness is randomised once at
+    construction (like :class:`RedAlertGlitter`'s palette/seed), then
+    :meth:`brightness_for` is a pure function of ``t`` – no per-frame state.
+    """
+
+    _TAIL_FRAC = 0.35
+
+    def __init__(
+        self,
+        num_lights: int,
+        count: int = 3,
+        speed: float = 1.2,
+        seed: int | None = None,
+    ) -> None:
+        self.num_lights = max(1, num_lights)
+        self.count = max(1, count)
+        rng = random.Random(seed)
+        speed = max(0.05, speed)
+        self._meteors = [
+            {
+                "offset": rng.uniform(0, self.num_lights),
+                "speed": rng.uniform(speed * 0.6, speed * 1.6) * rng.choice((1.0, -1.0)),
+                "peak": rng.uniform(0.55, 1.0),
+            }
+            for _ in range(self.count)
+        ]
+        self._tail = max(0.3, self._TAIL_FRAC * self.num_lights)
+
+    def brightness_for(self, t: float) -> list[float]:
+        """Per-light 0..1 shape at time ``t`` – the brightest overlapping meteor wins."""
+        n = self.num_lights
+        levels = [0.0] * n
+        for m in self._meteors:
+            head = (m["offset"] + m["speed"] * t) % n
+            for i in range(n):
+                d = (head - i) % n  # distance behind the head, wrapping
+                if d < self._tail:
+                    lvl = m["peak"] * math.exp(-d / (self._tail / 3.0))
+                    if lvl > levels[i]:
+                        levels[i] = lvl
+        return [min(1.0, v) for v in levels]
+
+
+class RedAlertWipe:
+    """Sequential fill across the channels (like a loading bar) that holds
+    once full, then resets and fills again – a one-shot motif repeated on a
+    loop, unlike ``chase``'s continuously moving band.
+
+    ``sweep_seconds`` is the fill duration (channel 0 to the last channel);
+    ``pause_seconds`` is how long it holds fully lit before resetting to
+    empty and filling again.
+    """
+
+    def __init__(
+        self, num_lights: int, sweep_seconds: float = 1.4, pause_seconds: float = 0.6
+    ) -> None:
+        self.num_lights = max(1, num_lights)
+        self.sweep_seconds = max(0.1, sweep_seconds)
+        self.pause_seconds = max(0.0, pause_seconds)
+
+    def brightness_for(self, t: float) -> list[float]:
+        """Per-light 0..1 shape at time ``t`` – how far the fill has reached."""
+        cycle = self.sweep_seconds + self.pause_seconds
+        u = t % cycle
+        n = self.num_lights
+        if u >= self.sweep_seconds:
+            return [1.0] * n
+        filled = (u / self.sweep_seconds) * n
+        return [min(1.0, max(0.0, filled - i)) for i in range(n)]
+
+
+class RedAlertFirework:
+    """One-shot bursts radiating outward from the centre channel, then
+    fading – repeats every ``interval_s``. Good for a celebratory trigger
+    (countdown, doorbell) rather than a continuous ambient loop.
+    """
+
+    _DECAY_FRAC = 0.5
+
+    def __init__(self, num_lights: int, interval_s: float = 3.0, speed: float = 6.0) -> None:
+        self.num_lights = max(1, num_lights)
+        self.center = (self.num_lights - 1) / 2.0
+        self.interval_s = max(0.2, interval_s)
+        self.speed = max(0.5, speed)
+
+    def brightness_for(self, t: float) -> list[float]:
+        """Per-light 0..1 shape at time ``t`` – the burst ring's current radius/decay."""
+        age = t % self.interval_s
+        radius = age * self.speed
+        decay = math.exp(-age / self._DECAY_FRAC)
+        return [decay if abs(i - self.center) <= radius else 0.0 for i in range(self.num_lights)]
