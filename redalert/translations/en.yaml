@@ -81,7 +81,7 @@ configuration:
         Overrides the glitter_colors option for this one bridge (hex colours
         separated by spaces). Empty = use the default below.
     gc_direction:
-      name: gradient_chase direction(s) (this bridge)
+      name: chase direction(s) (this bridge)
       description: >-
         Overrides the gc_direction option for this one bridge. A single value
         (forward/backward/bounce) applies to every strip on this bridge; once
@@ -89,40 +89,40 @@ configuration:
         comma-separated list (one direction per strip, e.g.
         "forward,backward"). Empty = use the default below.
     gc_strip_lengths:
-      name: gradient_chase strip lengths (this bridge)
+      name: chase strip lengths (this bridge)
       description: >-
-        effect gradient_chase only. Splits this bridge's channels (after
+        effect chase only (Gradient Lightstrips). Splits this bridge's channels (after
         channel_order) into consecutive Gradient Lightstrips, as a
         comma-separated list of segment counts, e.g. "7,5" for two combined
         strips of 7 and 5 segments. Must sum to the channel count, otherwise
         a single strip spanning all channels is used. Empty = one strip.
     gc_count:
-      name: gradient_chase chase count (this bridge)
+      name: chase count (this bridge)
       description: >-
         Overrides the gc_count option for this one bridge. Empty = use the
         default below.
     gc_length:
-      name: gradient_chase chase length (this bridge)
+      name: chase length (this bridge)
       description: >-
         Overrides the gc_length option for this one bridge. Empty = use the
         default below.
     gc_speed:
-      name: gradient_chase speed (this bridge)
+      name: chase speed (this bridge)
       description: >-
         Overrides the gc_speed option for this one bridge. Empty = use the
         default below.
     gc_background_color:
-      name: gradient_chase background colour (this bridge)
+      name: chase background colour (this bridge)
       description: >-
         Overrides the gc_background_color option for this one bridge. Empty =
         use the default below.
     gc_chase_glitter:
-      name: gradient_chase chases sparkle (this bridge)
+      name: chase bands sparkle (this bridge)
       description: >-
         Overrides the gc_chase_glitter option for this one bridge. Empty =
         use the default below.
     gc_background_pulse:
-      name: gradient_chase background pulses (this bridge)
+      name: chase background pulses (this bridge)
       description: >-
         Overrides the gc_background_pulse option for this one bridge. Empty =
         use the default below.
@@ -131,9 +131,9 @@ configuration:
     description: >-
       Default effect for bridges without their own setting. pulse = all lamps
       together: 0 to 100 % on the beat, back to 0 between pulses (fall faster
-      than rise). chase = a comet runs evenly around the channels, dragging a
+      than rise). comet = a comet runs evenly around the channels, dragging a
       tail behind it. glitter = each lamp sparkles on its own in very short
-      bursts of changing colour (diamond twinkle). gradient_chase = Gradient
+      bursts of changing colour (diamond twinkle). chase = Gradient
       Lightstrips only: one or more soft-edged two-colour bands slide along
       the segments, see the gc_* options. neutral = the lamps are not driven
       at all (e.g. for an effect set where only some bridges run).
@@ -150,13 +150,13 @@ configuration:
   sweep_seconds:
     name: Sweep duration (default)
     description: >-
-      Default for bridges without their own setting. chase: seconds for one
+      Default for bridges without their own setting. comet: seconds for one
       full loop of the comet around all lamps. pulse: length of one full
       up/down cycle (0.3–5.0).
   chase_pause:
     name: chase pause in seconds (default)
     description: >-
-      Default for bridges without their own setting. Pause between two chase
+      Default for bridges without their own setting. Pause between two comet
       runs. 0 = one continuous looping comet (default). > 0 = one full run,
       then all lamps rest at the low glow for that many seconds, then the
       next run.
@@ -202,43 +202,43 @@ configuration:
       "#FFFFFF #CFE8FF #FFF1D0") each spark picks from at random. Empty = the
       colour of the respective bridge.
   gc_direction:
-    name: gradient_chase direction (default)
+    name: chase direction (default)
     description: >-
-      effect gradient_chase only. Default chase direction for bridges without
+      effect chase only (Gradient Lightstrips). Default chase direction for bridges without
       their own setting: forward (looping), backward (looping) or bounce
       (reflects off both ends like a Larson scanner instead of looping).
   gc_count:
-    name: gradient_chase chase count (default)
+    name: chase count (default)
     description: >-
-      effect gradient_chase only. How many chase bands run at once, evenly
+      effect chase only (Gradient Lightstrips). How many chase bands run at once, evenly
       spaced along the strip (default 1).
   gc_length:
-    name: gradient_chase chase length (default)
+    name: chase length (default)
     description: >-
-      effect gradient_chase only. Width of a chase band's solid-colour core
+      effect chase only (Gradient Lightstrips). Width of a chase band's solid-colour core
       in segments (default 2.0), with a soft edge fading to the background
       colour.
   gc_speed:
-    name: gradient_chase speed (default)
+    name: chase speed (default)
     description: >-
-      effect gradient_chase only. How many segments a chase head crosses per
+      effect chase only (Gradient Lightstrips). How many segments a chase head crosses per
       second (default 4.0).
   gc_background_color:
-    name: gradient_chase background colour (default)
+    name: chase background colour (default)
     description: >-
-      effect gradient_chase only. Default hex colour outside the chase bands
+      effect chase only (Gradient Lightstrips). Default hex colour outside the chase bands
       (default #000000, off). The chase colour comes from the color
       option/field.
   gc_chase_glitter:
-    name: gradient_chase chases sparkle (default)
+    name: chase bands sparkle (default)
     description: >-
-      effect gradient_chase only. Makes the chase bands additionally sparkle
+      effect chase only (Gradient Lightstrips). Makes the chase bands additionally sparkle
       like effect glitter (uses glitter_interval_ms/glitter_flash_ms/
       glitter_colors), sparks only inside the bands.
   gc_background_pulse:
-    name: gradient_chase background pulses (default)
+    name: chase background pulses (default)
     description: >-
-      effect gradient_chase only. Makes the background additionally pulse
+      effect chase only (Gradient Lightstrips). Makes the background additionally pulse
       between glow_low and glow_high like effect pulse (uses attack_ms/
       release_ms/sweep_seconds), instead of resting quietly at glow_low. The
       chase bands stay unaffected at glow_high.

@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.9.0
+
+- **Breaking: Effekt-Namen umbenannt.** Der bisherige Komet-Effekt heißt jetzt
+  `comet` (vorher `chase`), der Gradient-Lightstrip-Effekt jetzt `chase`
+  (vorher `gradient_chase`). Bestehende Effektsets (`/data/presets.json`),
+  gespeicherte `bridges`-Optionen und `rest_command`-Aufrufe, die `effect:
+  chase` oder `effect: gradient_chase` verwenden, müssen auf `comet` bzw.
+  `chase` angepasst werden – alte Werte werden nicht mehr erkannt (fallen auf
+  `pulse` zurück). Alle sonstigen Parameter (`gc_*`, `chase_pause`, …) heißen
+  unverändert weiter.
+- **Web-UI: Farbwähler statt Hex-Text für alle Farbparameter.** Jede
+  Bridge-Karte bietet für `color` und `gc_background_color` jetzt einen
+  Farbwähler mit „eigene Farbe verwenden“-Häkchen statt eines Hex-Textfelds;
+  `glitter_colors` (je Bridge) besteht jetzt aus drei Farbwählern statt einem
+  Freitextfeld.
+- **Fix: Effekt-Auswahl „wie Konfiguration“ sprang zurück.** Der periodische
+  Konfigurations-Sync (alle 5 s) konnte eine bewusst gewählte Bridge-Einstellung
+  (z. B. „wie Konfiguration“ im Effekt-Feld) wieder überschreiben, sobald das
+  Feld leer war. Alle Bridge-Karten-Felder merken sich jetzt, ob der Nutzer sie
+  angefasst hat, und werden danach vom Sync nicht mehr angetastet.
+- **Web-UI, „2 · Steuerung“: Eingabefelder entfernt.** Effekt/Farbe/Timing/
+  Dauer/fps ließen sich hier nie wirksam setzen, weil jede Bridge entweder
+  eigene Werte hat oder „wie Konfiguration“ nutzt – der Standard kommt jetzt
+  ausschließlich aus der App-Konfiguration. Übrig bleiben die
+  Parameter-Erklärungen sowie **Start**/**Stop**.
+- **„wie oben“ → „wie Konfiguration“** in der Effekt-Auswahl jeder Bridge-Karte
+  (Bezug auf die App-Konfiguration statt der jetzt entfernten Felder unter
+  „2 · Steuerung“).
+- **Status zeigt jetzt alle Konfigurationsparameter**, inklusive
+  `restore_state` und `log_level` (vorher nicht angezeigt); `/config` liefert
+  `log_level` neu mit.
+
 ## 1.8.0
 
 - **Neuer Effekt `gradient_chase`** – nur für Hue Gradient Lightstrips (jeder

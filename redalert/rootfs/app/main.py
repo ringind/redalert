@@ -2,9 +2,10 @@
 
 Der Dienst hält pro konfigurierter Hue Bridge (bis zu 3) einen eigenen
 DTLS-Stream offen und schiebt ~25 Frames/s an die Kanäle: ein gemeinsames
-Auf-/Ab-Blenden aller Lampen einer Bridge (``effect: pulse``, Standard), das
-originale Larson-Scanner-Lauflicht (``effect: chase``) oder ein
-Diamant-Gefunkel aus kurzen Farb-Blitzen (``effect: glitter``).
+Auf-/Ab-Blenden aller Lampen einer Bridge (``effect: pulse``, Standard), ein
+umlaufender Komet mit Schweif (``effect: comet``), ein Diamant-Gefunkel aus
+kurzen Farb-Blitzen (``effect: glitter``) oder – für Gradient Lightstrips –
+weich überblendete Farbbänder (``effect: chase``).
 Effekt, Farbe und Timing sind pro Bridge einzeln einstellbar; alle Bridges
 starten trotzdem gleichzeitig (gemeinsame Start-Uhr nach parallelen
 DTLS-Handshakes). Läuft für ``duration`` Sekunden (Standardwert aus der
@@ -27,7 +28,7 @@ import aiohttp
 from aiohttp import web
 from hue_entertainment import EntertainmentSession, HueEntertainmentAPI, LightColorCommand
 
-from chase import RedAlertChase, RedAlertGlitter, RedAlertGradientChase, RedAlertPulse
+from chase import RedAlertChase, RedAlertComet, RedAlertGlitter, RedAlertPulse
 
 DATA_DIR = Path(os.environ.get("REDALERT_DATA_DIR", "/data"))
 CRED_FILE = DATA_DIR / "credentials.json"
@@ -78,7 +79,7 @@ options = load_json(OPTIONS_FILE, {})
 
 def _effect_name(value) -> str:
     v = str(value or "").lower()
-    return v if v in ("pulse", "chase", "glitter", "gradient_chase", "neutral") else "pulse"
+    return v if v in ("pulse", "comet", "glitter", "chase", "neutral") else "pulse"
 
 
 _GC_DIRECTIONS = ("forward", "backward", "bounce")
@@ -288,7 +289,7 @@ state = {
     "glitter_flash_ms": max(1.0, float(options.get("glitter_flash_ms", 260.0))),
     # Roh-String wie konfiguriert; leer -> je Bridge die Einzelfarbe.
     "glitter_colors": str(options.get("glitter_colors", "") or ""),
-    # Nur effect gradient_chase (Gradient Lightstrips):
+    # Nur effect chase (Gradient Lightstrips):
     "gc_direction": _gc_direction(options.get("gc_direction", "forward")),
     "gc_count": max(1, int(options.get("gc_count", 1))),
     "gc_length": min(max(float(options.get("gc_length", 2.0)), 0.2), 200.0),
@@ -310,7 +311,7 @@ state = {
 log.info(
     "Konfiguration: bridges=%s (Standard) effect=%s color=%s fps=%s sweep=%ss chase_pause=%ss "
     "attack=%sms release=%sms glow=%s..%s glitter=%sms/%sms colors=%r "
-    "gradient_chase=dir=%s/count=%s/length=%s/speed=%s bg=%s glitter=%s pulse=%s "
+    "chase=dir=%s/count=%s/length=%s/speed=%s bg=%s glitter=%s pulse=%s "
     "duration=%ss (0=unbegrenzt) presets=%s",
     [
         {"bridge_host": b["bridge_host"], "area_id": b["area_id"], "channel_order": b["channel_order"],
@@ -515,6 +516,7 @@ async def handle_config(request: web.Request) -> web.Response:
             "gc_chase_glitter": state["gc_chase_glitter"],
             "gc_background_pulse": state["gc_background_pulse"],
             "restore_state": state["restore_state"],
+            "log_level": str(options.get("log_level", "info")),
             "default_duration_s": state["duration"],
             "presets": sorted(state["presets"].keys()),
             "current_preset": state["current_preset"],
@@ -602,23 +604,23 @@ async def handle_areas(request: web.Request) -> web.Response:
 # --------------------------------------------------------------------------- #
 # Effekt starten / stoppen
 # --------------------------------------------------------------------------- #
-def _gradient_chase_chans(
+def _chase_chans(
     ctx: dict, elapsed: float, dt: float, glow_low: float, glow_span: float
 ) -> list[tuple[float, float, float, float]]:
-    """Ein Frame ``effect: gradient_chase`` als ``(r, g, b, scaled_level)`` je Kanal.
+    """Ein Frame ``effect: chase`` als ``(r, g, b, scaled_level)`` je Kanal.
 
-    Holt pro Strip (``ctx["gradient_chase"]``, je eine ``RedAlertGradientChase``-
+    Holt pro Strip (``ctx["chase"]``, je eine ``RedAlertChase``-
     Instanz) den 0..1-Blend und reiht die Ergebnisse in Kanalreihenfolge
     aneinander; interpoliert je Kanal zwischen ``gc_background_color`` (Blend 0)
     und ``color`` (Blend 1). Die Chase-Bänder liegen dabei immer auf
-    ``glow_high`` (wie der Kopf bei ``chase``); der Background ruht ohne
+    ``glow_high`` (wie der Kopf bei ``comet``); der Background ruht ohne
     ``gc_background_pulse`` auf ``glow_low`` und pulsiert mit gesetztem
     Parameter stattdessen zwischen ``glow_low`` und ``glow_high`` (gleiches
     Timing wie ``effect: pulse``). Chase-Glitter legt zusätzlich Funken nur
     innerhalb der Bänder (Blend > 0.5) obendrauf.
     """
     blend: list[float] = []
-    for gc in ctx["gradient_chase"]:
+    for gc in ctx["chase"]:
         blend.extend(gc.blend_for(elapsed))
     if ctx["gc_background_pulse"]:
         target = RedAlertPulse.periodic(elapsed, ctx["sweep_seconds"])
@@ -654,8 +656,8 @@ async def _run_effect(
     """Effekt auf mehreren Bridges gleichzeitig fahren, jede mit ihrem eigenen
     Effekt/Farbe/Timing (siehe ``handle_start._resolve``).
 
-    Jede Bridge bekommt ihre eigenen ``RedAlertChase``/``RedAlertPulse``/
-    ``RedAlertGlitter``/``RedAlertGradientChase``-Instanzen (Kanalzahl, Timing
+    Jede Bridge bekommt ihre eigenen ``RedAlertComet``/``RedAlertPulse``/
+    ``RedAlertGlitter``/``RedAlertChase``-Instanzen (Kanalzahl, Timing
     und Effekt-Art können pro Bridge unterschiedlich sein). Damit sie trotzdem
     **gleichzeitig** loslegen statt nacheinander, starten alle DTLS-Handshakes
     parallel, und die gemeinsame ``elapsed``-Uhr beginnt erst, wenn alle fertig
@@ -665,7 +667,7 @@ async def _run_effect(
     for ctx in bridge_ctxs:
         n = len(ctx["channel_ids"])
         ctx["pulse"] = RedAlertPulse(num_lights=n, attack_s=ctx["attack_s"], release_s=ctx["release_s"])
-        ctx["chase"] = RedAlertChase(
+        ctx["comet"] = RedAlertComet(
             num_lights=n, sweep_seconds=ctx["sweep_seconds"], pause_seconds=ctx["chase_pause"]
         )
         ctx["glitter"] = RedAlertGlitter(
@@ -674,11 +676,11 @@ async def _run_effect(
             flash_s=ctx["glitter_flash_ms"] / 1000.0,
             palette=ctx["glitter_palette"],
         )
-        # Ein RedAlertGradientChase je Gradient-Lightstrip dieser Bridge (siehe
+        # Ein RedAlertChase je Gradient-Lightstrip dieser Bridge (siehe
         # gc_strips in handle_start._resolve) – jeder mit seiner eigenen
         # Chase-Richtung, aber gemeinsamer count/length/speed.
-        ctx["gradient_chase"] = [
-            RedAlertGradientChase(
+        ctx["chase"] = [
+            RedAlertChase(
                 num_lights=strip["length"],
                 direction=strip["direction"],
                 count=ctx["gc_count"],
@@ -739,11 +741,11 @@ async def _run_effect(
                         (r, g, b, glow_low + glow_span * lvl)
                         for lvl, (r, g, b) in ctx["glitter"].step(dt)
                     ]
-                elif ctx["effect"] == "gradient_chase":
-                    chans = _gradient_chase_chans(ctx, elapsed, dt, glow_low, glow_span)
+                elif ctx["effect"] == "chase":
+                    chans = _chase_chans(ctx, elapsed, dt, glow_low, glow_span)
                 else:
-                    if ctx["effect"] == "chase":
-                        levels = ctx["chase"].brightness_for(elapsed)
+                    if ctx["effect"] == "comet":
+                        levels = ctx["comet"].brightness_for(elapsed)
                     else:  # pulse
                         target = RedAlertPulse.periodic(elapsed, ctx["sweep_seconds"])
                         levels = ctx["pulse"].step(target, dt)
@@ -936,7 +938,7 @@ async def handle_start(request: web.Request) -> web.Response:
     gc_count?, gc_length?, gc_speed?, gc_background_color?, gc_chase_glitter?,
     gc_background_pulse?}``) übersteuert für diesen Aufruf die Option
     ``bridges`` – jede Bridge kann ihren eigenen Effekt/Farbe/Timing haben.
-    ``gc_strip_lengths`` (nur ``effect: gradient_chase``, je Bridge, z. B.
+    ``gc_strip_lengths`` (nur ``effect: chase``, je Bridge, z. B.
     ``[7, 5]``) teilt die Kanäle dieser Bridge in aufeinanderfolgende Gradient-
     Lightstrips auf; ``gc_direction`` kann dann ebenfalls eine Liste sein
     (eine Chase-Richtung je Strip statt eines Werts für alle). ``effect:
@@ -1019,7 +1021,7 @@ async def handle_start(request: web.Request) -> web.Response:
     defaults["glitter_palette"] = _parse_color_list(
         _gc if _gc is not None else state["glitter_colors"]
     )
-    # Nur effect gradient_chase (Gradient Lightstrips).
+    # Nur effect chase (Gradient Lightstrips).
     defaults["gc_direction"] = _parse_gc_directions(body.get("gc_direction")) or state["gc_direction"]
     try:
         defaults["gc_count"] = max(1, int(body.get("gc_count") or state["gc_count"]))
@@ -1082,7 +1084,7 @@ async def handle_start(request: web.Request) -> web.Response:
         color = cfg.get("color", defaults["color"])
         palette = cfg.get("glitter_colors", defaults["glitter_palette"]) or [color]
 
-        # gradient_chase: Kanäle dieser Bridge in aufeinanderfolgende Gradient-
+        # chase: Kanäle dieser Bridge in aufeinanderfolgende Gradient-
         # Lightstrips aufteilen (gc_strip_lengths), jeder mit eigener
         # Chase-Richtung (gc_direction darf eine Liste sein, eine je Strip).
         # Passt die Summe nicht zur tatsächlichen Kanalzahl, gilt best-effort

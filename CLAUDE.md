@@ -13,10 +13,12 @@ Repositories*; the app itself lives in `redalert/`. The app drives a Star Trek "
 scene across ~6 Philips Hue lamps on **up to 3 Hue Bridges simultaneously** via
 the **Hue Entertainment API** (persistent DTLS stream per bridge, ~25 Hz) rather
 than normal Bridge scenes — `effect` is one of `pulse` (default: all lamps on
-that bridge together, periodic), `chase` (a comet with a tail), `glitter`
-(per-lamp random colour sparkle) or `neutral` (bridge left untouched — no
-stream/restore; per-bridge only, for effect sets where some bridges run and
-others don't). **Effect, colour, and timing are configurable per bridge**
+that bridge together, periodic), `comet` (a comet with a tail), `glitter`
+(per-lamp random colour sparkle), `chase` (Gradient Lightstrips only —
+soft-edged two-colour bands sliding along the segments) or `neutral` (bridge
+left untouched — no stream/restore; per-bridge only, for effect sets where
+some bridges run and others don't). **Effect, colour, and timing are
+configurable per bridge**
 (falling back to shared defaults when not overridden); all bridges still start
 **simultaneously** (parallel DTLS handshakes, shared start epoch) for a
 configurable `duration` (the `duration` option, shared across all bridges; `0` =
@@ -70,13 +72,13 @@ redalert/                  the app
   icon.png / logo.png      store graphics (generated, solid-red beacon)
   rootfs/etc/s6-overlay/s6-rc.d/redalert/{type,run,finish}  s6 service (bashio)
   rootfs/app/main.py        REST server + streaming loop + serves panel.html
-  rootfs/app/chase.py       RedAlertPulse (beat gate) + RedAlertChase (comet+tail) + RedAlertGlitter (per-lamp sparkle), no I/O
+  rootfs/app/chase.py       RedAlertPulse (beat gate) + RedAlertComet (comet+tail) + RedAlertGlitter (per-lamp sparkle) + RedAlertChase (Gradient Lightstrip bands), no I/O
   rootfs/app/panel.html     Ingress web UI (vanilla JS, relative fetch URLs)
 ```
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.8.0**.
+No build system, linter, or test suite. Current version: **1.9.0**.
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
   after every code change — the only static check available.
@@ -171,7 +173,7 @@ Three layers under `redalert/rootfs/app/`:
   `_run_effect` maps it onto `[glow_low, glow_high]` (options / `/start` body,
   clamped, `glow_high` forced ≥ `glow_low`) — so "0" is the resting glow, not
   necessarily black.
-  - `RedAlertChase.brightness_for(t)` → per-light `[0,1]` list. Per lamp, a pure
+  - `RedAlertComet.brightness_for(t)` → per-light `[0,1]` list. Per lamp, a pure
     function of `phase` (fraction of `sweep_seconds` since the head passed it):
     a flat `1.0` head of width `self.top` (= `max(peak_frac, 1/n + overlap_frac)`
     for n≥2 — wider than the lamp spacing so two adjacent lamps hold 100% together
@@ -203,12 +205,12 @@ surviving bridge gets the **same** `start = loop.time()` epoch — this is what
 keeps bridges starting simultaneously, even though each can run a completely
 different effect/colour/timing. A bridge whose handshake raises is dropped
 from `active` and logged; if none survive, the loop returns early. Each
-bridge gets its **own** `RedAlertChase`/`RedAlertPulse` instance (built once
+bridge gets its **own** `RedAlertComet`/`RedAlertPulse` instance (built once
 before the loop, sized to that bridge's own channel count and timing); every
 frame, each active bridge independently computes its 0..1 shape from the
-**same shared** `elapsed`/`dt` (so e.g. two bridges both running `chase` with
+**same shared** `elapsed`/`dt` (so e.g. two bridges both running `comet` with
 the same `sweep_seconds` stay phase-identical, and a `pulse` bridge's beat
-timing is anchored to the same clock as a `chase` bridge next to it) — there
+timing is anchored to the same clock as a `comet` bridge next to it) — there
 is no longer a single shared level reused across bridges verbatim, since
 bridges can now differ. Levels are mapped to `glow_low + (glow_high-glow_low)*lvl`
 per bridge (so between pulses lamps rest at that bridge's `glow_low`, not 0) →
@@ -229,18 +231,29 @@ it works both behind Ingress (path-prefixed) and via published port 8099. Polls
 `/config` every 5 s. Section "1 · Bridges" renders `BRIDGE_COUNT` = 3 identical
 cards (`bridgeCardHTML(i)`, ids `b${i}-*`) — pairing, area list/pick, own
 `channel_order` field, a nested `<details>` "Effekt für diese Bridge anpassen"
-(`b${i}-effect` with a blank "wie oben" option + `b${i}-color/sweep/chpause/
-attack/release/glowlow/glowhigh`, all optional — empty means inherit the
-shared default), and its own nested "Lampen zuordnen" (`AREAS[i]`,
-`renderIdentify(i)`, each POSTs `/identify` with that card's `bridge_host` and,
-if set, its own `b${i}-color` override). Section "2 · Steuerung" holds the
-**shared** run controls (`duration`/`fps`, always global) plus the **default**
-effect form (effect/color/sweep/chase_pause/glow) used by any bridge card that
-doesn't override that field. On Start it assembles `body.bridges` from
-whichever of the 3 cards have both `bridge_host` and `area_id` filled in, each
-entry including only the per-bridge fields that were actually set (empty cards
-are skipped entirely; if none are filled, `bridges` is omitted and the server
-falls back to the configured `bridges` option).
+(`b${i}-effect` with a blank "wie Konfiguration" option + `b${i}-color/sweep/
+chpause/attack/release/glowlow/glowhigh/…`, all optional — empty means
+inherit the app configuration), and its own nested "Lampen zuordnen"
+(`AREAS[i]`, `renderIdentify(i)`, each POSTs `/identify` with that card's
+`bridge_host` and, if set, its own `b${i}-color` override). Colour parameters
+(`color`, `gc_background_color`, `glitter_colors`) are `<input type=color>`
+pickers gated by a same-row "eigene Farbe verwenden" checkbox (`b${i}-color-en`
+etc. — unchecked = disabled input = inherit; `glitter_colors` uses three
+pickers `b${i}-gcolor0/1/2` behind one checkbox). Every bridge-card field sets
+`dataset.touched = "1"` on user interaction (`wireBridgeCard`'s generic
+listener); the periodic `/config` sync in `refresh()` (`syncIfUntouched` /
+`syncColorOverride`) only ever writes a field that isn't touched yet, so a
+deliberate choice (including explicitly picking "wie Konfiguration") survives
+later polls. Section "2 · Steuerung" has **no input fields** — effect
+parameters, `duration` and `fps` all come from the app configuration (or a
+bridge's own override); the section just renders the parameter descriptions
+plus **Start**/**Stop**. On Start, `collectBody()` assembles `body.bridges`
+from whichever of the 3 cards have both `bridge_host` and `area_id` filled in
+(each entry including only the per-bridge fields actually overridden; empty
+cards are skipped, and if none are filled `bridges` is omitted so the server
+falls back to the configured `bridges` option), merged over `LOADED_EXTRA` —
+any non-`bridges` fields from a preset loaded via `applyBody()`, preserved
+verbatim on save even though the UI no longer exposes controls for them.
 
 **Two Hue API surfaces:** the `hue_entertainment` lib (`EntertainmentSession`,
 `HueEntertainmentAPI`) does *only* DTLS streaming + pairing + area listing.
@@ -253,13 +266,15 @@ cert). See `_clip` / `capture_light_state` / `restore_light_state`.
 - Effect color comes from a bridge's own `bridges[].color` override, else the
   `color` option / `/start` body default (default red); `chase.py` only
   computes brightness, `main.py` applies the color.
-- `effect` default is `pulse` (all lamps together); `chase` is the comet.
-  Both are per-bridge overridable (`bridges[].effect`) — different bridges can
-  run different effects at the same time.
+- `effect` default is `pulse` (all lamps together); `comet` is the comet with
+  a tail; `chase` is the Gradient Lightstrip band effect (renamed from
+  `gradient_chase` in 1.9.0 — `comet` was itself renamed from the old
+  `chase`). All are per-bridge overridable (`bridges[].effect`) — different
+  bridges can run different effects at the same time.
 - `restore_state` (default true) snapshots + restores every area lamp via CLIP v2;
   runs in `_run_effect` before the handshake / in `finally` after `aclose()`.
 - Channel order = `channel_order` option if set, else the area's native order
-  (only meaningful for `chase`); it's per-bridge, like `area_id`.
+  (only meaningful for `comet`); it's per-bridge, like `area_id`.
 - Each Bridge allows only **one** active Entertainment stream at a time (this is
   per-*bridge*, not global — different bridges stream independently and
   concurrently); the DTLS handshake is 3–9 s per bridge.
@@ -281,11 +296,18 @@ cert). See `_clip` / `capture_light_state` / `restore_light_state`.
 3. `redalert/rootfs/app/main.py` — `state[...]` default from `options.get(...)`;
    the startup config `log.info(...)` line; `handle_start` body parse
    (`body.get(..., state[...])`); the `/config` JSON; the `state["last_start"]` dict.
-4. `redalert/rootfs/app/panel.html` — if user-facing and shared across bridges:
-   an input in section "2 · Steuerung", the `body.*` in `btn-start`, the
-   status-grid field, and the prefill in `refresh()`. If it's per-bridge (like
-   `area_id`/`channel_order`): a field in `bridgeCardHTML(i)` instead, wired in
-   `wireBridgeCard(i)`.
+4. `redalert/rootfs/app/panel.html` — since 1.9.0, section "2 · Steuerung" has
+   no input fields (only descriptions + Start/Stop): a **shared** option (not
+   per-bridge) only needs its read-only line added to the `fields` object in
+   `refresh()` (Status). A **per-bridge** option (like `area_id`/
+   `channel_order`, or any of the effect parameters) needs a field in
+   `bridgeCardHTML(i)`, wired in `wireBridgeCard(i)` (the generic
+   `input`/`select` loop already attaches `dataset.touched` tracking — a
+   colour value instead needs an `<input type=color>` + "eigene Farbe
+   verwenden" checkbox pair like `b${i}-color`/`b${i}-color-en`, synced via
+   `syncColorOverride`/`setColorOverride` and read via `colorOverride()` in
+   `collectBody()`), plus its `syncIfUntouched`/`syncColorOverride` line in
+   `refresh()` and its entry in `collectBody()`/`applyBody()`.
 5. `redalert/DOCS.md` (options table + `/start` body list) and `README.md`
    (§5 options table + §6 `/start` row + §8 "Effekt anpassen" if it tunes an effect).
 6. `redalert/CHANGELOG.md` + version bump (see the `release` skill).

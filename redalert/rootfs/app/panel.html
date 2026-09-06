@@ -34,6 +34,9 @@
   input[type=number] { width: 6.5rem; }
   input[type=text] { min-width: 12rem; }
   input[type=color] { width: 4.5rem; height: 3rem; padding: .2rem; cursor: pointer; }
+  input[type=color]:disabled { opacity: .35; cursor: not-allowed; }
+  .color-row { display: flex; align-items: center; gap: .4rem; }
+  .color-row input[type=checkbox] { margin: 0; }
   button { font: inherit; font-weight: 600; padding: .5rem .9rem; border: 0; border-radius: 8px;
     background: var(--accent); color: var(--accent-fg); cursor: pointer;
     box-shadow: 0 1px 0 rgba(0,0,0,.15); transition: transform .05s, box-shadow .05s, filter .05s; }
@@ -88,8 +91,8 @@
       drücken, IP eintragen, innerhalb ~30 s „Pairen“ klicken, dann „Bereiche
       laden“ und den gewünschten Bereich übernehmen. Über „Effekt für diese
       Bridge anpassen“ kann jede Bridge ihren eigenen Effekt/Farbe/Timing
-      bekommen – leer gelassene Felder übernehmen den Standard aus
-      „2 · Steuerung“.
+      bekommen – „wie Konfiguration“ bzw. leer gelassene Felder übernehmen den
+      Standard aus der App-Konfiguration.
     </p>
     <div id="bridges"></div>
   </section>
@@ -97,41 +100,16 @@
   <section class="card">
     <h2>2 · Steuerung</h2>
     <p class="muted" style="margin-top:0">
-      Dauer und fps gelten immer für alle Bridges gemeinsam. Effekt/Farbe/Timing
-      hier sind der <strong>Standard</strong> für Bridges ohne eigene
-      Einstellung (siehe „1 · Bridges“).
+      Alle Parameter (Effekt, Farbe, Timing, Dauer, fps, …) kommen aus der
+      App-Konfiguration (Tab „Konfiguration“) bzw. aus den Overrides der
+      jeweiligen Bridge-Karte oben – siehe „Status“ für die aktuell
+      wirksamen Werte. <strong>Start</strong> / <strong>Stop</strong> starten/stoppen
+      alle eingerichteten Bridges gleichzeitig; die beiden Knöpfe zeigen per
+      gedrücktem Zustand an, ob der Effekt gerade läuft.
     </p>
-    <div class="row">
-      <div><label for="effect">Effekt</label><select id="effect"><option value="pulse">pulse (Takt)</option><option value="chase">chase (Lauflicht)</option><option value="glitter">glitter (Funkeln)</option><option value="gradient_chase">gradient_chase (Gradient-Strip)</option><option value="neutral">neutral (nicht steuern)</option></select></div>
-      <div><label for="duration">Dauer (s, 0 = unbegrenzt)</label><input type="number" id="duration" min="0" step="1"></div>
-      <div><label for="fps">fps</label><input type="number" id="fps" min="5" max="50" step="1"></div>
-      <div><label for="sweep">sweep_seconds</label><input type="number" id="sweep" min="0.3" max="5" step="0.1"></div>
-      <div><label for="chpause">chase-Pause (s)</label><input type="number" id="chpause" min="0" max="60" step="0.5" placeholder="0"></div>
-      <div><label for="attack">Attack (ms)</label><input type="number" id="attack" min="0" max="2000" step="10" placeholder="140"></div>
-      <div><label for="release">Release (ms)</label><input type="number" id="release" min="0" max="5000" step="10" placeholder="70"></div>
-      <div><label for="glowlow">glow_low (0–1)</label><input type="number" id="glowlow" min="0" max="1" step="0.01" placeholder="0.08"></div>
-      <div><label for="glowhigh">glow_high (0–1)</label><input type="number" id="glowhigh" min="0" max="1" step="0.01" placeholder="1"></div>
-      <div><label for="color">Farbe</label><input type="color" id="color" value="#ff0000"></div>
-    </div>
-    <div class="row" style="margin-top:.6rem">
-      <div><label for="ginterval">glitter: Intervall (ms)</label><input type="number" id="ginterval" min="5" max="5000" step="5" placeholder="90"></div>
-      <div><label for="gflash">glitter: Blitzdauer (ms)</label><input type="number" id="gflash" min="20" max="5000" step="10" placeholder="260"></div>
-      <div style="flex:1 1 100%"><label for="gcolors">glitter: Farben (Hex, mit Leerzeichen getrennt – leer = Farbe oben)</label>
-        <input type="text" id="gcolors" placeholder="#FFFFFF #CFE8FF #FFF1D0" style="width:100%"></div>
-    </div>
-    <div class="row" style="margin-top:.6rem">
-      <div><label for="gcdir">gradient_chase: Richtung</label>
-        <select id="gcdir"><option value="forward">forward</option><option value="backward">backward</option><option value="bounce">bounce</option></select></div>
-      <div><label for="gccount">gradient_chase: Anzahl Chases</label><input type="number" id="gccount" min="1" max="8" step="1" placeholder="1"></div>
-      <div><label for="gclength">gradient_chase: Länge (Segmente)</label><input type="number" id="gclength" min="0.2" max="200" step="0.5" placeholder="2"></div>
-      <div><label for="gcspeed">gradient_chase: Geschwindigkeit (Segm./s)</label><input type="number" id="gcspeed" min="0.01" max="50" step="0.5" placeholder="4"></div>
-      <div><label for="gcbg">gradient_chase: Background-Farbe</label><input type="color" id="gcbg" value="#000000"></div>
-      <div><label><input type="checkbox" id="gcglitter"> Chases funkeln</label></div>
-      <div><label><input type="checkbox" id="gcpulse"> Background pulsiert</label></div>
-    </div>
     <p class="muted" style="margin:.5rem 0 0">
-      <strong>Dauer</strong> (leer = Standard aus der App-Option <code>duration</code>):
-      wie lange der Effekt läuft, bevor er von selbst endet (oder vorher per „Stop“).
+      <strong>Dauer</strong> (App-Option <code>duration</code>): wie lange der
+      Effekt läuft, bevor er von selbst endet (oder vorher per „Stop“).
       <code>0</code> = unbegrenzt, läuft bis „Stop“.<br>
       <strong>Attack / Release</strong> (nur <code>effect: pulse</code>): Auf- bzw.
       Abblendzeit zwischen <code>glow_low</code> und <code>glow_high</code>; Release
@@ -139,14 +117,18 @@
       <strong>glow_low / glow_high</strong> (alle Effekte): Ruhe-Helligkeit zwischen den
       Pulsen bzw. Helligkeit im Puls-Maximum. Zwischen den Pulsen gehen die Lampen auf
       <code>glow_low</code> zurück (nicht auf 0), im Maximum auf <code>glow_high</code>.<br>
+      <strong>comet</strong> (nur <code>effect: comet</code>): ein Komet läuft
+      umlaufend über die Kanäle und zieht einen Schweif hinter sich her;
+      <code>chase-Pause</code> = Pause zwischen zwei Durchläufen (0 =
+      durchgehend).<br>
       <strong>glitter</strong> (nur <code>effect: glitter</code>): jede Lampe funkelt für
       sich auf. <code>Intervall</code> = mittlerer Abstand zwischen zwei Blitzen (klein =
       hektischer), <code>Blitzdauer</code> = wie schnell ein Funken abklingt (größer als
-      das Intervall ⇒ mehrere Lampen gleichzeitig), <code>Farben</code> = Hex-Liste, aus
-      der jeder Funken zufällig zieht (leer = Farbe oben).<br>
-      <strong>gradient_chase</strong> (nur <code>effect: gradient_chase</code>, für
+      das Intervall ⇒ mehrere Lampen gleichzeitig), <code>Farben</code> = bis zu drei
+      Farben, aus denen jeder Funken zufällig zieht.<br>
+      <strong>chase</strong> (nur <code>effect: chase</code>, für
       Gradient Lightstrips): ein oder mehrere weich überblendete Bänder in der
-      Farbe oben laufen über die Segmente, dazwischen die
+      Bridge-Farbe laufen über die Segmente, dazwischen die
       Background-Farbe. <code>Anzahl Chases</code>/<code>Länge</code> = wie viele
       Bänder gleichzeitig und wie breit (in Segmenten); <code>Geschwindigkeit</code>
       = Segmente pro Sekunde; <code>Richtung</code> = <code>forward</code>/
@@ -170,8 +152,8 @@
   <section class="card">
     <h2>3 · Effektsets</h2>
     <p class="muted" style="margin-top:0">
-      Alle Einstellungen aus „1 · Bridges“ und „2 · Steuerung“ unter einem Namen
-      speichern, später wieder laden oder direkt starten (auch per
+      Alle Bridge-Karten aus „1 · Bridges“ unter einem Namen speichern, später
+      wieder laden oder direkt starten (auch per
       <code>POST /start {"preset": "…"}</code>). Sets lassen sich als JSON-Datei
       herunter- und wieder hochladen.
     </p>
@@ -279,45 +261,56 @@
           <div class="row" style="margin:.6rem 0">
             <div><label for="b${i}-effect">Effekt</label>
               <select id="b${i}-effect">
-                <option value="">wie oben</option>
+                <option value="">wie Konfiguration</option>
                 <option value="pulse">pulse (Takt)</option>
-                <option value="chase">chase (Lauflicht)</option>
+                <option value="comet">comet (Lauflicht)</option>
                 <option value="glitter">glitter (Funkeln)</option>
-                <option value="gradient_chase">gradient_chase (Gradient-Strip)</option>
+                <option value="chase">chase (Gradient-Strip)</option>
                 <option value="neutral">neutral (nicht steuern)</option>
               </select></div>
-            <div><label for="b${i}-color">Farbe (Hex, leer = wie oben)</label>
-              <input type="text" id="b${i}-color" placeholder="#FF0000"></div>
+            <div><label for="b${i}-color">Farbe (diese Bridge)</label>
+              <div class="color-row">
+                <input type="checkbox" id="b${i}-color-en" title="eigene Farbe verwenden">
+                <input type="color" id="b${i}-color" value="#ff0000" disabled>
+              </div></div>
             <div><label for="b${i}-sweep">sweep_seconds</label>
-              <input type="number" id="b${i}-sweep" min="0.3" max="5" step="0.1" placeholder="wie oben"></div>
+              <input type="number" id="b${i}-sweep" min="0.3" max="5" step="0.1" placeholder="wie Konfiguration"></div>
             <div><label for="b${i}-chpause">chase-Pause (s)</label>
-              <input type="number" id="b${i}-chpause" min="0" max="60" step="0.5" placeholder="wie oben"></div>
+              <input type="number" id="b${i}-chpause" min="0" max="60" step="0.5" placeholder="wie Konfiguration"></div>
             <div><label for="b${i}-attack">Attack (ms)</label>
-              <input type="number" id="b${i}-attack" min="0" max="2000" step="10" placeholder="wie oben"></div>
+              <input type="number" id="b${i}-attack" min="0" max="2000" step="10" placeholder="wie Konfiguration"></div>
             <div><label for="b${i}-release">Release (ms)</label>
-              <input type="number" id="b${i}-release" min="0" max="5000" step="10" placeholder="wie oben"></div>
+              <input type="number" id="b${i}-release" min="0" max="5000" step="10" placeholder="wie Konfiguration"></div>
             <div><label for="b${i}-glowlow">glow_low (0–1)</label>
-              <input type="number" id="b${i}-glowlow" min="0" max="1" step="0.01" placeholder="wie oben"></div>
+              <input type="number" id="b${i}-glowlow" min="0" max="1" step="0.01" placeholder="wie Konfiguration"></div>
             <div><label for="b${i}-glowhigh">glow_high (0–1)</label>
-              <input type="number" id="b${i}-glowhigh" min="0" max="1" step="0.01" placeholder="wie oben"></div>
+              <input type="number" id="b${i}-glowhigh" min="0" max="1" step="0.01" placeholder="wie Konfiguration"></div>
             <div><label for="b${i}-ginterval">glitter: Intervall (ms)</label>
-              <input type="number" id="b${i}-ginterval" min="5" max="5000" step="5" placeholder="wie oben"></div>
+              <input type="number" id="b${i}-ginterval" min="5" max="5000" step="5" placeholder="wie Konfiguration"></div>
             <div><label for="b${i}-gflash">glitter: Blitzdauer (ms)</label>
-              <input type="number" id="b${i}-gflash" min="20" max="5000" step="10" placeholder="wie oben"></div>
-            <div style="flex:1 1 100%"><label for="b${i}-gcolors">glitter: Farben (Hex, leer = wie oben)</label>
-              <input type="text" id="b${i}-gcolors" placeholder="#FFFFFF #CFE8FF #FFF1D0" style="width:100%"></div>
-            <div><label for="b${i}-gcdir">gradient_chase: Richtung(en)</label>
-              <input type="text" id="b${i}-gcdir" placeholder="wie oben, z. B. forward,backward"></div>
-            <div><label for="b${i}-gcstrips">gradient_chase: Strip-Längen</label>
+              <input type="number" id="b${i}-gflash" min="20" max="5000" step="10" placeholder="wie Konfiguration"></div>
+            <div><label for="b${i}-gcolor0">glitter: Farben (diese Bridge)</label>
+              <div class="color-row">
+                <input type="checkbox" id="b${i}-gcolors-en" title="eigene Farben verwenden">
+                <input type="color" id="b${i}-gcolor0" value="#ffffff" disabled>
+                <input type="color" id="b${i}-gcolor1" value="#cfe8ff" disabled>
+                <input type="color" id="b${i}-gcolor2" value="#fff1d0" disabled>
+              </div></div>
+            <div><label for="b${i}-gcdir">chase: Richtung(en)</label>
+              <input type="text" id="b${i}-gcdir" placeholder="wie Konfiguration, z. B. forward,backward"></div>
+            <div><label for="b${i}-gcstrips">chase: Strip-Längen</label>
               <input type="text" id="b${i}-gcstrips" placeholder="1 Strip, z. B. 7,5"></div>
-            <div><label for="b${i}-gccount">gradient_chase: Anzahl Chases</label>
-              <input type="number" id="b${i}-gccount" min="1" max="8" step="1" placeholder="wie oben"></div>
-            <div><label for="b${i}-gclength">gradient_chase: Länge (Segmente)</label>
-              <input type="number" id="b${i}-gclength" min="0.2" max="200" step="0.5" placeholder="wie oben"></div>
-            <div><label for="b${i}-gcspeed">gradient_chase: Geschwindigkeit (Segm./s)</label>
-              <input type="number" id="b${i}-gcspeed" min="0.01" max="50" step="0.5" placeholder="wie oben"></div>
-            <div><label for="b${i}-gcbg">gradient_chase: Background-Farbe (leer = wie oben)</label>
-              <input type="text" id="b${i}-gcbg" placeholder="#000000"></div>
+            <div><label for="b${i}-gccount">chase: Anzahl Chases</label>
+              <input type="number" id="b${i}-gccount" min="1" max="8" step="1" placeholder="wie Konfiguration"></div>
+            <div><label for="b${i}-gclength">chase: Länge (Segmente)</label>
+              <input type="number" id="b${i}-gclength" min="0.2" max="200" step="0.5" placeholder="wie Konfiguration"></div>
+            <div><label for="b${i}-gcspeed">chase: Geschwindigkeit (Segm./s)</label>
+              <input type="number" id="b${i}-gcspeed" min="0.01" max="50" step="0.5" placeholder="wie Konfiguration"></div>
+            <div><label for="b${i}-gcbg">chase: Background-Farbe (diese Bridge)</label>
+              <div class="color-row">
+                <input type="checkbox" id="b${i}-gcbg-en" title="eigene Background-Farbe verwenden">
+                <input type="color" id="b${i}-gcbg" value="#000000" disabled>
+              </div></div>
             <div><label><input type="checkbox" id="b${i}-gcglitter"> Chases funkeln</label></div>
             <div><label><input type="checkbox" id="b${i}-gcpulse"> Background pulsiert</label></div>
           </div>
@@ -355,19 +348,68 @@
     }
   }
 
+  // Farb-Override-Feld lesen: null, wenn die "eigene Farbe"-Checkbox aus ist.
+  function colorOverride(enId, colorId) {
+    return $(enId).checked ? $(colorId).value : null;
+  }
+
   async function identify(i, extra) {
     const host = $(`b${i}-host`).value.trim();
     if (!host) { logLine(`Bridge ${i + 1}: keine Bridge-IP eingetragen.`); return; }
     const body = Object.assign({ bridge_host: host }, extra);
     if ($(`b${i}-area`).value.trim()) body.area_id = $(`b${i}-area`).value.trim();
     if ($(`b${i}-idsecs`).value !== "") body.seconds = Number($(`b${i}-idsecs`).value);
-    const ownColor = $(`b${i}-color`).value.trim();
-    body.color = ownColor || $("color").value;
+    const ownColor = colorOverride(`b${i}-color-en`, `b${i}-color`);
+    if (ownColor) body.color = ownColor;
     await api("identify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     refresh();
   }
 
+  // Setzt Checkbox + Farbfelder eines Overrides (unbedingt – z. B. beim Laden
+  // eines Effektsets) und markiert sie als "touched", damit der nächste
+  // periodische refresh() sie nicht mit dem Konfigurationswert überschreibt.
+  function setColorOverride(enId, colorIds, hexStr) {
+    const enEl = $(enId);
+    const parts = hexStr
+      ? String(Array.isArray(hexStr) ? hexStr.join(" ") : hexStr).replace(/,/g, " ").trim().split(/\s+/).filter(Boolean)
+      : [];
+    enEl.checked = parts.length > 0;
+    enEl.dataset.touched = "1";
+    colorIds.forEach((id, idx) => {
+      const el = $(id);
+      el.disabled = !enEl.checked;
+      if (parts[idx]) el.value = parts[idx].toLowerCase();
+      el.dataset.touched = "1";
+    });
+  }
+
+  // Wie setColorOverride, aber nur, wenn die Felder noch nicht vom Nutzer
+  // angefasst wurden (für den periodischen Konfigurations-Sync in refresh()).
+  function syncColorOverride(enId, colorIds, hexStr) {
+    if (hexStr == null || $(enId).dataset.touched) return;
+    setColorOverride(enId, colorIds, hexStr);
+  }
+
   function wireBridgeCard(i) {
+    const card = document.querySelector(`.bridge-card[data-idx="${i}"]`);
+    // Jedes Feld dieser Karte als "touched" markieren, sobald der Nutzer es
+    // anfasst – verhindert, dass der periodische Konfigurations-Sync in
+    // refresh() eine bewusste Auswahl (z. B. "wie Konfiguration") wieder
+    // überschreibt.
+    card.querySelectorAll("input, select").forEach((el) => {
+      const evt = (el.tagName === "SELECT" || el.type === "checkbox" || el.type === "color") ? "change" : "input";
+      el.addEventListener(evt, () => { el.dataset.touched = "1"; });
+    });
+    $(`b${i}-color-en`).addEventListener("change", () => {
+      $(`b${i}-color`).disabled = !$(`b${i}-color-en`).checked;
+    });
+    $(`b${i}-gcbg-en`).addEventListener("change", () => {
+      $(`b${i}-gcbg`).disabled = !$(`b${i}-gcbg-en`).checked;
+    });
+    $(`b${i}-gcolors-en`).addEventListener("change", () => {
+      const on = $(`b${i}-gcolors-en`).checked;
+      $(`b${i}-gcolor0`).disabled = $(`b${i}-gcolor1`).disabled = $(`b${i}-gcolor2`).disabled = !on;
+    });
     $(`b${i}-pair`).onclick = async () => {
       const body = {};
       if ($(`b${i}-host`).value.trim()) body.bridge_host = $(`b${i}-host`).value.trim();
@@ -390,7 +432,7 @@
         el.innerHTML = `<div><strong>${a.name || "(ohne Name)"}</strong><br><code>${a.id}</code> · Kanäle: ${a.channels.join(", ")}</div>`;
         const btn = document.createElement("button");
         btn.className = "secondary"; btn.textContent = "übernehmen";
-        btn.onclick = () => { $(`b${i}-area`).value = a.id; logLine(`Bridge ${i + 1}: area_id gesetzt: ` + a.id); renderIdentify(i); };
+        btn.onclick = () => { $(`b${i}-area`).value = a.id; $(`b${i}-area`).dataset.touched = "1"; logLine(`Bridge ${i + 1}: area_id gesetzt: ` + a.id); renderIdentify(i); };
         el.appendChild(btn);
         box.appendChild(el);
       }
@@ -400,6 +442,18 @@
     $(`b${i}-area`).addEventListener("input", () => renderIdentify(i));
   }
   for (let i = 0; i < BRIDGE_COUNT; i++) wireBridgeCard(i);
+
+  // Feld nur setzen, wenn der Nutzer es noch nicht angefasst hat (verhindert,
+  // dass der periodische Konfigurations-Sync eine laufende Eingabe bzw. eine
+  // bewusste Auswahl wie "wie Konfiguration" überschreibt).
+  function syncIfUntouched(id, val) {
+    const el = $(id);
+    if (val != null && val !== "" && !el.dataset.touched) el.value = val;
+  }
+  function syncCheckboxIfUntouched(id, val) {
+    const el = $(id);
+    if (val != null && !el.dataset.touched) el.checked = !!val;
+  }
 
   // --- Status / Steuerung ---------------------------------------------------
   async function refresh() {
@@ -416,24 +470,26 @@
 
     const s = $("status"); s.innerHTML = "";
     const fields = {
-      "Dauer (Standard)": data.default_duration_s > 0 ? `${data.default_duration_s} s` : "unbegrenzt",
-      "Effekt (Standard)": data.effect,
-      "Farbe (Standard)": data.color,
+      "Dauer (Konfiguration)": data.default_duration_s > 0 ? `${data.default_duration_s} s` : "unbegrenzt",
+      "Effekt (Konfiguration)": data.effect,
+      "Farbe (Konfiguration)": data.color,
       "fps": data.fps,
-      "sweep_seconds (Standard)": data.sweep_seconds,
-      "chase-Pause (Standard)": data.chase_pause ? `${data.chase_pause} s` : "aus (durchgehend)",
-      "attack / release (Standard)": `${data.attack_ms} / ${data.release_ms} ms`,
-      "glow low / high (Standard)": `${data.glow_low} / ${data.glow_high}`,
-      "glitter (Standard)": `${data.glitter_interval_ms} / ${data.glitter_flash_ms} ms · `
+      "sweep_seconds (Konfiguration)": data.sweep_seconds,
+      "chase-Pause (Konfiguration)": data.chase_pause ? `${data.chase_pause} s` : "aus (durchgehend)",
+      "attack / release (Konfiguration)": `${data.attack_ms} / ${data.release_ms} ms`,
+      "glow low / high (Konfiguration)": `${data.glow_low} / ${data.glow_high}`,
+      "glitter (Konfiguration)": `${data.glitter_interval_ms} / ${data.glitter_flash_ms} ms · `
         + (data.glitter_colors ? data.glitter_colors : "Bridge-Farbe"),
-      "gradient_chase (Standard)": `${data.gc_direction} · ${data.gc_count}× · ${data.gc_length} Seg. · `
+      "chase (Konfiguration)": `${data.gc_direction} · ${data.gc_count}× · ${data.gc_length} Seg. · `
         + `${data.gc_speed} Seg./s · bg ${data.gc_background_color}`
         + (data.gc_chase_glitter ? " · Chases funkeln" : "") + (data.gc_background_pulse ? " · bg pulsiert" : ""),
+      "Lichtzustand wiederherstellen": data.restore_state ? "ja" : "nein",
+      "Log-Level": data.log_level,
       "Effektsets": (data.presets && data.presets.length) ? data.presets.join(", ") : "keine",
     };
     bridges.forEach((b, i) => {
-      const own = b.effect ? `${b.effect}${b.color ? " " + b.color : ""}` : "Standard";
-      fields[`Bridge ${i + 1} (Option)`] =
+      const own = b.effect ? `${b.effect}${b.color ? " " + b.color : ""}` : "Konfiguration";
+      fields[`Bridge ${i + 1} (Konfiguration)`] =
         `${b.bridge_host} · ${b.paired ? "gepaart" : "nicht gepaart"} · Bereich ${b.area_id || "–"} · Effekt: ${own}`;
     });
     for (const [k, v] of Object.entries(fields)) {
@@ -444,71 +500,46 @@
 
     bridges.forEach((b, i) => {
       if (i >= BRIDGE_COUNT) return;
-      if (b.bridge_host && !$(`b${i}-host`).value) $(`b${i}-host`).value = b.bridge_host;
-      if (b.area_id && !$(`b${i}-area`).value) $(`b${i}-area`).value = b.area_id;
-      if (b.channel_order && b.channel_order.length && !$(`b${i}-order`).value)
-        $(`b${i}-order`).value = b.channel_order.join(", ");
-      if (b.effect && !$(`b${i}-effect`).value) $(`b${i}-effect`).value = b.effect;
-      if (b.color && !$(`b${i}-color`).value) $(`b${i}-color`).value = b.color;
-      if (b.sweep_seconds != null && !$(`b${i}-sweep`).value) $(`b${i}-sweep`).value = b.sweep_seconds;
-      if (b.chase_pause != null && !$(`b${i}-chpause`).value) $(`b${i}-chpause`).value = b.chase_pause;
-      if (b.attack_ms != null && !$(`b${i}-attack`).value) $(`b${i}-attack`).value = b.attack_ms;
-      if (b.release_ms != null && !$(`b${i}-release`).value) $(`b${i}-release`).value = b.release_ms;
-      if (b.glow_low != null && !$(`b${i}-glowlow`).value) $(`b${i}-glowlow`).value = b.glow_low;
-      if (b.glow_high != null && !$(`b${i}-glowhigh`).value) $(`b${i}-glowhigh`).value = b.glow_high;
-      if (b.glitter_interval_ms != null && !$(`b${i}-ginterval`).value) $(`b${i}-ginterval`).value = b.glitter_interval_ms;
-      if (b.glitter_flash_ms != null && !$(`b${i}-gflash`).value) $(`b${i}-gflash`).value = b.glitter_flash_ms;
-      if (b.glitter_colors && !$(`b${i}-gcolors`).value) $(`b${i}-gcolors`).value = b.glitter_colors;
-      if (b.gc_direction && !$(`b${i}-gcdir`).value)
-        $(`b${i}-gcdir`).value = Array.isArray(b.gc_direction) ? b.gc_direction.join(",") : b.gc_direction;
-      if (b.gc_strip_lengths && b.gc_strip_lengths.length && !$(`b${i}-gcstrips`).value)
-        $(`b${i}-gcstrips`).value = b.gc_strip_lengths.join(",");
-      if (b.gc_count != null && !$(`b${i}-gccount`).value) $(`b${i}-gccount`).value = b.gc_count;
-      if (b.gc_length != null && !$(`b${i}-gclength`).value) $(`b${i}-gclength`).value = b.gc_length;
-      if (b.gc_speed != null && !$(`b${i}-gcspeed`).value) $(`b${i}-gcspeed`).value = b.gc_speed;
-      if (b.gc_background_color && !$(`b${i}-gcbg`).value) $(`b${i}-gcbg`).value = b.gc_background_color;
-      if (b.gc_chase_glitter != null) $(`b${i}-gcglitter`).checked = !!b.gc_chase_glitter;
-      if (b.gc_background_pulse != null) $(`b${i}-gcpulse`).checked = !!b.gc_background_pulse;
+      syncIfUntouched(`b${i}-host`, b.bridge_host);
+      syncIfUntouched(`b${i}-area`, b.area_id);
+      if (b.channel_order && b.channel_order.length) syncIfUntouched(`b${i}-order`, b.channel_order.join(", "));
+      syncIfUntouched(`b${i}-effect`, b.effect);
+      syncColorOverride(`b${i}-color-en`, [`b${i}-color`], b.color);
+      syncIfUntouched(`b${i}-sweep`, b.sweep_seconds);
+      syncIfUntouched(`b${i}-chpause`, b.chase_pause);
+      syncIfUntouched(`b${i}-attack`, b.attack_ms);
+      syncIfUntouched(`b${i}-release`, b.release_ms);
+      syncIfUntouched(`b${i}-glowlow`, b.glow_low);
+      syncIfUntouched(`b${i}-glowhigh`, b.glow_high);
+      syncIfUntouched(`b${i}-ginterval`, b.glitter_interval_ms);
+      syncIfUntouched(`b${i}-gflash`, b.glitter_flash_ms);
+      syncColorOverride(`b${i}-gcolors-en`, [`b${i}-gcolor0`, `b${i}-gcolor1`, `b${i}-gcolor2`], b.glitter_colors);
+      if (b.gc_direction) syncIfUntouched(`b${i}-gcdir`, Array.isArray(b.gc_direction) ? b.gc_direction.join(",") : b.gc_direction);
+      if (b.gc_strip_lengths && b.gc_strip_lengths.length) syncIfUntouched(`b${i}-gcstrips`, b.gc_strip_lengths.join(","));
+      syncIfUntouched(`b${i}-gccount`, b.gc_count);
+      syncIfUntouched(`b${i}-gclength`, b.gc_length);
+      syncIfUntouched(`b${i}-gcspeed`, b.gc_speed);
+      syncColorOverride(`b${i}-gcbg-en`, [`b${i}-gcbg`], b.gc_background_color);
+      syncCheckboxIfUntouched(`b${i}-gcglitter`, b.gc_chase_glitter);
+      syncCheckboxIfUntouched(`b${i}-gcpulse`, b.gc_background_pulse);
       setPill($(`b${i}-pill`), b.paired, b.paired ? "gepaart" : "nicht gepaart");
       renderIdentify(i);
     });
 
-    if (data.default_duration_s != null)
-      $("duration").placeholder = data.default_duration_s > 0 ? data.default_duration_s : "unbegrenzt";
-    if (data.effect && !$("effect").dataset.touched) $("effect").value = data.effect;
-    if (data.fps && !$("fps").value) $("fps").value = data.fps;
-    if (data.sweep_seconds && !$("sweep").value) $("sweep").value = data.sweep_seconds;
-    if (data.chase_pause != null && !$("chpause").value && data.chase_pause > 0) $("chpause").value = data.chase_pause;
-    if (data.attack_ms != null && !$("attack").value) $("attack").value = data.attack_ms;
-    if (data.release_ms != null && !$("release").value) $("release").value = data.release_ms;
-    if (data.glow_low != null && !$("glowlow").value) $("glowlow").value = data.glow_low;
-    if (data.glow_high != null && !$("glowhigh").value) $("glowhigh").value = data.glow_high;
-    if (data.glitter_interval_ms != null && !$("ginterval").value) $("ginterval").value = data.glitter_interval_ms;
-    if (data.glitter_flash_ms != null && !$("gflash").value) $("gflash").value = data.glitter_flash_ms;
-    if (data.glitter_colors && !$("gcolors").value) $("gcolors").value = data.glitter_colors;
-    if (data.gc_direction && !$("gcdir").dataset.touched) $("gcdir").value = data.gc_direction;
-    if (data.gc_count != null && !$("gccount").value) $("gccount").value = data.gc_count;
-    if (data.gc_length != null && !$("gclength").value) $("gclength").value = data.gc_length;
-    if (data.gc_speed != null && !$("gcspeed").value) $("gcspeed").value = data.gc_speed;
-    if (data.gc_background_color && !$("gcbg").dataset.touched) $("gcbg").value = data.gc_background_color.toLowerCase();
-    if (data.gc_chase_glitter != null && !$("gcglitter").dataset.touched) $("gcglitter").checked = !!data.gc_chase_glitter;
-    if (data.gc_background_pulse != null && !$("gcpulse").dataset.touched) $("gcpulse").checked = !!data.gc_background_pulse;
-    if (data.color && !$("color").dataset.touched) $("color").value = data.color.toLowerCase();
     loadPresets();
   }
 
   $("btn-refresh").onclick = refresh;
-  $("effect").onchange = () => { $("effect").dataset.touched = "1"; };
-  $("color").oninput = () => { $("color").dataset.touched = "1"; };
-  $("gcdir").onchange = () => { $("gcdir").dataset.touched = "1"; };
-  $("gcbg").oninput = () => { $("gcbg").dataset.touched = "1"; };
-  $("gcglitter").onchange = () => { $("gcglitter").dataset.touched = "1"; };
-  $("gcpulse").onchange = () => { $("gcpulse").dataset.touched = "1"; };
 
-  // Formular (Bridges + Steuerung) -> /start-Body. Basis für Start und Set-Speichern.
+  // Nicht in der Bridge-Karte editierbare Felder eines geladenen Effektsets
+  // (z. B. duration/fps, sofern das Set sie enthält) – werden beim erneuten
+  // Speichern unverändert mitgeschickt, obwohl das Web-UI dafür keine Felder
+  // mehr anzeigt (siehe „2 · Steuerung“).
+  let LOADED_EXTRA = {};
+
+  // Bridge-Karten -> /start-Body. Basis für Start und Set-Speichern.
   function collectBody() {
-    // Geteilte Felder aus „2 · Steuerung“.
-    const sharedNum = [
+    const bridgeNum = [
       ["sweep", "sweep_seconds"], ["chpause", "chase_pause"],
       ["attack", "attack_ms"], ["release", "release_ms"],
       ["glowlow", "glow_low"], ["glowhigh", "glow_high"],
@@ -527,77 +558,51 @@
       const order = $(`b${i}-order`).value.trim();
       if (order) entry.channel_order = order;
       if (ownEffect) entry.effect = ownEffect;
-      const ownColor = $(`b${i}-color`).value.trim();
+      const ownColor = colorOverride(`b${i}-color-en`, `b${i}-color`);
       if (ownColor) entry.color = ownColor;
-      const ownGcolors = $(`b${i}-gcolors`).value.trim();
-      if (ownGcolors) entry.glitter_colors = ownGcolors;
+      if ($(`b${i}-gcolors-en`).checked) {
+        entry.glitter_colors = [`b${i}-gcolor0`, `b${i}-gcolor1`, `b${i}-gcolor2`].map((id) => $(id).value).join(" ");
+      }
       const ownGcDir = $(`b${i}-gcdir`).value.trim();
       if (ownGcDir) entry.gc_direction = ownGcDir;
       const ownGcStrips = $(`b${i}-gcstrips`).value.trim();
       if (ownGcStrips) entry.gc_strip_lengths = ownGcStrips;
-      const ownGcBg = $(`b${i}-gcbg`).value.trim();
+      const ownGcBg = colorOverride(`b${i}-gcbg-en`, `b${i}-gcbg`);
       if (ownGcBg) entry.gc_background_color = ownGcBg;
       if ($(`b${i}-gcglitter`).checked) entry.gc_chase_glitter = true;
       if ($(`b${i}-gcpulse`).checked) entry.gc_background_pulse = true;
-      for (const [suf, key] of sharedNum) {
+      for (const [suf, key] of bridgeNum) {
         if ($(`b${i}-${suf}`).value !== "") entry[key] = Number($(`b${i}-${suf}`).value);
       }
       bridges.push(entry);
     }
-    const body = { color: $("color").value, effect: $("effect").value, gc_direction: $("gcdir").value };
+    const body = Object.assign({}, LOADED_EXTRA);
     if (bridges.length) body.bridges = bridges;
-    if ($("duration").value !== "") body.duration = Number($("duration").value);
-    if ($("fps").value !== "") body.fps = Number($("fps").value);
-    for (const [id, key] of sharedNum) {
-      if ($(id).value !== "") body[key] = Number($(id).value);
-    }
-    const gcolors = $("gcolors").value.trim();
-    if (gcolors) body.glitter_colors = gcolors;
-    body.gc_background_color = $("gcbg").value;
-    body.gc_chase_glitter = $("gcglitter").checked;
-    body.gc_background_pulse = $("gcpulse").checked;
+    else delete body.bridges;
     return body;
   }
 
-  // /start-Body (z. B. aus einem geladenen Set) -> Formular.
+  // /start-Body (z. B. aus einem geladenen Set) -> Bridge-Karten.
   function applyBody(b) {
     b = b || {};
-    const setVal = (id, v) => { $(id).value = (v === undefined || v === null) ? "" : v; };
-    if (b.effect) { $("effect").value = b.effect; $("effect").dataset.touched = "1"; }
-    if (b.color) { $("color").value = String(b.color).toLowerCase(); $("color").dataset.touched = "1"; }
-    setVal("duration", b.duration);
-    setVal("fps", b.fps);
-    setVal("sweep", b.sweep_seconds);
-    setVal("chpause", b.chase_pause);
-    setVal("attack", b.attack_ms);
-    setVal("release", b.release_ms);
-    setVal("glowlow", b.glow_low);
-    setVal("glowhigh", b.glow_high);
-    setVal("ginterval", b.glitter_interval_ms);
-    setVal("gflash", b.glitter_flash_ms);
-    $("gcolors").value = b.glitter_colors || "";
-    if (b.gc_direction) { $("gcdir").value = b.gc_direction; $("gcdir").dataset.touched = "1"; }
-    setVal("gccount", b.gc_count);
-    setVal("gclength", b.gc_length);
-    setVal("gcspeed", b.gc_speed);
-    if (b.gc_background_color) { $("gcbg").value = b.gc_background_color; $("gcbg").dataset.touched = "1"; }
-    $("gcglitter").checked = !!b.gc_chase_glitter; $("gcglitter").dataset.touched = "1";
-    $("gcpulse").checked = !!b.gc_background_pulse; $("gcpulse").dataset.touched = "1";
+    LOADED_EXTRA = Object.assign({}, b);
+    delete LOADED_EXTRA.bridges;
+    delete LOADED_EXTRA.preset;
+    const setVal = (id, v) => { const el = $(id); el.value = (v === undefined || v === null) ? "" : v; el.dataset.touched = "1"; };
     const arr = Array.isArray(b.bridges) ? b.bridges : [];
     for (let i = 0; i < BRIDGE_COUNT; i++) {
       const e = arr[i] || {};
       setVal(`b${i}-host`, e.bridge_host);
       setVal(`b${i}-area`, e.area_id);
-      $(`b${i}-order`).value = Array.isArray(e.channel_order)
-        ? e.channel_order.join(", ") : (e.channel_order || "");
-      $(`b${i}-effect`).value = e.effect || "";
-      $(`b${i}-color`).value = e.color || "";
-      $(`b${i}-gcolors`).value = e.glitter_colors || "";
-      $(`b${i}-gcdir`).value = Array.isArray(e.gc_direction) ? e.gc_direction.join(",") : (e.gc_direction || "");
-      $(`b${i}-gcstrips`).value = Array.isArray(e.gc_strip_lengths) ? e.gc_strip_lengths.join(",") : (e.gc_strip_lengths || "");
-      $(`b${i}-gcbg`).value = e.gc_background_color || "";
-      $(`b${i}-gcglitter`).checked = !!e.gc_chase_glitter;
-      $(`b${i}-gcpulse`).checked = !!e.gc_background_pulse;
+      setVal(`b${i}-order`, Array.isArray(e.channel_order) ? e.channel_order.join(", ") : (e.channel_order || ""));
+      setVal(`b${i}-effect`, e.effect || "");
+      setColorOverride(`b${i}-color-en`, [`b${i}-color`], e.color);
+      setColorOverride(`b${i}-gcolors-en`, [`b${i}-gcolor0`, `b${i}-gcolor1`, `b${i}-gcolor2`], e.glitter_colors);
+      setVal(`b${i}-gcdir`, Array.isArray(e.gc_direction) ? e.gc_direction.join(",") : (e.gc_direction || ""));
+      setVal(`b${i}-gcstrips`, Array.isArray(e.gc_strip_lengths) ? e.gc_strip_lengths.join(",") : (e.gc_strip_lengths || ""));
+      setColorOverride(`b${i}-gcbg-en`, [`b${i}-gcbg`], e.gc_background_color);
+      $(`b${i}-gcglitter`).checked = !!e.gc_chase_glitter; $(`b${i}-gcglitter`).dataset.touched = "1";
+      $(`b${i}-gcpulse`).checked = !!e.gc_background_pulse; $(`b${i}-gcpulse`).dataset.touched = "1";
       setVal(`b${i}-sweep`, e.sweep_seconds);
       setVal(`b${i}-chpause`, e.chase_pause);
       setVal(`b${i}-attack`, e.attack_ms);

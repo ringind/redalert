@@ -6,23 +6,23 @@ Effects, selected by the ``effect`` option / ``/start`` body:
   sound, dim in the pauses. Driven by the audio cue envelope (or a periodic
   cosine when no cue is active), with an asymmetric attack/release so the
   transitions read as fades rather than steps.
-- ``chase``: a comet running **continuously in one direction** around the
+- ``comet``: a comet running **continuously in one direction** around the
   channels (wraps at the end, constant speed). Each lamp on its own runs a
   **pulse**: a very short rise as the head arrives, then a long exponential
   fade back to the resting glow. Consecutive lamps peak one after another, so
-  together they read as a comet dragging a tail.
+  together they read as a comet dragging a tail. See ``RedAlertComet``.
 - ``glitter``: each lamp sparkles on its own – at random moments it snaps to
   full brightness in a colour picked from a palette and then fades out fast,
   like light glinting off diamonds. Several lamps can be lit at once.
-- ``gradient_chase``: one or more soft-edged two-colour bands sliding along
-  the channels – built for Hue Gradient Lightstrips, where each channel is a
-  coloured segment rather than a separate lamp. See ``RedAlertGradientChase``.
+- ``chase``: one or more soft-edged two-colour bands sliding along the
+  channels – built for Hue Gradient Lightstrips, where each channel is a
+  coloured segment rather than a separate lamp. See ``RedAlertChase``.
 
-``RedAlertChase`` / ``RedAlertPulse`` only compute a **0..1 shape**; ``main.py``
+``RedAlertComet`` / ``RedAlertPulse`` only compute a **0..1 shape**; ``main.py``
 maps it onto the configured ``glow_low`` / ``glow_high`` levels and applies the
 colour + 16-bit scaling. ``RedAlertGlitter`` additionally picks a per-lamp
 colour (``main.py`` still does the level mapping and 16-bit scaling).
-``RedAlertGradientChase`` computes a per-segment **blend** between two colours
+``RedAlertChase`` computes a per-segment **blend** between two colours
 instead (``main.py`` interpolates and layers glow/pulse/glitter on top).
 """
 
@@ -34,7 +34,7 @@ import random
 HUE_16BIT_MAX = 65535
 
 
-class RedAlertChase:
+class RedAlertComet:
     """Comet running continuously around the channels, dragging a tail.
 
     ``sweep_seconds`` is the time for **one full loop** past every channel, so a
@@ -278,7 +278,7 @@ class RedAlertGlitter:
         return list(zip(self._level, self._color))
 
 
-class RedAlertGradientChase:
+class RedAlertChase:
     """One or more soft-edged two-colour bands sliding along the channels.
 
     Built for Hue **Gradient Lightstrips**, where each Entertainment channel
@@ -300,7 +300,7 @@ class RedAlertGradientChase:
     ``count`` bands run at once, evenly spaced. ``direction``:
 
     - ``forward`` / ``backward``: the strip is a **loop** – bands wrap
-      seamlessly from the last segment back to the first, like ``chase``.
+      seamlessly from the last segment back to the first, like ``comet``.
     - ``bounce``: the strip is a **line** – bands reflect off both ends
       instead of wrapping, like a Larson scanner.
 

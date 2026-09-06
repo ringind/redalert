@@ -82,7 +82,7 @@ configuration:
         Überschreibt die Option glitter_colors für diese eine Bridge
         (Hex-Farben, durch Leerzeichen getrennt). Leer = Standard weiter unten.
     gc_direction:
-      name: gradient_chase – Richtung(en) (diese Bridge)
+      name: chase – Richtung(en) (diese Bridge)
       description: >-
         Überschreibt die Option gc_direction für diese eine Bridge. Ein Wert
         (forward/backward/bounce) gilt für alle Strips dieser Bridge; mit
@@ -90,40 +90,40 @@ configuration:
         kommagetrennte Liste stehen (eine Richtung je Strip, z. B.
         "forward,backward"). Leer = Standard weiter unten.
     gc_strip_lengths:
-      name: gradient_chase – Strip-Längen (diese Bridge)
+      name: chase – Strip-Längen (diese Bridge)
       description: >-
-        Nur effect gradient_chase. Teilt die Kanäle dieser Bridge (nach
+        Nur effect chase. Teilt die Kanäle dieser Bridge (nach
         channel_order) in aufeinanderfolgende Gradient-Lightstrips auf, als
         kommagetrennte Segmentzahlen, z. B. "7,5" für zwei kombinierte Strips
         zu 7 bzw. 5 Segmenten. Summe muss der Kanalzahl entsprechen, sonst
         gilt ein einzelner Strip über alle Kanäle. Leer = ein einzelner Strip.
     gc_count:
-      name: gradient_chase – Anzahl Chases (diese Bridge)
+      name: chase – Anzahl Chases (diese Bridge)
       description: >-
         Überschreibt die Option gc_count für diese eine Bridge. Leer =
         Standard weiter unten.
     gc_length:
-      name: gradient_chase – Chase-Länge (diese Bridge)
+      name: chase – Chase-Länge (diese Bridge)
       description: >-
         Überschreibt die Option gc_length für diese eine Bridge. Leer =
         Standard weiter unten.
     gc_speed:
-      name: gradient_chase – Geschwindigkeit (diese Bridge)
+      name: chase – Geschwindigkeit (diese Bridge)
       description: >-
         Überschreibt die Option gc_speed für diese eine Bridge. Leer =
         Standard weiter unten.
     gc_background_color:
-      name: gradient_chase – Background-Farbe (diese Bridge)
+      name: chase – Background-Farbe (diese Bridge)
       description: >-
         Überschreibt die Option gc_background_color für diese eine Bridge.
         Leer = Standard weiter unten.
     gc_chase_glitter:
-      name: gradient_chase – Chases funkeln (diese Bridge)
+      name: chase – Chases funkeln (diese Bridge)
       description: >-
         Überschreibt die Option gc_chase_glitter für diese eine Bridge. Leer =
         Standard weiter unten.
     gc_background_pulse:
-      name: gradient_chase – Background pulsiert (diese Bridge)
+      name: chase – Background pulsiert (diese Bridge)
       description: >-
         Überschreibt die Option gc_background_pulse für diese eine Bridge.
         Leer = Standard weiter unten.
@@ -132,10 +132,10 @@ configuration:
     description: >-
       Standard-Effekt für Bridges ohne eigene Einstellung. pulse = alle Lampen
       zusammen: von 0 auf 100 % im Takt, zwischen den Pulsen wieder auf 0
-      (Abfallen schneller als Aufblenden). chase = ein Komet läuft gleichmäßig
+      (Abfallen schneller als Aufblenden). comet = ein Komet läuft gleichmäßig
       umlaufend über die Kanäle und zieht einen Schweif hinter sich her.
       glitter = jede Lampe funkelt für sich in sehr kurzen Abständen in
-      wechselnden Farben auf (Diamant-Gefunkel). gradient_chase = nur für
+      wechselnden Farben auf (Diamant-Gefunkel). chase = nur für
       Gradient Lightstrips: ein oder mehrere weich überblendete Zwei-Farben-
       Bänder laufen über die Segmente, siehe die gc_*-Optionen. neutral = die
       Lampen werden nicht gesteuert (z. B. für ein Effektset, in dem nur
@@ -153,14 +153,14 @@ configuration:
   sweep_seconds:
     name: Sweep-Dauer (Standard)
     description: >-
-      Standard für Bridges ohne eigene Einstellung. chase: Sekunden für eine
+      Standard für Bridges ohne eigene Einstellung. comet: Sekunden für eine
       volle Umrundung aller Lampen. pulse: Dauer eines vollständigen
       Auf-/Ab-Zyklus (0.3–5.0).
   chase_pause:
     name: chase-Pause in Sekunden (Standard)
     description: >-
       Standard für Bridges ohne eigene Einstellung. Pause zwischen zwei
-      chase-Durchläufen. 0 = durchgehend umlaufender Komet (Standard). > 0 =
+      comet-Durchläufen. 0 = durchgehend umlaufender Komet (Standard). > 0 =
       ein kompletter Durchlauf, dann alle Lampen für so viele Sekunden auf dem
       Grund-Glühwert, dann der nächste Durchlauf.
   attack_ms:
@@ -205,44 +205,44 @@ configuration:
       z. B. "#FFFFFF #CFE8FF #FFF1D0"), aus denen jeder Funken zufällig eine
       Farbe zieht. Leer = die Farbe der jeweiligen Bridge.
   gc_direction:
-    name: gradient_chase – Richtung (Standard)
+    name: chase – Richtung (Standard)
     description: >-
-      Nur effect gradient_chase. Standard-Chaserichtung für Bridges ohne
+      Nur effect chase (Gradient Lightstrips). Standard-Chaserichtung für Bridges ohne
       eigene Einstellung: forward (vorwärts, umlaufend), backward (rückwärts,
       umlaufend) oder bounce (prallt an beiden Enden ab wie ein
       Larson-Scanner, statt umzulaufen).
   gc_count:
-    name: gradient_chase – Anzahl Chases (Standard)
+    name: chase – Anzahl Chases (Standard)
     description: >-
-      Nur effect gradient_chase. Wie viele Chase-Bänder gleichzeitig über den
+      Nur effect chase (Gradient Lightstrips). Wie viele Chase-Bänder gleichzeitig über den
       Strip laufen, gleichmäßig verteilt (Standard 1).
   gc_length:
-    name: gradient_chase – Chase-Länge (Standard)
+    name: chase – Chase-Länge (Standard)
     description: >-
-      Nur effect gradient_chase. Breite des vollfarbigen Kerns eines
+      Nur effect chase (Gradient Lightstrips). Breite des vollfarbigen Kerns eines
       Chase-Bands in Segmenten (Standard 2.0), mit weichem Übergang zur
       Background-Farbe an den Rändern.
   gc_speed:
-    name: gradient_chase – Geschwindigkeit (Standard)
+    name: chase – Geschwindigkeit (Standard)
     description: >-
-      Nur effect gradient_chase. Wie viele Segmente ein Chase-Kopf pro
+      Nur effect chase (Gradient Lightstrips). Wie viele Segmente ein Chase-Kopf pro
       Sekunde zurücklegt (Standard 4.0).
   gc_background_color:
-    name: gradient_chase – Background-Farbe (Standard)
+    name: chase – Background-Farbe (Standard)
     description: >-
-      Nur effect gradient_chase. Standard-Hex-Farbe des Bereichs außerhalb der
+      Nur effect chase (Gradient Lightstrips). Standard-Hex-Farbe des Bereichs außerhalb der
       Chase-Bänder (Vorgabe #000000, aus). Die Chase-Farbe kommt aus der
       Option/dem Feld color.
   gc_chase_glitter:
-    name: gradient_chase – Chases funkeln (Standard)
+    name: chase – Chases funkeln (Standard)
     description: >-
-      Nur effect gradient_chase. Lässt die Chase-Bänder zusätzlich wie
+      Nur effect chase (Gradient Lightstrips). Lässt die Chase-Bänder zusätzlich wie
       effect glitter funkeln (nutzt glitter_interval_ms/glitter_flash_ms/
       glitter_colors), Funken nur innerhalb der Bänder.
   gc_background_pulse:
-    name: gradient_chase – Background pulsiert (Standard)
+    name: chase – Background pulsiert (Standard)
     description: >-
-      Nur effect gradient_chase. Lässt den Background zusätzlich wie
+      Nur effect chase (Gradient Lightstrips). Lässt den Background zusätzlich wie
       effect pulse zwischen glow_low und glow_high pulsieren (nutzt
       attack_ms/release_ms/sweep_seconds), statt ruhig auf glow_low zu
       bleiben. Die Chase-Bänder bleiben davon unberührt auf glow_high.
