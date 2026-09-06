@@ -7,7 +7,7 @@ configuration:
       glow_high/glitter_interval_ms/glitter_flash_ms/glitter_colors/
       gc_direction/gc_strip_lengths/gc_count/gc_length/gc_speed/
       gc_background_color/gc_chase_glitter/gc_background_pulse/
-      police_color2/lightning_interval_ms/lightning_flash_ms/meteor_count/
+      color2/lightning_interval_ms/lightning_flash_ms/meteor_count/
       meteor_speed/firework_interval_ms/firework_speed/ripple_interval_ms/
       ripple_speed/wave_length/flicker_interval_ms/flicker_dip_ms are
       optional per bridge – leave empty and the like-named option below is
@@ -129,12 +129,12 @@ configuration:
       description: >-
         Overrides the gc_background_pulse option for this one bridge. Empty =
         use the default below.
-    police_color2:
+    color2:
       name: second colour (this bridge)
       description: >-
-        Overrides the police_color2 option for this one bridge – second
-        colour for police (group 2), duel (second comet) and sunrise (dark/
-        warm end). Empty = use the default below.
+        Overrides the color2 option for this one bridge – second colour for
+        police (group 2) and duel (second comet). Empty = use the default
+        below.
     lightning_interval_ms:
       name: lightning strike interval ms (this bridge)
       description: >-
@@ -213,10 +213,8 @@ configuration:
       several crests visible at once. flicker = lamps sporadically dip
       briefly, like a failing bulb. strobe = a hard, instant flash with no
       fade, party-strobe style. duel = two comets launch from opposite ends,
-      meet in the middle and bounce back. sunrise = one slow colour-and-
-      brightness arc for all lamps together, drifting between the second
-      colour (dark/warm) and the bridge colour (bright) and back. chase =
-      Gradient Lightstrips only: one or more soft-edged two-colour bands
+      meet in the middle and bounce back. chase = Gradient Lightstrips only:
+      one or more soft-edged two-colour bands
       slide along the segments, see the gc_* options. neutral = the lamps
       are not driven at all (e.g. for an effect set where only some bridges
       run).
@@ -235,10 +233,8 @@ configuration:
     description: >-
       Default for bridges without their own setting. comet: seconds for one
       full loop of the comet around all lamps. pulse/heartbeat: length of one
-      cycle. wave/strobe/duel: period length. sunrise: duration of one
-      direction (dark → bright); a full cycle takes twice as long. Range
-      0.3–300 – for sunrise, pick something much higher than for the fast
-      effects.
+      cycle. wave/strobe/duel: period length. Range 0.3–300 – for very slow,
+      calm effects pick something much higher than for the fast effects.
   chase_pause:
     name: chase pause in seconds (default)
     description: >-
@@ -328,13 +324,13 @@ configuration:
       between glow_low and glow_high like effect pulse (uses attack_ms/
       release_ms/sweep_seconds), instead of resting quietly at glow_low. The
       chase bands stay unaffected at glow_high.
-  police_color2:
-    name: police second colour (default)
+  color2:
+    name: second colour (default)
     description: >-
-      effect police only. Default hex colour of the second lamp group (the
-      first uses the color option/field). Default #0000FF (blue), so
-      together with the red default this gives classic red/blue emergency
-      lights.
+      Default hex colour for effect police (second lamp group) and effect
+      duel (second comet); the first colour comes from the color
+      option/field. Default #0000FF (blue), so together with the red default
+      this gives classic red/blue emergency lights.
   lightning_interval_ms:
     name: lightning strike interval ms (default)
     description: >-

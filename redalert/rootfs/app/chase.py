@@ -52,10 +52,6 @@ Effects, selected by the ``effect`` option / ``/start`` body:
   the middle and bouncing back off each other – unlike ``meteor``
   (independent, random) or ``comet`` (a single deterministic loop). See
   ``RedAlertDuel``.
-- ``sunrise``: one slow colour-and-brightness arc across the whole array,
-  drifting between two colours and back – every lamp shows the same colour
-  at the same time, like a single sky overhead, unlike ``aurora``'s per-lamp
-  phase-offset palette blend. See ``RedAlertSunrise``.
 
 ``RedAlertComet`` / ``RedAlertPulse`` / ``RedAlertMeteor`` / ``RedAlertWipe`` /
 ``RedAlertFirework`` / ``RedAlertPolice`` / ``RedAlertRipple`` /
@@ -71,10 +67,8 @@ colours instead (main.py interpolates and layers glow/pulse/glitter on top);
 ``RedAlertAurora`` / ``RedAlertRainbow`` instead compute a per-lamp
 **colour** directly (0..255 float RGB) with no separate brightness shape –
 main.py applies glow scaling on top of that colour. ``RedAlertDuel`` returns
-**two** brightness shapes (one per comet); ``RedAlertSunrise`` returns a
-single 0..1 **blend** (0 = the second colour, 1 = the bridge colour) used as
-both the colour-interpolation factor and the brightness level – main.py
-blends ``color``/``police_color2`` accordingly in both cases.
+**two** brightness shapes (one per comet); main.py blends ``color``/
+``color2`` accordingly.
 """
 
 from __future__ import annotations
@@ -791,7 +785,7 @@ class RedAlertDuel:
     the strip, exactly out of phase with the other, so they meet in the
     middle, "collide", and head back the way they came. Returns **two**
     brightness shapes (one per comet); ``main.py`` colours comet A with the
-    bridge colour and comet B with ``police_color2``, blending the two where
+    bridge colour and comet B with ``color2``, blending the two where
     their tails overlap.
     """
 
@@ -812,27 +806,3 @@ class RedAlertDuel:
         levels_a = [max(0.0, 1.0 - abs(i - pos_a) / self.tail) for i in range(self.num_lights)]
         levels_b = [max(0.0, 1.0 - abs(i - pos_b) / self.tail) for i in range(self.num_lights)]
         return levels_a, levels_b
-
-
-class RedAlertSunrise:
-    """One slow colour-and-brightness arc across the whole array, drifting
-    between two colours and back – every lamp shows the same colour at the
-    same time, like a single sky overhead, unlike :class:`RedAlertAurora`'s
-    per-lamp phase-offset palette blend.
-
-    :meth:`blend_for` returns a single 0..1 position in the arc (``0`` = the
-    second colour/dim end, ``1`` = the bridge colour/bright end); ``main.py``
-    uses it both to interpolate ``police_color2`` → ``color`` and, unscaled,
-    as the brightness level mapped onto ``[glow_low, glow_high]`` – so the
-    "dawn" end is dim and warm and the "day" end is bright, like a real
-    sunrise, and it eases back down again like a sunset. ``period_s`` is the
-    one-way duration (dawn to day); a full cycle is ``2 * period_s``.
-    """
-
-    def __init__(self, period_s: float = 60.0) -> None:
-        self.period_s = max(1.0, period_s)
-
-    def blend_for(self, t: float) -> float:
-        """0..1 position in the arc at time ``t``."""
-        phase = (t % (2.0 * self.period_s)) / self.period_s
-        return phase if phase <= 1.0 else 2.0 - phase

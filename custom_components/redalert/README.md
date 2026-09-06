@@ -1,5 +1,7 @@
 # Red Alert Entertainment – Home-Assistant-Integration
 
+🇩🇪 Deutsch (diese Datei) · 🇬🇧 [English](README.en.md)
+
 Eigenständige `custom_component` für die App [`redalert`](../../redalert): spricht
 deren REST-API an (siehe [`redalert/DOCS.md`](../../redalert/DOCS.md#rest-api))
 und legt vier Entities an – ohne `rest_command`/Template-Umweg (siehe

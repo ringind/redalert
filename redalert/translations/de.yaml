@@ -7,7 +7,7 @@ configuration:
       glow_low/glow_high/glitter_interval_ms/glitter_flash_ms/glitter_colors/
       gc_direction/gc_strip_lengths/gc_count/gc_length/gc_speed/
       gc_background_color/gc_chase_glitter/gc_background_pulse/
-      police_color2/lightning_interval_ms/lightning_flash_ms/meteor_count/
+      color2/lightning_interval_ms/lightning_flash_ms/meteor_count/
       meteor_speed/firework_interval_ms/firework_speed/ripple_interval_ms/
       ripple_speed/wave_length/flicker_interval_ms/flicker_dip_ms sind je
       Bridge optional – leer gelassen gilt der gleichnamige Wert weiter unten
@@ -130,12 +130,12 @@ configuration:
       description: >-
         Überschreibt die Option gc_background_pulse für diese eine Bridge.
         Leer = Standard weiter unten.
-    police_color2:
+    color2:
       name: zweite Farbe (diese Bridge)
       description: >-
-        Überschreibt die Option police_color2 für diese eine Bridge – zweite
-        Farbe für police (Gruppe 2), duel (zweiter Komet) und sunrise
-        (dunkles/warmes Ende). Leer = Standard weiter unten.
+        Überschreibt die Option color2 für diese eine Bridge – zweite
+        Farbe für police (Gruppe 2) und duel (zweiter Komet). Leer =
+        Standard weiter unten.
     lightning_interval_ms:
       name: lightning – Blitz-Intervall ms (diese Bridge)
       description: >-
@@ -216,10 +216,8 @@ configuration:
       brechen sporadisch kurz ein, wie eine defekte Glühbirne. strobe = ein
       hartes, sofortiges Blitzen ohne Überblendung, im Party-Stroboskop-Stil.
       duel = zwei Kometen starten an entgegengesetzten Enden, treffen sich in
-      der Mitte und prallen zurück. sunrise = ein langsamer Farb- und
-      Helligkeitsbogen für alle Lampen gemeinsam, wandert zwischen der
-      zweiten Farbe (dunkel/warm) und der Bridge-Farbe (hell) und zurück.
-      chase = nur für Gradient Lightstrips: ein oder mehrere weich
+      der Mitte und prallen zurück. chase = nur für Gradient Lightstrips: ein
+      oder mehrere weich
       überblendete Zwei-Farben-Bänder laufen über die Segmente, siehe die
       gc_*-Optionen. neutral = die Lampen werden nicht gesteuert (z. B. für
       ein Effektset, in dem nur einzelne Bridges laufen).
@@ -238,10 +236,9 @@ configuration:
     description: >-
       Standard für Bridges ohne eigene Einstellung. comet: Sekunden für eine
       volle Umrundung aller Lampen. pulse/heartbeat: Dauer eines Zyklus.
-      wave/strobe/duel: Periodendauer. sunrise: Dauer einer Richtung (dunkel
-      → hell); ein voller Zyklus dauert doppelt so lange. Wertebereich
-      0.3–300 – für sunrise ruhig deutlich höher als für die schnellen
-      Effekte wählen.
+      wave/strobe/duel: Periodendauer. Wertebereich 0.3–300 – für sehr
+      langsame, ruhige Effekte deutlich höher als für die schnellen Effekte
+      wählen.
   chase_pause:
     name: chase-Pause in Sekunden (Standard)
     description: >-
@@ -332,12 +329,13 @@ configuration:
       effect pulse zwischen glow_low und glow_high pulsieren (nutzt
       attack_ms/release_ms/sweep_seconds), statt ruhig auf glow_low zu
       bleiben. Die Chase-Bänder bleiben davon unberührt auf glow_high.
-  police_color2:
-    name: police – zweite Farbe (Standard)
+  color2:
+    name: zweite Farbe (Standard)
     description: >-
-      Nur effect police. Standard-Hex-Farbe der zweiten Lampengruppe (die
-      erste nutzt die Option/das Feld color). Vorgabe #0000FF (Blau), zusammen
-      mit dem roten Standard also klassisches Blaulicht.
+      Standard-Hex-Farbe für effect police (zweite Lampengruppe) und effect
+      duel (zweiter Komet); die erste Farbe kommt jeweils aus der Option/dem
+      Feld color. Vorgabe #0000FF (Blau), zusammen mit dem roten Standard
+      also klassisches Blaulicht.
   lightning_interval_ms:
     name: lightning – Blitz-Intervall ms (Standard)
     description: >-

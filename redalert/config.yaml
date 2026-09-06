@@ -1,12 +1,12 @@
 name: "Red Alert Entertainment"
-version: "1.11.0"
+version: "1.14.0"
 slug: "redalert"
 description: >-
   Konfigurierbare Hue-Entertainment-Lichteffekte über mehrere Bridges
   gleichzeitig (Puls, Komet, Funkeln, Alarmlicht, Gewitter, Herzschlag,
   Polarlicht, Regenbogen, Meteore, Auffüll-Balken, Feuerwerk, Echo, Welle,
-  Flackern, Stroboskop, Duell, Sonnenaufgang, Lauflicht für Gradient-
-  Lightstrips) – ursprünglich für Star Trek »Alarmstufe Rot«.
+  Flackern, Stroboskop, Duell, Lauflicht für Gradient-Lightstrips) –
+  ursprünglich für Star Trek »Alarmstufe Rot«.
 url: "https://github.com/ringind/redalert/tree/main/redalert"
 arch:
   - aarch64
@@ -43,7 +43,7 @@ options:
   gc_background_color: "#000000"
   gc_chase_glitter: false
   gc_background_pulse: false
-  police_color2: "#0000FF"
+  color2: "#0000FF"
   lightning_interval_ms: 4000.0
   lightning_flash_ms: 500.0
   meteor_count: 3
@@ -63,7 +63,7 @@ schema:
     - bridge_host: "str"
       area_id: "str"
       channel_order: "str?"
-      effect: "list(pulse|comet|glitter|chase|police|lightning|heartbeat|aurora|rainbow|meteor|wipe|firework|ripple|wave|flicker|strobe|duel|sunrise|neutral)?"
+      effect: "list(pulse|comet|glitter|chase|police|lightning|heartbeat|aurora|rainbow|meteor|wipe|firework|ripple|wave|flicker|strobe|duel|neutral)?"
       color: "match(^#[0-9A-Fa-f]{6}$)?"
       sweep_seconds: "float(0.3,300.0)?"
       chase_pause: "float(0,60)?"
@@ -82,7 +82,7 @@ schema:
       gc_background_color: "match(^#[0-9A-Fa-f]{6}$)?"
       gc_chase_glitter: "bool?"
       gc_background_pulse: "bool?"
-      police_color2: "match(^#[0-9A-Fa-f]{6}$)?"
+      color2: "match(^#[0-9A-Fa-f]{6}$)?"
       lightning_interval_ms: "float(50,60000)?"
       lightning_flash_ms: "float(20,5000)?"
       meteor_count: "int(1,8)?"
@@ -94,7 +94,7 @@ schema:
       wave_length: "float(0.5,50)?"
       flicker_interval_ms: "float(20,10000)?"
       flicker_dip_ms: "float(20,5000)?"
-  effect: "list(pulse|comet|glitter|chase|police|lightning|heartbeat|aurora|rainbow|meteor|wipe|firework|ripple|wave|flicker|strobe|duel|sunrise|neutral)?"
+  effect: "list(pulse|comet|glitter|chase|police|lightning|heartbeat|aurora|rainbow|meteor|wipe|firework|ripple|wave|flicker|strobe|duel|neutral)?"
   color: "match(^#[0-9A-Fa-f]{6}$)?"
   fps: "int(5,50)"
   sweep_seconds: "float(0.3,300.0)"
@@ -113,7 +113,7 @@ schema:
   gc_background_color: "match(^#[0-9A-Fa-f]{6}$)?"
   gc_chase_glitter: "bool?"
   gc_background_pulse: "bool?"
-  police_color2: "match(^#[0-9A-Fa-f]{6}$)?"
+  color2: "match(^#[0-9A-Fa-f]{6}$)?"
   lightning_interval_ms: "float(50,60000)?"
   lightning_flash_ms: "float(20,5000)?"
   meteor_count: "int(1,8)?"

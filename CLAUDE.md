@@ -26,11 +26,10 @@ reflects off both ends and echoes back), `wave` (scrolling spatial sine wave,
 several crests visible at once), `flicker` (per-lamp brief dips from full
 brightness, like a failing bulb), `strobe` (hard instant on/off flash, no
 fade), `duel` (two comets launched from opposite ends, meeting and bouncing
-back), `sunrise` (one slow colour/brightness arc, same for every lamp at
-once), `chase` (Gradient Lightstrips only — soft-edged two-colour bands
+back), `chase` (Gradient Lightstrips only — soft-edged two-colour bands
 sliding along the segments) or `neutral` (bridge left untouched — no
 stream/restore; per-bridge only, for effect sets where some bridges run and
-others don't). 18 effects total. **Effect, colour, and timing are
+others don't). 17 effects total. **Effect, colour, and timing are
 configurable per bridge**
 (falling back to shared defaults when not overridden); all bridges still start
 **simultaneously** (parallel DTLS handshakes, shared start epoch) for a
@@ -41,7 +40,12 @@ controls) can be saved as a named **effect set** in `/data/presets.json`
 aiohttp REST service **and** an Ingress web UI for control. HA builds the
 image locally from `redalert/Dockerfile` (no `image:` key, no prebuilt registry).
 Primary docs are German: repo overview in `README.md`, in-HA docs in
-`redalert/DOCS.md`.
+`redalert/DOCS.md`. Each has a standalone English counterpart
+(`README.en.md`, `redalert/DOCS.en.md`, plus `custom_components/redalert/
+README.en.md` and `info.en.md`) — separate files rather than one bilingual
+file, since HA's in-app docs viewer has no locale switching; keep both
+languages' content in sync when editing either one, and update the
+language-switcher line at the top of each.
 
 **Remote & CI:** `github.com/ringind/redalert` (branch `main`).
 `.github/workflows/build.yaml` = `frenck/action-addon-linter` (strict: rejects any
@@ -61,10 +65,10 @@ Releases are tags `vX.Y.Z` on a green commit — see the `release` skill.
 
 ```
 repository.yaml            store metadata
-README.md                  repo overview (German)
+README.md / README.en.md   repo overview (German / English)
 hacs.json                  makes this repo addable in HACS as a custom
                             integration repository (category "Integration")
-info.md                    what HACS renders instead of README.md when
+info.md / info.en.md       what HACS renders instead of README.md when
                             present — integration-only blurb + the standard
                             my.home-assistant.io HACS-install badge, points
                             to the app's own docs rather than duplicating them
@@ -72,7 +76,8 @@ custom_components/redalert/  HA integration talking to the app's REST API
   manifest.json, const.py, api.py, coordinator.py, config_flow.py, entity.py
   binary_sensor.py (running) / switch.py (start+stop) / select.py (pick+load
   a preset) / sensor.py (currently loaded preset) — one DataUpdateCoordinator
-  polling GET /config every 10s; README.md documents install + entities
+  polling GET /config every 10s; README.md/README.en.md document install +
+  entities
   brand/icon.png, brand/logo.png — copies of redalert/{icon,logo}.png; HA
   2026.3+ shows these inline (no home-assistant/brands PR needed), and the
   `hacs/action` CI check requires them regardless of HA version
@@ -80,12 +85,13 @@ redalert/                  the app
   config.yaml              manifest: options schema, ingress, ports
   build.yaml               base images: ghcr.io/home-assistant/{arch}-base-python
   Dockerfile               installs requirements, copies rootfs, chmods s6 scripts
-  DOCS.md / CHANGELOG.md   "Documentation" / "Changelog" tabs in HA
+  DOCS.md / DOCS.en.md / CHANGELOG.md   "Documentation" / "Changelog" tabs in
+                           HA (CHANGELOG.md is German only, no .en.md)
   translations/{de,en}.yaml  config-option labels shown in the HA UI
   icon.png / logo.png      store graphics (generated, solid-red beacon)
   rootfs/etc/s6-overlay/s6-rc.d/redalert/{type,run,finish}  s6 service (bashio)
   rootfs/app/main.py        REST server + streaming loop + serves panel.html
-  rootfs/app/chase.py       18 effects' pure math, no I/O: RedAlertPulse
+  rootfs/app/chase.py       17 effects' pure math, no I/O: RedAlertPulse
     (pulse beat-gate, also drives heartbeat via .heartbeat()) +
     RedAlertComet (comet+tail) + RedAlertGlitter (per-lamp sparkle) +
     RedAlertChase (Gradient Lightstrip bands) + RedAlertPolice (two-group
@@ -94,14 +100,14 @@ redalert/                  the app
     (randomised multi-comet) + RedAlertWipe (fill-and-hold) + RedAlertFirework
     (radiating one-shot bursts) + RedAlertRipple (firework that echoes back) +
     RedAlertWave (scrolling sine) + RedAlertFlicker (per-lamp dips, stateful) +
-    RedAlertStrobe (hard on/off) + RedAlertDuel (two comets, two shapes) +
-    RedAlertSunrise (single shared colour/brightness blend)
-  rootfs/app/panel.html     Ingress web UI (vanilla JS, relative fetch URLs)
+    RedAlertStrobe (hard on/off) + RedAlertDuel (two comets, two shapes)
+  rootfs/app/panel.html     Ingress web UI (vanilla JS, relative fetch URLs,
+    bilingual DE/EN via an I18N dict + data-i18n attributes, see below)
 ```
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.11.0**.
+No build system, linter, or test suite. Current version: **1.14.0**.
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
   after every code change — the only static check available.
@@ -249,8 +255,21 @@ Concurrency is guarded by `state["task"]` still running (`/start` →
 `already_running`); `/stop` cancels and awaits it (cancelling the gathers
 inside cancels every bridge's in-flight work too).
 
-**Web UI (`panel.html`):** vanilla JS, all `fetch` calls use **relative** URLs so
-it works both behind Ingress (path-prefixed) and via published port 8099. All
+**Web UI (`panel.html`):** vanilla JS, bilingual since 1.13.0 — an `I18N` object
+(`{de:{...}, en:{...}}`, flat `"key": "value"` maps, both kept in lockstep;
+a value can be a function for interpolated strings, e.g. `(i) => \`Bridge
+${i}\``) backs a `t(key, ...args)` lookup. Static markup carries
+`data-i18n`/`-html`/`-ph`/`-title` attributes; `applyI18n()` walks the DOM and
+fills them in, run once at load and again on every `setLang()` call (toggle
+buttons top-right, persisted to `localStorage["redalert-lang"]`, default from
+`navigator.language`). Content built once from a JS template literal at
+bridge-card-creation time (the per-bridge pairing pill, area list placeholder,
+channel-identify placeholder) carries no `data-i18n` and must be re-rendered
+explicitly in `setLang()` instead — a bridge card the server doesn't know
+about yet is otherwise never touched by the periodic `/config`-driven
+`refresh()`, so its pill would stay in the old language after a toggle.
+`PANEL_HTML` is read once at import in `main.py`, so any edit to `panel.html`
+needs a server restart to show up when testing locally. All
 requests go through `api()`, which wraps `fetch` in an `AbortController` timeout
 (`DEFAULT_TIMEOUT_MS` = 15 s; `/pair` passes 35 s since the server itself awaits
 up to 30 s for the link-button press) — since 1.9.1, after a bug where a hung
@@ -340,6 +359,7 @@ cert). See `_clip` / `capture_light_state` / `restore_light_state`.
    `collectBody()`), plus its `syncIfUntouched`/`syncColorOverride` line in
    `refresh()` and its entry in `collectBody()`/`applyBody()`.
 5. `redalert/DOCS.md` (options table + `/start` body list) and `README.md`
-   (§5 options table + §6 `/start` row + §8 "Effekt anpassen" if it tunes an effect).
+   (§5 options table + §6 `/start` row + §8 "Effekt anpassen" if it tunes an effect)
+   — and their English counterparts `redalert/DOCS.en.md`/`README.en.md`.
 6. `redalert/CHANGELOG.md` + version bump (see the `release` skill).
 7. Live-test on the real bridge (`smoke-test` skill) before committing.

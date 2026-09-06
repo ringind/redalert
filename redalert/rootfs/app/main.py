@@ -50,7 +50,6 @@ from chase import (
     RedAlertRainbow,
     RedAlertRipple,
     RedAlertStrobe,
-    RedAlertSunrise,
     RedAlertWave,
     RedAlertWipe,
 )
@@ -124,7 +123,6 @@ _EFFECTS = (
     "flicker",
     "strobe",
     "duel",
-    "sunrise",
     "neutral",
 )
 
@@ -235,7 +233,7 @@ def _parse_bridges_option(value) -> list[dict]:
     ``glow_low``, ``glow_high``, ``glitter_interval_ms``, ``glitter_flash_ms``,
     ``glitter_colors``, ``gc_direction``, ``gc_strip_lengths``, ``gc_count``,
     ``gc_length``, ``gc_speed``, ``gc_background_color``, ``gc_chase_glitter``,
-    ``gc_background_pulse``, ``police_color2``, ``meteor_count``,
+    ``gc_background_pulse``, ``color2``, ``meteor_count``,
     ``meteor_speed``, ``firework_interval_ms``, ``firework_speed``,
     ``lightning_interval_ms``, ``lightning_flash_ms``, ``ripple_interval_ms``,
     ``ripple_speed``, ``wave_length``, ``flicker_interval_ms``,
@@ -290,8 +288,8 @@ def _parse_bridges_option(value) -> list[dict]:
                 norm["gc_strip_lengths"] = lengths
         if entry.get("gc_background_color"):
             norm["gc_background_color"] = hex_to_rgb(entry["gc_background_color"])
-        if entry.get("police_color2"):
-            norm["police_color2"] = hex_to_rgb(entry["police_color2"])
+        if entry.get("color2"):
+            norm["color2"] = hex_to_rgb(entry["color2"])
         if "gc_chase_glitter" in entry:
             norm["gc_chase_glitter"] = bool(entry["gc_chase_glitter"])
         if "gc_background_pulse" in entry:
@@ -367,8 +365,9 @@ state = {
     "gc_background_color": hex_to_rgb(options.get("gc_background_color", "#000000")),
     "gc_chase_glitter": bool(options.get("gc_chase_glitter", False)),
     "gc_background_pulse": bool(options.get("gc_background_pulse", False)),
-    # Nur effect police (zweite Farbe der zweiten Lampengruppe):
-    "police_color2": hex_to_rgb(options.get("police_color2", "#0000FF")),
+    # Zweite Farbe: effect police (zweite Lampengruppe) und effect duel
+    # (zweiter Komet):
+    "color2": hex_to_rgb(options.get("color2", "#0000FF")),
     # Nur effect meteor:
     "meteor_count": max(1, int(options.get("meteor_count", 3))),
     "meteor_speed": max(0.05, float(options.get("meteor_speed", 1.2))),
@@ -401,7 +400,7 @@ log.info(
     "Konfiguration: bridges=%s (Standard) effect=%s color=%s fps=%s sweep=%ss chase_pause=%ss "
     "attack=%sms release=%sms glow=%s..%s glitter=%sms/%sms colors=%r "
     "chase=dir=%s/count=%s/length=%s/speed=%s bg=%s glitter=%s pulse=%s "
-    "police_color2=%s meteor=count=%s/speed=%s firework=interval=%sms/speed=%s "
+    "color2=%s meteor=count=%s/speed=%s firework=interval=%sms/speed=%s "
     "lightning=interval=%sms/flash=%sms "
     "ripple=interval=%sms/speed=%s wave=length=%s flicker=interval=%sms/dip=%sms "
     "duration=%ss (0=unbegrenzt) presets=%s",
@@ -412,7 +411,7 @@ log.info(
                                "glitter_interval_ms", "glitter_flash_ms", "glitter_colors",
                                "gc_direction", "gc_strip_lengths", "gc_count", "gc_length",
                                "gc_speed", "gc_background_color", "gc_chase_glitter",
-                               "gc_background_pulse", "police_color2", "meteor_count",
+                               "gc_background_pulse", "color2", "meteor_count",
                                "meteor_speed", "firework_interval_ms", "firework_speed",
                                "lightning_interval_ms", "lightning_flash_ms",
                                "ripple_interval_ms", "ripple_speed", "wave_length",
@@ -438,7 +437,7 @@ log.info(
     "#{:02X}{:02X}{:02X}".format(*state["gc_background_color"]),
     state["gc_chase_glitter"],
     state["gc_background_pulse"],
-    "#{:02X}{:02X}{:02X}".format(*state["police_color2"]),
+    "#{:02X}{:02X}{:02X}".format(*state["color2"]),
     state["meteor_count"],
     state["meteor_speed"],
     state["firework_interval_ms"],
@@ -604,7 +603,7 @@ async def handle_config(request: web.Request) -> web.Response:
                     "gc_background_color": _bridge_field_hex(bg, "gc_background_color"),
                     "gc_chase_glitter": bg.get("gc_chase_glitter"),
                     "gc_background_pulse": bg.get("gc_background_pulse"),
-                    "police_color2": _bridge_field_hex(bg, "police_color2"),
+                    "color2": _bridge_field_hex(bg, "color2"),
                     "meteor_count": bg.get("meteor_count"),
                     "meteor_speed": bg.get("meteor_speed"),
                     "firework_interval_ms": bg.get("firework_interval_ms"),
@@ -638,7 +637,7 @@ async def handle_config(request: web.Request) -> web.Response:
             "gc_background_color": "#{:02X}{:02X}{:02X}".format(*state["gc_background_color"]),
             "gc_chase_glitter": state["gc_chase_glitter"],
             "gc_background_pulse": state["gc_background_pulse"],
-            "police_color2": "#{:02X}{:02X}{:02X}".format(*state["police_color2"]),
+            "color2": "#{:02X}{:02X}{:02X}".format(*state["color2"]),
             "meteor_count": state["meteor_count"],
             "meteor_speed": state["meteor_speed"],
             "firework_interval_ms": state["firework_interval_ms"],
@@ -855,7 +854,6 @@ async def _run_effect(
         )
         ctx["strobe"] = RedAlertStrobe(num_lights=n, period_s=ctx["sweep_seconds"])
         ctx["duel"] = RedAlertDuel(num_lights=n, period_s=ctx["sweep_seconds"])
-        ctx["sunrise"] = RedAlertSunrise(period_s=ctx["sweep_seconds"])
     frames = 0
     snapshots: dict[str, list[dict]] = {}
     loop = asyncio.get_event_loop()
@@ -914,7 +912,7 @@ async def _run_effect(
                 elif effect == "police":
                     # zwei Lampengruppen blinken abwechselnd in zwei Farben
                     levels = ctx["police"].brightness_for(elapsed)
-                    ca, cb = ctx["color"], ctx["police_color2"]
+                    ca, cb = ctx["color"], ctx["color2"]
                     chans = [
                         (*(ca if is_a else cb), glow_low + glow_span * lvl)
                         for lvl, is_a in zip(levels, ctx["police"].group_a)
@@ -942,7 +940,7 @@ async def _run_effect(
                 elif effect == "duel":
                     # zwei Kometen aus entgegengesetzten Enden, je eigene Farbe
                     levels_a, levels_b = ctx["duel"].brightness_for(elapsed)
-                    ca, cb = ctx["color"], ctx["police_color2"]
+                    ca, cb = ctx["color"], ctx["color2"]
                     chans = []
                     for la, lb in zip(levels_a, levels_b):
                         total = la + lb
@@ -953,15 +951,6 @@ async def _run_effect(
                         else:
                             r = g = b = 0.0
                         chans.append((r, g, b, glow_low + glow_span * min(1.0, total)))
-                elif effect == "sunrise":
-                    # eine gemeinsame Farbe/Helligkeit für alle Lampen, wandert
-                    # zwischen police_color2 (dunkel/warm) und color (hell)
-                    bl = ctx["sunrise"].blend_for(elapsed)
-                    ca, cb = ctx["police_color2"], ctx["color"]
-                    r = ca[0] + (cb[0] - ca[0]) * bl
-                    g = ca[1] + (cb[1] - ca[1]) * bl
-                    b = ca[2] + (cb[2] - ca[2]) * bl
-                    chans = [(r, g, b, glow_low + glow_span * bl)] * len(ctx["channel_ids"])
                 else:
                     # Effekte, die nur eine 0..1-Helligkeitskurve je Lampe liefern
                     # und dabei die gemeinsame Bridge-Farbe verwenden.
@@ -1166,7 +1155,7 @@ async def handle_start(request: web.Request) -> web.Response:
     ``glitter_interval_ms``, ``glitter_flash_ms``, ``glitter_colors``,
     ``gc_direction``, ``gc_count``, ``gc_length``, ``gc_speed``,
     ``gc_background_color``, ``gc_chase_glitter``, ``gc_background_pulse``,
-    ``police_color2``, ``meteor_count``, ``meteor_speed``,
+    ``color2``, ``meteor_count``, ``meteor_speed``,
     ``firework_interval_ms``, ``firework_speed``, ``lightning_interval_ms``,
     ``lightning_flash_ms``, ``ripple_interval_ms``, ``ripple_speed``,
     ``wave_length``, ``flicker_interval_ms``, ``flicker_dip_ms`` im
@@ -1176,7 +1165,7 @@ async def handle_start(request: web.Request) -> web.Response:
     release_ms?, glow_low?, glow_high?, glitter_interval_ms?,
     glitter_flash_ms?, glitter_colors?, gc_direction?, gc_strip_lengths?,
     gc_count?, gc_length?, gc_speed?, gc_background_color?, gc_chase_glitter?,
-    gc_background_pulse?, police_color2?, meteor_count?, meteor_speed?,
+    gc_background_pulse?, color2?, meteor_count?, meteor_speed?,
     firework_interval_ms?, firework_speed?, lightning_interval_ms?,
     lightning_flash_ms?, ripple_interval_ms?, ripple_speed?, wave_length?,
     flicker_interval_ms?, flicker_dip_ms?}``) übersteuert für diesen Aufruf die Option
@@ -1285,9 +1274,10 @@ async def handle_start(request: web.Request) -> web.Response:
     )
     defaults["gc_chase_glitter"] = bool(body.get("gc_chase_glitter", state["gc_chase_glitter"]))
     defaults["gc_background_pulse"] = bool(body.get("gc_background_pulse", state["gc_background_pulse"]))
-    # Nur effect police (zweite Lampengruppe).
-    defaults["police_color2"] = (
-        hex_to_rgb(body["police_color2"]) if body.get("police_color2") else state["police_color2"]
+    # Zweite Farbe: effect police (zweite Lampengruppe) und effect duel
+    # (zweiter Komet).
+    defaults["color2"] = (
+        hex_to_rgb(body["color2"]) if body.get("color2") else state["color2"]
     )
     # Nur effect meteor.
     try:
@@ -1444,7 +1434,7 @@ async def handle_start(request: web.Request) -> web.Response:
             "gc_background_color": cfg.get("gc_background_color", defaults["gc_background_color"]),
             "gc_chase_glitter": cfg.get("gc_chase_glitter", defaults["gc_chase_glitter"]),
             "gc_background_pulse": cfg.get("gc_background_pulse", defaults["gc_background_pulse"]),
-            "police_color2": cfg.get("police_color2", defaults["police_color2"]),
+            "color2": cfg.get("color2", defaults["color2"]),
             "meteor_count": max(1, cfg.get("meteor_count", defaults["meteor_count"])),
             "meteor_speed": max(0.05, cfg.get("meteor_speed", defaults["meteor_speed"])),
             "firework_interval_ms": max(
@@ -1539,7 +1529,7 @@ async def handle_start(request: web.Request) -> web.Response:
                 "gc_background_color": "#{:02X}{:02X}{:02X}".format(*c["gc_background_color"]),
                 "gc_chase_glitter": c["gc_chase_glitter"],
                 "gc_background_pulse": c["gc_background_pulse"],
-                "police_color2": "#{:02X}{:02X}{:02X}".format(*c["police_color2"]),
+                "color2": "#{:02X}{:02X}{:02X}".format(*c["color2"]),
                 "meteor_count": c["meteor_count"],
                 "meteor_speed": c["meteor_speed"],
                 "firework_interval_ms": round(c["firework_interval_ms"]),

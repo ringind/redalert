@@ -3,6 +3,8 @@
 [![Build](https://github.com/ringind/redalert/actions/workflows/build.yaml/badge.svg)](https://github.com/ringind/redalert/actions/workflows/build.yaml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+🇩🇪 Deutsch (diese Datei) · 🇬🇧 [English](README.en.md)
+
 Home-Assistant-App für frei konfigurierbare Licht-Effekte über mehrere
 Philips-Hue-Lampen, gesteuert über das echte **Hue Entertainment API**
 (DTLS-Streaming, nicht die normale, träge Bridge-Szene). Ursprünglich für die
@@ -12,8 +14,8 @@ Timing je Bridge) lassen sich benannt speichern und per Knopfdruck, Sprache
 oder Automation abrufen, von der namensgebenden roten Alarmstufe bis zu einer
 ruhigen Ambiente-Beleuchtung oder einem Diamant-Funkeln zur Party. Unterstützt
 **bis zu 3 Hue Bridges**, die gleichzeitig loslegen – jede mit ihrem eigenen
-Effekt, ihrer eigenen Farbe und eigenem Timing. **18 Effekte** stehen zur
-Wahl – von ruhig (`pulse`, `aurora`, `sunrise`) über klassisch (`comet`,
+Effekt, ihrer eigenen Farbe und eigenem Timing. **17 Effekte** stehen zur
+Wahl – von ruhig (`pulse`, `aurora`) über klassisch (`comet`,
 `chase`, `wave`) bis actionreich (`police`, `lightning`, `strobe`, `duel`,
 `meteor`, `firework`, `ripple`, `glitter`, `flicker`, `heartbeat`, `wipe`) –
 siehe [§8 „Effekt anpassen“](#8-effekt-anpassen) für alle im Detail. Farbe(n),
@@ -37,7 +39,8 @@ Nutzt die Bibliothek [`hue-entertainment`](https://github.com/music-assistant/hu
 > Die eigentliche App liegt im Unterordner [`redalert/`](redalert/); die in
 > Home Assistant angezeigte Anleitung ist [`redalert/DOCS.md`](redalert/DOCS.md).
 > Ein Web-UI zur Steuerung (Pairing, Bereiche, Start/Stop) erscheint nach der
-> Installation als Seitenleisten-Eintrag **Red Alert** (Ingress).
+> Installation als Seitenleisten-Eintrag **Red Alert** (Ingress); oben rechts
+> lässt sich zwischen Deutsch und Englisch umschalten.
 
 Getestet mit Hue Bridge V2 (BSB002, API 1.78): Pairing, Bereichsabruf,
 DTLS-Streaming und Start/Stop laufen end-to-end.
@@ -58,8 +61,7 @@ DTLS-Streaming und Start/Stop laufen end-to-end.
 10. [Home Assistant einbinden](#7-home-assistant-einbinden)
 11. [Effekt anpassen](#8-effekt-anpassen)
 12. [Fehlerbehebung](#9-fehlerbehebung)
-13. [Rechtlicher Hinweis zur Audiodatei](#10-rechtlicher-hinweis-zur-audiodatei)
-14. [Projektstruktur](#projektstruktur)
+13. [Projektstruktur](#projektstruktur)
 
 ---
 
@@ -81,7 +83,7 @@ HA-Automation ──┬──> media_player.play_media (optional: dein Sound, z.
                          hält je Bridge (bis zu 3) einen
                          eigenen DTLS-Stream offen (~25 Hz),
                          jede mit eigenem Effekt/Farbe/Timing
-                         (18 Effekte, siehe §8)
+                         (17 Effekte, siehe §8)
                                         │
                               ┌─────────┼─────────┐
                               ▼         ▼         ▼
@@ -111,8 +113,7 @@ selbst braucht keinen Ton):
 
 - Ein `media_player`-Entity in Home Assistant (Sonos/Chromecast/Speaker o. ä.)
   für die Sound-Wiedergabe.
-- Eine eigene, legal erworbene Audiodatei mit dem Alarm-Sound (siehe
-  [Rechtlicher Hinweis](#10-rechtlicher-hinweis-zur-audiodatei)).
+- Eine eigene, legal erworbene Audiodatei mit dem Alarm-Sound.
 
 ## Schnellstart
 
@@ -191,11 +192,11 @@ App nach einer Options-Änderung neu starten.
 
 | Option           | Typ           | Standard | Bedeutung                                                       |
 |-------------------|--------------|----------|-------------------------------------------------------------------|
-| `bridges`         | Liste (max. 3) | leer   | Eine Zeile pro Bridge: `bridge_host` (IP), `area_id` (siehe Schritt 4), optional `channel_order` sowie je Bridge optional `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors`, `gc_direction`, `gc_strip_lengths`, `gc_count`, `gc_length`, `gc_speed`, `gc_background_color`, `gc_chase_glitter`, `gc_background_pulse`, `police_color2`, `lightning_interval_ms`, `lightning_flash_ms`, `meteor_count`, `meteor_speed`, `firework_interval_ms`, `firework_speed`, `ripple_interval_ms`, `ripple_speed`, `wave_length`, `flicker_interval_ms`, `flicker_dip_ms` (überschreiben die gleichnamige Option unten nur für diese Bridge). |
-| `effect`          | `pulse`\|`comet`\|`glitter`\|`police`\|`lightning`\|`heartbeat`\|`aurora`\|`rainbow`\|`meteor`\|`wipe`\|`firework`\|`ripple`\|`wave`\|`flicker`\|`strobe`\|`duel`\|`sunrise`\|`chase`\|`neutral` | `pulse` | Standard für Bridges ohne eigene Einstellung, siehe §8 für alle Effekte im Detail. `neutral` (nur je Bridge sinnvoll) = Bridge wird nicht gesteuert. |
+| `bridges`         | Liste (max. 3) | leer   | Eine Zeile pro Bridge: `bridge_host` (IP), `area_id` (siehe Schritt 4), optional `channel_order` sowie je Bridge optional `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors`, `gc_direction`, `gc_strip_lengths`, `gc_count`, `gc_length`, `gc_speed`, `gc_background_color`, `gc_chase_glitter`, `gc_background_pulse`, `color2`, `lightning_interval_ms`, `lightning_flash_ms`, `meteor_count`, `meteor_speed`, `firework_interval_ms`, `firework_speed`, `ripple_interval_ms`, `ripple_speed`, `wave_length`, `flicker_interval_ms`, `flicker_dip_ms` (überschreiben die gleichnamige Option unten nur für diese Bridge). |
+| `effect`          | `pulse`\|`comet`\|`glitter`\|`police`\|`lightning`\|`heartbeat`\|`aurora`\|`rainbow`\|`meteor`\|`wipe`\|`firework`\|`ripple`\|`wave`\|`flicker`\|`strobe`\|`duel`\|`chase`\|`neutral` | `pulse` | Standard für Bridges ohne eigene Einstellung, siehe §8 für alle Effekte im Detail. `neutral` (nur je Bridge sinnvoll) = Bridge wird nicht gesteuert. |
 | `color`           | Hex-String    | `#FF0000`| Standard-Farbe für Bridges ohne eigene Einstellung.                |
 | `fps`             | int (5–50)    | 25       | Frames/Sekunde des DTLS-Streams (für alle Bridges gleich).         |
-| `sweep_seconds`   | float (0.3–300) | 1.4    | Standard für Bridges ohne eigene Einstellung. `comet`: Dauer einer vollen Umrundung. `pulse`/`heartbeat`: Zyklusdauer. `wave`/`strobe`/`duel`: Periodendauer. `sunrise`: Dauer einer Richtung. |
+| `sweep_seconds`   | float (0.3–300) | 1.4    | Standard für Bridges ohne eigene Einstellung. `comet`: Dauer einer vollen Umrundung. `pulse`/`heartbeat`: Zyklusdauer. `wave`/`strobe`/`duel`: Periodendauer. |
 | `chase_pause`     | float (0–60)  | 0        | Standard für Bridges ohne eigene Einstellung. `comet`: Pause (s) zwischen zwei Durchläufen. `0` = durchgehend; `> 0` = ein Durchlauf, dann alle Lampen `chase_pause` s auf `glow_low`. |
 | `attack_ms`       | int (0–2000)  | 140      | Standard für Bridges ohne eigene Einstellung. `pulse`: Aufblendzeit `glow_low` → `glow_high`. |
 | `release_ms`      | int (0–5000)  | 70       | Standard für Bridges ohne eigene Einstellung. `pulse`: Abblendzeit → `glow_low` (kleiner als `attack_ms`). |
@@ -212,7 +213,7 @@ App nach einer Options-Änderung neu starten.
 | `gc_background_color` | Hex-String | `#000000` | Nur `chase`. Farbe außerhalb der Chase-Bänder. Je Bridge überschreibbar. |
 | `gc_chase_glitter` | bool         | `false`  | Nur `chase`. Bänder funkeln zusätzlich wie `glitter`. Je Bridge überschreibbar. |
 | `gc_background_pulse` | bool     | `false`  | Nur `chase`. Background pulsiert zusätzlich wie `pulse` statt ruhig auf `glow_low` zu bleiben. Je Bridge überschreibbar. |
-| `police_color2`   | Hex-String    | `#0000FF`| Zweite Farbe – `police` (Gruppe 2), `duel` (zweiter Komet), `sunrise` (dunkles Ende). Je Bridge überschreibbar. |
+| `color2`   | Hex-String    | `#0000FF`| Zweite Farbe – `police` (Gruppe 2), `duel` (zweiter Komet). Je Bridge überschreibbar. |
 | `lightning_interval_ms` | float (50–60000) | `4000` | Nur `lightning`. Mittlerer Abstand (ms) zwischen zwei gemeinsamen Blitzen. Je Bridge überschreibbar. |
 | `lightning_flash_ms` | float (20–5000) | `500` | Nur `lightning`. Abkling-Zeitkonstante (ms) eines Blitzes. Je Bridge überschreibbar. |
 | `meteor_count`    | int (1–8)     | `3`      | Nur `meteor`. Anzahl unabhängiger Meteore. Je Bridge überschreibbar. |
@@ -237,7 +238,7 @@ App nach einer Options-Änderung neu starten.
 | `/config` | GET     | Effektive Konfiguration inkl. `bridges`, `presets` (Namen der Effektsets) und `current_preset` – für das Web-UI und die Home-Assistant-Integration |
 | `/pair`   | POST    | Einmalige Kopplung mit einer Bridge. Body: `{"bridge_host": "..."}` (Pflicht bei mehr als einer konfigurierten Bridge) |
 | `/areas`  | GET     | Entertainment-Bereiche + Kanäle einer Bridge auflisten. Query `?bridge_host=...` (Pflicht bei mehr als einer gepaarten Bridge) |
-| `/start`  | POST    | Effekt auf allen konfigurierten (oder im Body übergebenen) Bridges gleichzeitig starten (antwortet sofort; DTLS-Handshakes laufen parallel im Hintergrund). Body optional: `duration` (Sek., Standard aus der Option `duration`, `0` = unbegrenzt), `fps`, `restore_state` (für alle Bridges gemeinsam); `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors`, `gc_direction`, `gc_count`, `gc_length`, `gc_speed`, `gc_background_color`, `gc_chase_glitter`, `gc_background_pulse`, `police_color2`, `lightning_interval_ms`, `lightning_flash_ms`, `meteor_count`, `meteor_speed`, `firework_interval_ms`, `firework_speed`, `ripple_interval_ms`, `ripple_speed`, `wave_length`, `flicker_interval_ms`, `flicker_dip_ms` sind die Standardwerte für Bridges ohne eigene Einstellung. `bridges` (Liste von `{bridge_host, area_id, channel_order, effect?, color?, sweep_seconds?, chase_pause?, attack_ms?, release_ms?, glow_low?, glow_high?, glitter_interval_ms?, glitter_flash_ms?, glitter_colors?, gc_direction?, gc_strip_lengths?, gc_count?, gc_length?, gc_speed?, gc_background_color?, gc_chase_glitter?, gc_background_pulse?, police_color2?, lightning_interval_ms?, lightning_flash_ms?, meteor_count?, meteor_speed?, firework_interval_ms?, firework_speed?, ripple_interval_ms?, ripple_speed?, wave_length?, flicker_interval_ms?, flicker_dip_ms?}`, `channel_order` als `[2,3,1,0,5,4]` oder `"2,3,1,0,5,4"`) übersteuert für diesen Aufruf die Option `bridges`; `gc_strip_lengths` (nur `chase`, je Bridge, z. B. `[7,5]`) teilt die Kanäle dieser Bridge in mehrere Gradient-Lightstrips auf, `gc_direction` darf dann eine Liste sein (eine Richtung je Strip). `preset` = Name eines gespeicherten Effektsets als Basis (weitere Body-Felder überschreiben es). Antwort enthält `bridges` (gestartet, je mit aufgelösten Parametern) + `failed_bridges` (übersprungen); `502` nur wenn keine Bridge startet. |
+| `/start`  | POST    | Effekt auf allen konfigurierten (oder im Body übergebenen) Bridges gleichzeitig starten (antwortet sofort; DTLS-Handshakes laufen parallel im Hintergrund). Body optional: `duration` (Sek., Standard aus der Option `duration`, `0` = unbegrenzt), `fps`, `restore_state` (für alle Bridges gemeinsam); `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors`, `gc_direction`, `gc_count`, `gc_length`, `gc_speed`, `gc_background_color`, `gc_chase_glitter`, `gc_background_pulse`, `color2`, `lightning_interval_ms`, `lightning_flash_ms`, `meteor_count`, `meteor_speed`, `firework_interval_ms`, `firework_speed`, `ripple_interval_ms`, `ripple_speed`, `wave_length`, `flicker_interval_ms`, `flicker_dip_ms` sind die Standardwerte für Bridges ohne eigene Einstellung. `bridges` (Liste von `{bridge_host, area_id, channel_order, effect?, color?, sweep_seconds?, chase_pause?, attack_ms?, release_ms?, glow_low?, glow_high?, glitter_interval_ms?, glitter_flash_ms?, glitter_colors?, gc_direction?, gc_strip_lengths?, gc_count?, gc_length?, gc_speed?, gc_background_color?, gc_chase_glitter?, gc_background_pulse?, color2?, lightning_interval_ms?, lightning_flash_ms?, meteor_count?, meteor_speed?, firework_interval_ms?, firework_speed?, ripple_interval_ms?, ripple_speed?, wave_length?, flicker_interval_ms?, flicker_dip_ms?}`, `channel_order` als `[2,3,1,0,5,4]` oder `"2,3,1,0,5,4"`) übersteuert für diesen Aufruf die Option `bridges`; `gc_strip_lengths` (nur `chase`, je Bridge, z. B. `[7,5]`) teilt die Kanäle dieser Bridge in mehrere Gradient-Lightstrips auf, `gc_direction` darf dann eine Liste sein (eine Richtung je Strip). `preset` = Name eines gespeicherten Effektsets als Basis (weitere Body-Felder überschreiben es). Antwort enthält `bridges` (gestartet, je mit aufgelösten Parametern) + `failed_bridges` (übersprungen); `502` nur wenn keine Bridge startet. |
 | `/stop`   | POST    | Effekt auf allen laufenden Bridges sofort stoppen                                       |
 | `/identify` | POST  | Lampen einer Bridge einzeln durchtesten (`channel_id` → Lampe). Body: `bridge_host` (Pflicht bei mehr als einer konfigurierten Bridge), `area_id` (optional, sonst aus der bridges-Konfiguration), `channel_id` (fehlt = alle nacheinander), `seconds`, `color`, `restore_state`. Ein DTLS-Handshake für den Durchlauf; belegt denselben Slot wie `/start`. |
 | `/presets` | GET / PUT / POST / DELETE | Effektsets verwalten (`/data/presets.json`). `GET` = alle (`{presets, names}`) bzw. `?name=…` eines. `PUT`/`POST` `{"name","config"}` = speichern/überschreiben (auch Datei-Upload). `DELETE ?name=…` = löschen. |
@@ -257,7 +258,7 @@ in diesem Repo legt vier Entities an (`binary_sensor` „Betriebszustand“, `sw
 hinzufügen – `hacs.json` im Wurzelverzeichnis) oder manuell (Ordner nach
 `config/custom_components/` kopieren); danach HA neu starten und
 **Einstellungen → Geräte & Dienste → Integration hinzufügen → „Red Alert
-Entertainment App“**. Details siehe das `README.md` in diesem Ordner.
+Entertainment App“**. Details siehe [`custom_components/redalert/README.md`](custom_components/redalert/README.md).
 
 **Ohne Zusatzinstallation** – `configuration.yaml`:
 
@@ -312,7 +313,7 @@ per Sprachbefehl schalten.
 ## 8. Effekt anpassen
 
 Effekt wählen: Option `effect` bzw.
-`"effect": "pulse"|"comet"|"glitter"|"police"|"lightning"|"heartbeat"|"aurora"|"rainbow"|"meteor"|"wipe"|"firework"|"ripple"|"wave"|"flicker"|"strobe"|"duel"|"sunrise"|"chase"` im `/start`-Body
+`"effect": "pulse"|"comet"|"glitter"|"police"|"lightning"|"heartbeat"|"aurora"|"rainbow"|"meteor"|"wipe"|"firework"|"ripple"|"wave"|"flicker"|"strobe"|"duel"|"chase"` im `/start`-Body
 (Standard für Bridges ohne eigene Einstellung), oder `effect` in der
 jeweiligen Zeile der `bridges`-Option/-Liste für nur eine Bridge.
 
@@ -376,7 +377,7 @@ zusätzlich je Funken eine Farbe aus `glitter_colors`.
 Gruppe, die beiden Gruppen blinken abwechselnd (`RedAlertPolice` in
 `chase.py`):
 - `sweep_seconds` – Dauer eines vollen Wechsels (beide Gruppen einmal an).
-- `police_color2` – Farbe der zweiten Gruppe (Option, `/start`-Body **oder**
+- `color2` – Farbe der zweiten Gruppe (Option, `/start`-Body **oder**
   je Bridge in `bridges`, Standard `#0000FF`); die erste Gruppe nutzt die
   normale Bridge-`color`.
 
@@ -462,20 +463,11 @@ Party-Look (`RedAlertStrobe` in `chase.py`):
 - `sweep_seconds` – Periodendauer (Zeit zwischen zwei Blitzen).
 
 `duel` – zwei Kometen starten an entgegengesetzten Enden der Kanäle – einer
-in der Bridge-`color`, einer in `police_color2` –, treffen sich in der Mitte
+in der Bridge-`color`, einer in `color2` –, treffen sich in der Mitte
 und laufen zurück, anders als `meteor` (unabhängig, zufällig) oder `comet`
 (ein einzelner, deterministischer Umlauf) (`RedAlertDuel` in `chase.py`):
 - `sweep_seconds` – Periodendauer eines vollen Hin- und Rücklaufs.
-- `police_color2` – Farbe des zweiten Kometen (Standard `#0000FF`).
-
-`sunrise` – ein langsamer Farb- und Helligkeitsbogen für **alle** Lampen
-einer Bridge gemeinsam, anders als `aurora`s phasenversetzte Palette je
-Lampe (`RedAlertSunrise` in `chase.py`):
-- `sweep_seconds` – Dauer einer Richtung (dunkel → hell); ein voller Zyklus
-  dauert doppelt so lange, z. B. `120` für einen 4-minütigen Sonnenauf-/
-  -untergang.
-- `police_color2` – dunkles/warmes Ende des Bogens; `color` ist das helle
-  Ende.
+- `color2` – Farbe des zweiten Kometen (Standard `#0000FF`).
 
 `chase` – **nur für Gradient Lightstrips** (jeder Kanal ist ein
 Farb-Segment, keine eigene Lampe): ein oder mehrere weich überblendete Bänder
@@ -533,30 +525,36 @@ wieder **Laden**, direkt **Starten**, als JSON-Datei **Herunterladen** /
 | Lauflicht ruckelt                          | `fps` in den App-Optionen erhöhen oder Netzwerklast zur Bridge prüfen.                          |
 | Streaming einer Bridge bricht nach kurzer Zeit ab | Jede Bridge erlaubt nur **einen aktiven** Entertainment-Stream gleichzeitig (pro Bridge, nicht global) – Hue-Sync-App oder andere Streaming-Clients auf dieser Bridge währenddessen schließen. |
 
-## 10. Rechtlicher Hinweis zur Audiodatei
-
-Diese App kümmert sich ausschließlich um das Licht. Den Alarmstufe-Rot-Sound
-aus der Serie musst du selbst aus einer legal erworbenen Quelle bereitstellen
-(z. B. eigene Kaufversion, eigene Aufnahme).
-
 ## Projektstruktur
 
 App-Store-Repository: `repository.yaml` im Wurzelverzeichnis, die App
-selbst im Unterordner `redalert/`.
+selbst im Unterordner `redalert/`, die optionale Home-Assistant-Integration
+in `custom_components/redalert/`.
 
 ```
 .
 ├── repository.yaml              App-Store-Metadaten (name, url, maintainer)
-├── README.md                   Diese Datei (Repo-Überblick)
-├── custom_components/redalert/ Home-Assistant-Integration (binary_sensor,
-│                                switch, select, sensor – spricht die REST-API
-│                                der App an, siehe README darin)
+├── README.md / README.en.md    Diese Datei (Repo-Überblick, DE/EN)
+├── hacs.json                    macht dieses Repo als HACS-Integrations-
+│                                Repository hinzufügbar (Kategorie „Integration“)
+├── info.md                      HACS-Kurzbeschreibung der Integration
+├── custom_components/redalert/ Home-Assistant-Integration (optional)
+│   ├── manifest.json, const.py, api.py, coordinator.py, config_flow.py,
+│   │   entity.py                REST-Client + Config-Flow + gemeinsame Basis-Entity
+│   ├── binary_sensor.py / switch.py / select.py / sensor.py
+│   │                             die vier Entities – spricht nur die REST-API
+│   │                             der App an, siehe README.md darin
+│   ├── strings.json (Englisch) / translations/{de,en}.json
+│   │                             Entity-/Config-Flow-Beschriftungen
+│   │                             (strings.json ist zusätzlich die Quelle für
+│   │                             die technischen Entity-IDs, siehe README dort)
+│   └── brand/icon.png, brand/logo.png  Kopien der Store-Grafiken (für HA-UI)
 ├── redalert/                   >>> die eigentliche App <<<
 │   ├── config.yaml              Manifest: Optionen, Ingress, Ports
 │   ├── build.yaml               Basis-Images (home-assistant/base-python)
 │   ├── Dockerfile               Image-Build
 │   ├── requirements.txt         Python-Abhängigkeiten (hue-entertainment, aiohttp)
-│   ├── DOCS.md                  In HA angezeigte Anleitung (Tab „Dokumentation“)
+│   ├── DOCS.md / DOCS.en.md     In HA angezeigte Anleitung (Tab „Dokumentation“, DE/EN)
 │   ├── CHANGELOG.md             Versionshistorie (Tab „Changelog“)
 │   ├── icon.png / logo.png      Store-Grafiken
 │   ├── translations/{de,en}.yaml  Beschriftung der Konfigurationsoberfläche
@@ -564,6 +562,6 @@ selbst im Unterordner `redalert/`.
 │       ├── etc/s6-overlay/…      Service-Definition (Start, bashio-Logging)
 │       └── app/
 │           ├── main.py           REST-Server + Streaming-Loop + Ingress-Panel
-│           ├── chase.py          Effekt-Mathematik (18 Effekte, siehe §8)
+│           ├── chase.py          Effekt-Mathematik (17 Effekte, siehe §8)
 │           └── panel.html        Web-UI (Steuerung)
 ```

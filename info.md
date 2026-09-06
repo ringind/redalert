@@ -1,10 +1,12 @@
 # Red Alert Entertainment – Home-Assistant-Integration
 
+🇩🇪 Deutsch (diese Datei) · 🇬🇧 [English](https://github.com/ringind/redalert/blob/main/info.en.md)
+
 Diese Integration steuert die **Red Alert Entertainment App** aus Home
 Assistant heraus – eine App für frei konfigurierbare Hue-Entertainment-
-Lichteffekte (18 Effekte, u. a. Puls, Komet, Diamant-Funkeln, Alarmlicht,
+Lichteffekte (17 Effekte, u. a. Puls, Komet, Diamant-Funkeln, Alarmlicht,
 Gewitter, Herzschlag, Polarlicht, Regenbogen, Meteore, Feuerwerk, Duell,
-Sonnenaufgang, Lauflicht für Gradient-Lightstrips; Farbe, Timing und bis zu
+Lauflicht für Gradient-Lightstrips; Farbe, Timing und bis zu
 3 Bridges je Effektset einstellbar).
 Die namensgebende Star-Trek-„Alarmstufe Rot“-Szene ist nur eines von beliebig
 vielen speicherbaren **Effektsets**. Diese Integration spricht ausschließlich

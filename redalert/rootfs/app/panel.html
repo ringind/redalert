@@ -24,6 +24,9 @@
   header .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--accent);
     box-shadow: 0 0 10px var(--accent); }
   header h1 { font-size: 1rem; margin: 0; font-weight: 600; }
+  .lang-toggle { margin-left: auto; display: flex; gap: .3rem; }
+  .lang-btn { padding: .3rem .6rem; font-size: .75rem; }
+  .lang-btn.active { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
   main { max-width: 720px; margin: 0 auto; padding: 1.25rem; display: grid; gap: 1rem; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.1rem; }
   .card h2 { margin: 0 0 .75rem; font-size: .95rem; font-weight: 600; }
@@ -71,22 +74,26 @@
 <header>
   <span class="dot"></span>
   <h1>Red Alert Entertainment</h1>
+  <div class="lang-toggle">
+    <button class="secondary lang-btn" id="lang-de" data-lang="de">DE</button>
+    <button class="secondary lang-btn" id="lang-en" data-lang="en">EN</button>
+  </div>
 </header>
 
 <main>
   <section class="card">
-    <h2>Status</h2>
+    <h2 data-i18n="status.title">Status</h2>
     <div class="row" style="margin-bottom:.8rem">
-      <span class="pill" id="pill-pair"><span class="led"></span> Bridges</span>
-      <span class="pill" id="pill-run"><span class="led"></span> Effekt</span>
-      <button class="secondary" id="btn-refresh" style="margin-left:auto">Aktualisieren</button>
+      <span class="pill" id="pill-pair"><span class="led"></span> <span data-i18n="status.bridges">Bridges</span></span>
+      <span class="pill" id="pill-run"><span class="led"></span> <span data-i18n="status.effect">Effekt</span></span>
+      <button class="secondary" id="btn-refresh" style="margin-left:auto" data-i18n="btn.refresh">Aktualisieren</button>
     </div>
     <div class="status-grid" id="status"></div>
   </section>
 
   <section class="card">
-    <h2>1 · Bridges</h2>
-    <p class="muted" style="margin-top:0">
+    <h2 data-i18n="section1.title">1 · Bridges</h2>
+    <p class="muted" style="margin-top:0" data-i18n="section1.intro">
       Bis zu 3 Hue Bridges, die gleichzeitig loslegen. Pro Bridge: Link-Button
       drücken, IP eintragen, innerhalb ~30 s „Pairen“ klicken, dann „Bereiche
       laden“ und den gewünschten Bereich übernehmen. Über „Effekt für diese
@@ -98,21 +105,78 @@
   </section>
 
   <section class="card">
-    <h2>2 · Steuerung</h2>
+    <h2 data-i18n="section2.title">2 · Steuerung</h2>
     <div class="row" style="margin-bottom:.9rem">
-      <button id="btn-start">▶ Start</button>
-      <button class="secondary" id="btn-stop">■ Stop</button>
+      <button id="btn-start" data-i18n="btn.start">▶ Start</button>
+      <button class="secondary" id="btn-stop" data-i18n="btn.stop">■ Stop</button>
     </div>
-    <p class="muted" style="margin-top:0">
-      Alle Parameter (Effekt, Farbe, Timing, Dauer, fps, …) kommen aus der
+    <p class="muted" style="margin-top:0" data-i18n-html="section2.intro"></p>
+    <p class="muted" style="margin:.5rem 0 0" data-i18n-html="section2.effects"></p>
+  </section>
+
+  <section class="card">
+    <h2 data-i18n="section3.title">3 · Effektsets</h2>
+    <p class="muted" style="margin-top:0" data-i18n-html="section3.intro"></p>
+    <div class="row">
+      <div><label for="preset-select" data-i18n="preset.saved">Gespeichertes Set</label>
+        <select id="preset-select"><option value="" data-i18n="preset.none">– keins –</option></select></div>
+      <button class="secondary" id="btn-preset-load" data-i18n="btn.load">Laden</button>
+      <button id="btn-preset-start" data-i18n="btn.presetStart">▶ Starten</button>
+      <button class="secondary" id="btn-preset-download" data-i18n="btn.download">Herunterladen</button>
+      <button class="secondary" id="btn-preset-delete" data-i18n="btn.delete">Löschen</button>
+    </div>
+    <div class="row" style="margin-top:.6rem">
+      <div style="flex:1 1 18rem"><label for="preset-name" data-i18n="preset.saveAs">Aktuelle Einstellungen speichern als</label>
+        <input type="text" id="preset-name" style="width:100%" data-i18n-ph="preset.namePh"></div>
+      <button id="btn-preset-save" data-i18n="btn.save">Speichern</button>
+      <button class="secondary" id="btn-preset-upload" data-i18n="btn.upload">Hochladen…</button>
+      <input type="file" id="preset-file" accept="application/json,.json" style="display:none">
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 data-i18n="log.title">Protokoll</h2>
+    <div class="row" style="margin-bottom:.6rem">
+      <label><input type="checkbox" id="log-requests"> <span data-i18n="log.showRequests">Anfragen einblenden</span></label>
+      <button class="secondary" id="btn-log-download" style="margin-left:auto" data-i18n="btn.download">Herunterladen</button>
+      <button class="secondary" id="btn-log-clear" data-i18n="btn.delete">Löschen</button>
+    </div>
+    <pre id="log">Bereit.</pre>
+  </section>
+</main>
+
+<script>
+  // Relative URLs -> funktioniert hinter Ingress und via Port 8099 direkt.
+  const $ = (id) => document.getElementById(id);
+  const BRIDGE_COUNT = 3;
+
+  // --- i18n -------------------------------------------------------------
+  // Übersetzungen liegen als flache Key-Value-Tabellen je Sprache vor;
+  // statische Elemente tragen data-i18n(-html|-ph|-title), dynamisch erzeugte
+  // Texte (Bridge-Karten, Status, Log) rufen t(key) direkt auf. applyI18n()
+  // läuft beim Start und bei jedem Sprachwechsel erneut über das ganze
+  // Dokument (auch über die bereits eingefügten Bridge-Karten), sodass ein
+  // Sprachwechsel keine Formulareingaben zurücksetzt.
+  const I18N = {
+    de: {
+      "status.title": "Status", "status.bridges": "Bridges", "status.effect": "Effekt",
+      "btn.refresh": "Aktualisieren",
+      "section1.title": "1 · Bridges",
+      "section1.intro": `Bis zu 3 Hue Bridges, die gleichzeitig loslegen. Pro Bridge: Link-Button
+      drücken, IP eintragen, innerhalb ~30 s „Pairen“ klicken, dann „Bereiche
+      laden“ und den gewünschten Bereich übernehmen. Über „Effekt für diese
+      Bridge anpassen“ kann jede Bridge ihren eigenen Effekt/Farbe/Timing
+      bekommen – „wie Konfiguration“ bzw. leer gelassene Felder übernehmen den
+      Standard aus der App-Konfiguration.`,
+      "section2.title": "2 · Steuerung",
+      "btn.start": "▶ Start", "btn.stop": "■ Stop",
+      "section2.intro": `Alle Parameter (Effekt, Farbe, Timing, Dauer, fps, …) kommen aus der
       App-Konfiguration (Tab „Konfiguration“) bzw. aus den Overrides der
       jeweiligen Bridge-Karte oben – siehe „Status“ für die aktuell
       wirksamen Werte. <strong>Start</strong> / <strong>Stop</strong> starten/stoppen
       alle eingerichteten Bridges gleichzeitig; die beiden Knöpfe zeigen per
-      gedrücktem Zustand an, ob der Effekt gerade läuft.
-    </p>
-    <p class="muted" style="margin:.5rem 0 0">
-      <strong>Dauer</strong> (App-Option <code>duration</code>): wie lange der
+      gedrücktem Zustand an, ob der Effekt gerade läuft.`,
+      "section2.effects": `<strong>Dauer</strong> (App-Option <code>duration</code>): wie lange der
       Effekt läuft, bevor er von selbst endet (oder vorher per „Stop“).
       <code>0</code> = unbegrenzt, läuft bis „Stop“.<br>
       <strong>Attack / Release</strong> (nur <code>effect: pulse</code>): Auf- bzw.
@@ -177,10 +241,6 @@
       entgegengesetzten Enden – einer in der Bridge-Farbe, einer in
       <code>zweite Farbe</code> –, treffen sich in der Mitte und prallen zurück;
       <code>sweep_seconds</code> steuert das Tempo.<br>
-      <strong>sunrise</strong> (nur <code>effect: sunrise</code>): ein langsamer
-      Farb-/Helligkeitsbogen für alle Lampen gemeinsam, wandert zwischen
-      <code>zweite Farbe</code> (dunkel/warm) und der Bridge-Farbe (hell) und
-      zurück; <code>sweep_seconds</code> = Dauer einer Richtung.<br>
       <strong>chase</strong> (nur <code>effect: chase</code>, für
       Gradient Lightstrips): ein oder mehrere weich überblendete Bänder in der
       Bridge-Farbe laufen über die Segmente, dazwischen die
@@ -196,59 +256,328 @@
       (ein Entertainment-Bereich mit mehreren Geräten) und je Strip eine eigene
       Richtung: siehe „Strip-Längen“ in der jeweiligen Bridge-Karte.<br>
       <strong>neutral</strong>: die Bridge wird nicht angefasst – so kann ein Effektset
-      z. B. Bridge 1 laufen lassen und Bridge 2 auslassen.
-    </p>
-  </section>
-
-  <section class="card">
-    <h2>3 · Effektsets</h2>
-    <p class="muted" style="margin-top:0">
-      Alle Bridge-Karten aus „1 · Bridges“ unter einem Namen speichern, später
+      z. B. Bridge 1 laufen lassen und Bridge 2 auslassen.`,
+      "section3.title": "3 · Effektsets",
+      "section3.intro": `Alle Bridge-Karten aus „1 · Bridges“ unter einem Namen speichern, später
       wieder laden oder direkt starten (auch per
       <code>POST /start {"preset": "…"}</code>). Sets lassen sich als JSON-Datei
-      herunter- und wieder hochladen.
-    </p>
-    <div class="row">
-      <div><label for="preset-select">Gespeichertes Set</label>
-        <select id="preset-select"><option value="">– keins –</option></select></div>
-      <button class="secondary" id="btn-preset-load">Laden</button>
-      <button id="btn-preset-start">▶ Starten</button>
-      <button class="secondary" id="btn-preset-download">Herunterladen</button>
-      <button class="secondary" id="btn-preset-delete">Löschen</button>
-    </div>
-    <div class="row" style="margin-top:.6rem">
-      <div style="flex:1 1 18rem"><label for="preset-name">Aktuelle Einstellungen speichern als</label>
-        <input type="text" id="preset-name" placeholder="z. B. Star Trek – Alarmstufe Rot" style="width:100%"></div>
-      <button id="btn-preset-save">Speichern</button>
-      <button class="secondary" id="btn-preset-upload">Hochladen…</button>
-      <input type="file" id="preset-file" accept="application/json,.json" style="display:none">
-    </div>
-  </section>
-
-  <section class="card">
-    <h2>Protokoll</h2>
-    <div class="row" style="margin-bottom:.6rem">
-      <label><input type="checkbox" id="log-requests"> Anfragen einblenden</label>
-      <button class="secondary" id="btn-log-download" style="margin-left:auto">Herunterladen</button>
-      <button class="secondary" id="btn-log-clear">Löschen</button>
-    </div>
-    <pre id="log">Bereit.</pre>
-  </section>
-</main>
-
-<script>
-  // Relative URLs -> funktioniert hinter Ingress und via Port 8099 direkt.
-  const $ = (id) => document.getElementById(id);
-  const BRIDGE_COUNT = 3;
+      herunter- und wieder hochladen.`,
+      "preset.saved": "Gespeichertes Set", "preset.none": "– keins –",
+      "preset.saveAs": "Aktuelle Einstellungen speichern als",
+      "preset.namePh": "z. B. Star Trek – Alarmstufe Rot",
+      "btn.load": "Laden", "btn.presetStart": "▶ Starten", "btn.download": "Herunterladen",
+      "btn.delete": "Löschen", "btn.save": "Speichern", "btn.upload": "Hochladen…",
+      "log.title": "Protokoll", "log.showRequests": "Anfragen einblenden", "log.ready": "Bereit.",
+      "log.timeout": "Zeitüberschreitung", "log.netError": "Netzwerkfehler: ",
+      "log.noBridgeIp": (i) => `Bridge ${i}: keine Bridge-IP eingetragen.`,
+      "log.areaSet": (i, id) => `Bridge ${i}: area_id gesetzt: ${id}`,
+      "log.noPresetSelected": "Kein Set gewählt.",
+      "log.presetLoaded": (name) => `Effektset „${name}“ ins Formular geladen.`,
+      "log.presetNameRequired": "Bitte einen Namen für das Set eingeben.",
+      "log.uploadInvalidJson": (err) => `Upload fehlgeschlagen – keine gültige JSON-Datei: ${err}`,
+      "log.uploadNoName": "Upload: kein Name für das Set – bitte oben einen eintragen.",
+      "log.uploadNoConfig": "Upload: Datei enthält keine Einstellungen.",
+      "log.uploaded": (name) => `Effektset „${name}“ hochgeladen.`,
+      "areas.none": "Keine Bereiche gefunden.",
+      "areas.notLoaded": "Noch nichts geladen.",
+      "areas.pickArea": "Bereich oben wählen und „Bereiche laden“.",
+      "areas.noName": "(ohne Name)", "areas.channels": "Kanäle",
+      "areas.apply": "übernehmen", "areas.channel": "Kanal",
+      "pill.paired": "gepaart", "pill.notPaired": "nicht gepaart",
+      "pill.running": "Effekt läuft", "pill.stopped": "Effekt aus",
+      "pill.pairedCount": (n, total) => `${n}/${total} gepaart`,
+      "pill.nonePaired": "keine gepaart",
+      "opt.sameAsConfig": "wie Konfiguration",
+      "opt.pulse": "pulse (Takt)", "opt.comet": "comet (Komet)", "opt.glitter": "glitter (Funkeln)",
+      "opt.police": "police (Alarmlicht)", "opt.lightning": "lightning (Gewitter)",
+      "opt.heartbeat": "heartbeat (Herzschlag)", "opt.aurora": "aurora (Polarlicht)",
+      "opt.rainbow": "rainbow (Regenbogen)", "opt.meteor": "meteor (Meteore)",
+      "opt.wipe": "wipe (Auffüllen)", "opt.firework": "firework (Feuerwerk)",
+      "opt.ripple": "ripple (Echo)", "opt.wave": "wave (Welle)", "opt.flicker": "flicker (Flackern)",
+      "opt.strobe": "strobe (Stroboskop)", "opt.duel": "duel (Duell)", "opt.chase": "chase (Lauflicht)",
+      "opt.neutral": "neutral (nicht steuern)",
+      "card.bridge": (i) => `Bridge ${i}`,
+      "card.bridgeIp": "Bridge-IP", "btn.pair": "Pairen",
+      "card.areaId": "area_id", "btn.loadAreas": "Bereiche laden",
+      "card.channelOrder": "channel_order (leer = Bereichs-Standard)",
+      "card.channelOrderPh": "z. B. 2,3,1,0,5,4",
+      "card.customizeEffect": "Effekt für diese Bridge anpassen",
+      "card.effect": "Effekt",
+      "card.color": "Farbe (diese Bridge)", "title.useOwnColor": "eigene Farbe verwenden",
+      "card.sweep": "sweep_seconds", "card.chasePause": "chase-Pause (s)",
+      "card.attack": "Attack (ms)", "card.release": "Release (ms)",
+      "card.glowLow": "glow_low (0–1)", "card.glowHigh": "glow_high (0–1)",
+      "card.glitterInterval": "glitter: Intervall (ms)", "card.glitterFlash": "glitter: Blitzdauer (ms)",
+      "card.glitterColors": "glitter: Farben (diese Bridge)", "title.useOwnColors": "eigene Farben verwenden",
+      "card.gcDir": "chase: Richtung(en) – forward, backward oder bounce",
+      "card.gcDirPh": "wie Konfiguration, z. B. forward",
+      "title.gcDir": "forward / backward: umlaufend (wie ein Förderband); bounce: prallt an beiden Enden ab (Larson-Scanner). Bei mehreren Strips (siehe Strip-Längen) durch Komma getrennt, eine Richtung je Strip, z. B. forward,backward.",
+      "card.gcStrips": "chase: Strip-Längen", "card.gcStripsPh": "1 Strip, z. B. 7,5",
+      "card.gcCount": "chase: Anzahl Chases", "card.gcLength": "chase: Länge (Segmente)",
+      "card.gcSpeed": "chase: Geschwindigkeit (Segm./s)",
+      "card.gcBg": "chase: Background-Farbe (diese Bridge)", "title.useOwnBg": "eigene Background-Farbe verwenden",
+      "card.gcGlitter": "Chases funkeln", "card.gcPulse": "Background pulsiert",
+      "card.color2": "zweite Farbe (diese Bridge) – für police, duel",
+      "title.useOwnColor2": "eigene zweite Farbe verwenden",
+      "card.lightInt": "lightning: Blitz-Intervall (ms)", "card.lightFlash": "lightning: Blitzdauer (ms)",
+      "card.mCount": "meteor: Anzahl", "card.mSpeed": "meteor: Geschwindigkeit (Kanäle/s)",
+      "card.fwInt": "firework: Intervall (ms)", "card.fwSpeed": "firework: Geschwindigkeit (Kanäle/s)",
+      "card.ripInt": "ripple: Intervall (ms)", "card.ripSpeed": "ripple: Geschwindigkeit (Kanäle/s)",
+      "card.waveLen": "wave: Wellenlänge (Kanäle)",
+      "card.flickInt": "flicker: Intervall (ms)", "card.flickDip": "flicker: Einbruchsdauer (ms)",
+      "card.mapLamps": "Lampen zuordnen", "card.idSeconds": "Sekunden je Kanal",
+      "btn.identifyAll": "Alle Kanäle nacheinander",
+      "field.duration": "Dauer (Konfiguration)", "field.effect": "Effekt (Konfiguration)",
+      "field.color": "Farbe (Konfiguration)", "field.fps": "fps",
+      "field.sweep": "sweep_seconds (Konfiguration)", "field.chasePause": "chase-Pause (Konfiguration)",
+      "field.attackRelease": "attack / release (Konfiguration)", "field.glow": "glow low / high (Konfiguration)",
+      "field.glitter": "glitter (Konfiguration)", "field.chase": "chase (Konfiguration)",
+      "field.color2": "police / duel: Farbe / zweite Farbe (Konfiguration)",
+      "field.lightning": "lightning (Konfiguration)", "field.meteor": "meteor (Konfiguration)",
+      "field.firework": "firework (Konfiguration)", "field.ripple": "ripple (Konfiguration)",
+      "field.wave": "wave (Konfiguration)", "field.flicker": "flicker (Konfiguration)",
+      "field.restoreState": "Lichtzustand wiederherstellen", "field.logLevel": "Log-Level",
+      "field.presets": "Effektsets",
+      "field.bridgeN": (i) => `Bridge ${i} (Konfiguration)`,
+      "val.unlimited": "unbegrenzt", "val.offContinuous": "aus (durchgehend)",
+      "val.yes": "ja", "val.no": "nein", "val.bridgeColor": "Bridge-Farbe", "val.none": "keine",
+      "val.config": "Konfiguration",
+      "val.bridgeSummary": (host, paired, area, effect) =>
+        `${host} · ${paired} · Bereich ${area} · Effekt: ${effect}`,
+    },
+    en: {
+      "status.title": "Status", "status.bridges": "Bridges", "status.effect": "Effect",
+      "btn.refresh": "Refresh",
+      "section1.title": "1 · Bridges",
+      "section1.intro": `Up to 3 Hue Bridges that start simultaneously. Per bridge: press the
+      link button, enter the IP, click "Pair" within ~30 s, then "Load areas"
+      and pick the one you want. "Customize effect for this bridge" lets each
+      bridge get its own effect/colour/timing – "same as configuration" or a
+      field left empty falls back to the app configuration's default.`,
+      "section2.title": "2 · Control",
+      "btn.start": "▶ Start", "btn.stop": "■ Stop",
+      "section2.intro": `All parameters (effect, colour, timing, duration, fps, …) come from the
+      app configuration ("Configuration" tab) or from the overrides on a
+      bridge card above – see "Status" for the currently effective values.
+      <strong>Start</strong> / <strong>Stop</strong> start/stop all configured
+      bridges at once; both buttons show a pressed state to indicate whether
+      the effect is currently running.`,
+      "section2.effects": `<strong>Duration</strong> (app option <code>duration</code>): how long the
+      effect runs before ending on its own (or earlier via "Stop").
+      <code>0</code> = unlimited, runs until "Stop".<br>
+      <strong>Attack / Release</strong> (only <code>effect: pulse</code>): ramp-up/
+      ramp-down time between <code>glow_low</code> and <code>glow_high</code>; pick a
+      smaller Release than Attack for a faster fall than rise.<br>
+      <strong>glow_low / glow_high</strong> (all effects): resting brightness between
+      pulses, and brightness at the pulse peak. Between pulses the lamps return to
+      <code>glow_low</code> (not 0), at the peak they reach <code>glow_high</code>.<br>
+      <strong>comet</strong> (only <code>effect: comet</code>): a comet loops around
+      the channels, dragging a tail behind it; <code>chase pause</code> = pause
+      between two runs (0 = continuous).<br>
+      <strong>glitter</strong> (only <code>effect: glitter</code>): each lamp sparkles
+      on its own. <code>Interval</code> = mean gap between two sparkles (small =
+      more frantic), <code>flash duration</code> = how fast a spark decays (larger
+      than the interval ⇒ several lamps sparkle at once), <code>colours</code> = up
+      to three colours each spark picks from at random.<br>
+      <strong>police</strong> (only <code>effect: police</code>): two lamp groups
+      (every other lamp) flash alternately – the first group in the bridge colour,
+      the second in <code>second colour</code>; <code>sweep_seconds</code> controls
+      the switching tempo.<br>
+      <strong>lightning</strong> (only <code>effect: lightning</code>): all lamps of a
+      bridge flash together in the bridge colour, at random intervals
+      (<code>strike interval</code>) and decay over <code>flash duration</code>;
+      occasionally followed by a quick second flash.<br>
+      <strong>heartbeat</strong> (only <code>effect: heartbeat</code>): a double pulse
+      (lub-dub) instead of a single pulse, timed by <code>sweep_seconds</code>;
+      uses the same <code>Attack</code>/<code>Release</code> as <code>pulse</code>.<br>
+      <strong>aurora</strong> (only <code>effect: aurora</code>): slow, soft colour
+      waves drift across the lamps, blended from the <code>glitter colours</code>
+      (or the bridge colour if none are set); <code>sweep_seconds</code>
+      sets the tempo.<br>
+      <strong>rainbow</strong> (only <code>effect: rainbow</code>): a continuous
+      rainbow hue-cycle, phase-offset per lamp, so a colour gradient visibly
+      travels across the lamps; <code>sweep_seconds</code> sets the tempo.<br>
+      <strong>meteor</strong> (only <code>effect: meteor</code>): several independent
+      meteors in the bridge colour run at randomised speed and direction around
+      the channels; <code>count</code>/<code>speed</code> control how many and
+      how fast on average.<br>
+      <strong>wipe</strong> (only <code>effect: wipe</code>): a fill bar in the bridge
+      colour runs once across the channels (duration <code>sweep_seconds</code>),
+      holds briefly full (<code>chase pause</code>) and starts over.<br>
+      <strong>firework</strong> (only <code>effect: firework</code>): recurring bursts
+      in the bridge colour spread outward from the middle of the channels and
+      fade; <code>interval</code>/<code>speed</code> control how often and how
+      fast.<br>
+      <strong>ripple</strong> (only <code>effect: ripple</code>): like
+      <code>firework</code>, but the wave bounces off both ends and echoes back
+      before fading.<br>
+      <strong>wave</strong> (only <code>effect: wave</code>): a continuous
+      brightness sine wave runs across the channels, several crests visible at
+      once; <code>wave length</code> = channels per full wave (small = more
+      crests), <code>sweep_seconds</code> = tempo.<br>
+      <strong>flicker</strong> (only <code>effect: flicker</code>): lamps sporadically
+      dip briefly from <code>glow_high</code>, like a failing bulb;
+      <code>interval</code>/<code>dip duration</code> control how often and how
+      fast a lamp recovers.<br>
+      <strong>strobe</strong> (only <code>effect: strobe</code>): a hard, instant
+      flash in the bridge colour with no fade at all;
+      <code>sweep_seconds</code> sets the tempo.<br>
+      <strong>duel</strong> (only <code>effect: duel</code>): two comets launch from
+      opposite ends – one in the bridge colour, one in
+      <code>second colour</code> –, meet in the middle and bounce back;
+      <code>sweep_seconds</code> sets the tempo.<br>
+      <strong>chase</strong> (only <code>effect: chase</code>, for
+      Gradient Lightstrips): one or more soft-edged bands in the bridge colour
+      slide across the segments, with the background colour in between.
+      <code>Band count</code>/<code>length</code> = how many bands at once and
+      how wide (in segments); <code>speed</code> = segments per second;
+      <code>direction</code> = <code>forward</code>/<code>backward</code>
+      (looping) or <code>bounce</code> (reflects off both ends). With
+      <code>bands sparkle</code> the bands additionally sparkle (like
+      <code>glitter</code>), with <code>background pulses</code> the
+      background breathes between <code>glow_low</code> and
+      <code>glow_high</code> (like <code>pulse</code>) instead of resting
+      quietly at <code>glow_low</code>. Several combined Gradient Lightstrips
+      (one Entertainment area with several devices) can each get their own
+      direction: see "strip lengths" on the respective bridge card.<br>
+      <strong>neutral</strong>: this bridge is left untouched – handy for an
+      effect set that runs bridge 1 while leaving bridge 2 out.`,
+      "section3.title": "3 · Effect Sets",
+      "section3.intro": `Save all bridge cards from "1 · Bridges" under a name, load or start
+      them again later (also via
+      <code>POST /start {"preset": "…"}</code>). Sets can be downloaded and
+      uploaded again as a JSON file.`,
+      "preset.saved": "Saved set", "preset.none": "– none –",
+      "preset.saveAs": "Save current settings as",
+      "preset.namePh": "e.g. Star Trek – Red Alert",
+      "btn.load": "Load", "btn.presetStart": "▶ Start", "btn.download": "Download",
+      "btn.delete": "Delete", "btn.save": "Save", "btn.upload": "Upload…",
+      "log.title": "Log", "log.showRequests": "Show requests", "log.ready": "Ready.",
+      "log.timeout": "Timed out", "log.netError": "Network error: ",
+      "log.noBridgeIp": (i) => `Bridge ${i}: no bridge IP entered.`,
+      "log.areaSet": (i, id) => `Bridge ${i}: area_id set: ${id}`,
+      "log.noPresetSelected": "No set selected.",
+      "log.presetLoaded": (name) => `Effect set "${name}" loaded into the form.`,
+      "log.presetNameRequired": "Please enter a name for the set.",
+      "log.uploadInvalidJson": (err) => `Upload failed – not a valid JSON file: ${err}`,
+      "log.uploadNoName": "Upload: no name for the set – please enter one above.",
+      "log.uploadNoConfig": "Upload: the file has no settings.",
+      "log.uploaded": (name) => `Effect set "${name}" uploaded.`,
+      "areas.none": "No areas found.",
+      "areas.notLoaded": "Nothing loaded yet.",
+      "areas.pickArea": `Pick an area above and "Load areas".`,
+      "areas.noName": "(unnamed)", "areas.channels": "Channels",
+      "areas.apply": "use", "areas.channel": "Channel",
+      "pill.paired": "paired", "pill.notPaired": "not paired",
+      "pill.running": "effect running", "pill.stopped": "effect off",
+      "pill.pairedCount": (n, total) => `${n}/${total} paired`,
+      "pill.nonePaired": "none paired",
+      "opt.sameAsConfig": "same as configuration",
+      "opt.pulse": "pulse (beat)", "opt.comet": "comet", "opt.glitter": "glitter (sparkle)",
+      "opt.police": "police (emergency lights)", "opt.lightning": "lightning (storm)",
+      "opt.heartbeat": "heartbeat", "opt.aurora": "aurora (northern lights)",
+      "opt.rainbow": "rainbow", "opt.meteor": "meteor (meteors)",
+      "opt.wipe": "wipe (fill)", "opt.firework": "firework",
+      "opt.ripple": "ripple (echo)", "opt.wave": "wave", "opt.flicker": "flicker",
+      "opt.strobe": "strobe", "opt.duel": "duel", "opt.chase": "chase (running lights)",
+      "opt.neutral": "neutral (don't control)",
+      "card.bridge": (i) => `Bridge ${i}`,
+      "card.bridgeIp": "Bridge IP", "btn.pair": "Pair",
+      "card.areaId": "area_id", "btn.loadAreas": "Load areas",
+      "card.channelOrder": "channel_order (empty = area's default)",
+      "card.channelOrderPh": "e.g. 2,3,1,0,5,4",
+      "card.customizeEffect": "Customize effect for this bridge",
+      "card.effect": "Effect",
+      "card.color": "Colour (this bridge)", "title.useOwnColor": "use custom colour",
+      "card.sweep": "sweep_seconds", "card.chasePause": "chase pause (s)",
+      "card.attack": "Attack (ms)", "card.release": "Release (ms)",
+      "card.glowLow": "glow_low (0–1)", "card.glowHigh": "glow_high (0–1)",
+      "card.glitterInterval": "glitter: interval (ms)", "card.glitterFlash": "glitter: flash duration (ms)",
+      "card.glitterColors": "glitter: colours (this bridge)", "title.useOwnColors": "use custom colours",
+      "card.gcDir": "chase: direction(s) – forward, backward or bounce",
+      "card.gcDirPh": "same as configuration, e.g. forward",
+      "title.gcDir": "forward / backward: loops endlessly (like a conveyor belt); bounce: reflects off both ends (Larson scanner). With several strips (see strip lengths), comma-separated, one direction per strip, e.g. forward,backward.",
+      "card.gcStrips": "chase: strip lengths", "card.gcStripsPh": "1 strip, e.g. 7,5",
+      "card.gcCount": "chase: number of bands", "card.gcLength": "chase: length (segments)",
+      "card.gcSpeed": "chase: speed (segments/s)",
+      "card.gcBg": "chase: background colour (this bridge)", "title.useOwnBg": "use custom background colour",
+      "card.gcGlitter": "Bands sparkle", "card.gcPulse": "Background pulses",
+      "card.color2": "second colour (this bridge) – for police, duel",
+      "title.useOwnColor2": "use custom second colour",
+      "card.lightInt": "lightning: strike interval (ms)", "card.lightFlash": "lightning: flash duration (ms)",
+      "card.mCount": "meteor: count", "card.mSpeed": "meteor: speed (channels/s)",
+      "card.fwInt": "firework: interval (ms)", "card.fwSpeed": "firework: speed (channels/s)",
+      "card.ripInt": "ripple: interval (ms)", "card.ripSpeed": "ripple: speed (channels/s)",
+      "card.waveLen": "wave: wavelength (channels)",
+      "card.flickInt": "flicker: interval (ms)", "card.flickDip": "flicker: dip duration (ms)",
+      "card.mapLamps": "Map lamps", "card.idSeconds": "Seconds per channel",
+      "btn.identifyAll": "All channels in sequence",
+      "field.duration": "Duration (configuration)", "field.effect": "Effect (configuration)",
+      "field.color": "Colour (configuration)", "field.fps": "fps",
+      "field.sweep": "sweep_seconds (configuration)", "field.chasePause": "chase pause (configuration)",
+      "field.attackRelease": "attack / release (configuration)", "field.glow": "glow low / high (configuration)",
+      "field.glitter": "glitter (configuration)", "field.chase": "chase (configuration)",
+      "field.color2": "police / duel: colour / second colour (configuration)",
+      "field.lightning": "lightning (configuration)", "field.meteor": "meteor (configuration)",
+      "field.firework": "firework (configuration)", "field.ripple": "ripple (configuration)",
+      "field.wave": "wave (configuration)", "field.flicker": "flicker (configuration)",
+      "field.restoreState": "Restore light state", "field.logLevel": "Log level",
+      "field.presets": "Effect sets",
+      "field.bridgeN": (i) => `Bridge ${i} (configuration)`,
+      "val.unlimited": "unlimited", "val.offContinuous": "off (continuous)",
+      "val.yes": "yes", "val.no": "no", "val.bridgeColor": "bridge colour", "val.none": "none",
+      "val.config": "configuration",
+      "val.bridgeSummary": (host, paired, area, effect) =>
+        `${host} · ${paired} · area ${area} · effect: ${effect}`,
+    },
+  };
+  let LANG = localStorage.getItem("redalert-lang") || (navigator.language && navigator.language.startsWith("de") ? "de" : "en");
+  function t(key, ...args) {
+    const entry = (I18N[LANG] && I18N[LANG][key] !== undefined) ? I18N[LANG][key] : I18N.de[key];
+    return typeof entry === "function" ? entry(...args) : entry;
+  }
+  function applyI18n(root) {
+    const scope = root || document;
+    scope.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = t(el.dataset.i18n); });
+    scope.querySelectorAll("[data-i18n-html]").forEach((el) => { el.innerHTML = t(el.dataset.i18nHtml); });
+    scope.querySelectorAll("[data-i18n-ph]").forEach((el) => { el.placeholder = t(el.dataset.i18nPh); });
+    scope.querySelectorAll("[data-i18n-title]").forEach((el) => { el.title = t(el.dataset.i18nTitle); });
+  }
+  function setLang(lang) {
+    LANG = lang;
+    localStorage.setItem("redalert-lang", lang);
+    document.documentElement.lang = lang;
+    $("lang-de").classList.toggle("active", lang === "de");
+    $("lang-en").classList.toggle("active", lang === "en");
+    applyI18n();
+    renderLog();
+    // Text, das nur einmal per Template-Literal eingefügt wurde (Bridge-Pills,
+    // Bereichsliste, Kanal-Zuordnung), trägt kein data-i18n und muss beim
+    // Sprachwechsel gesondert neu gerendert werden. Für Bridge-Karten, die der
+    // Server (noch) nicht kennt, deckt refresh() unten die Pill nicht ab (nur
+    // die in /config gemeldeten Bridges durchlaufen setPill) - daher hier aus
+    // dem aktuellen "on"-Status direkt neu beschriften, unabhängig von /config.
+    for (let i = 0; i < BRIDGE_COUNT; i++) {
+      const pill = $(`b${i}-pill`);
+      setPill(pill, pill.classList.contains("on"), pill.classList.contains("on") ? t("pill.paired") : t("pill.notPaired"));
+      if (AREAS[i].length === 0) {
+        $(`b${i}-arealist`).innerHTML = `<span class="muted">${t("areas.notLoaded")}</span>`;
+      }
+      renderIdentify(i);
+    }
+    refresh();
+  }
+  $("lang-de").onclick = () => setLang("de");
+  $("lang-en").onclick = () => setLang("en");
 
   const logEl = $("log");
   let LOG_ENTRIES = [];
   function renderLog() {
-    logEl.textContent = LOG_ENTRIES.join("\n\n") || "Bereit.";
+    logEl.textContent = LOG_ENTRIES.join("\n\n") || t("log.ready");
   }
   function logLine(msg, obj) {
-    const t = new Date().toLocaleTimeString();
-    LOG_ENTRIES.unshift(`[${t}] ${msg}` + (obj !== undefined ? "\n" + JSON.stringify(obj, null, 2) : ""));
+    const time = new Date().toLocaleTimeString();
+    LOG_ENTRIES.unshift(`[${time}] ${msg}` + (obj !== undefined ? "\n" + JSON.stringify(obj, null, 2) : ""));
     renderLog();
   }
   // Ohne Timeout blieb ein hängender fetch() (z. B. Bridge kurz nicht
@@ -272,7 +601,7 @@
       logLine(`${opts?.method || "GET"} ${path} → ${res.status}`, data);
       return { ok: res.ok, data };
     } catch (e) {
-      logLine(`${path} → ${e.name === "AbortError" ? "Zeitüberschreitung" : "Netzwerkfehler: " + e}`);
+      logLine(`${path} → ${e.name === "AbortError" ? t("log.timeout") : t("log.netError") + e}`);
       return { ok: false, data: {} };
     } finally {
       clearTimeout(timer);
@@ -293,7 +622,7 @@
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   $("btn-log-clear").onclick = () => { LOG_ENTRIES = []; renderLog(); };
   $("btn-log-download").onclick = () => {
-    const text = LOG_ENTRIES.slice().reverse().join("\n\n") || "Bereit.";
+    const text = LOG_ENTRIES.slice().reverse().join("\n\n") || t("log.ready");
     downloadText(text, `redalert-log-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`, "text/plain");
   };
   function setPill(el, on, label) {
@@ -305,129 +634,126 @@
   function bridgeCardHTML(i) {
     return `
       <div class="bridge-card" data-idx="${i}">
-        <h3>Bridge ${i + 1}</h3>
+        <h3>${t("card.bridge", i + 1)}</h3>
         <div class="row" style="margin-top:.5rem">
-          <div><label for="b${i}-host">Bridge-IP</label><input type="text" id="b${i}-host" placeholder="192.168.1.50"></div>
-          <button id="b${i}-pair">Pairen</button>
-          <span class="pill" id="b${i}-pill"><span class="led"></span> nicht gepaart</span>
+          <div><label for="b${i}-host" data-i18n="card.bridgeIp">Bridge-IP</label><input type="text" id="b${i}-host" placeholder="192.168.1.50"></div>
+          <button id="b${i}-pair" data-i18n="btn.pair">Pairen</button>
+          <span class="pill" id="b${i}-pill"><span class="led"></span> ${t("pill.notPaired")}</span>
         </div>
         <div class="row" style="margin-top:.6rem">
-          <div><label for="b${i}-area">area_id</label><input type="text" id="b${i}-area" placeholder="abcd-1234"></div>
-          <button class="secondary" id="b${i}-areas-btn">Bereiche laden</button>
-          <div style="flex:1 1 100%"><label for="b${i}-order">channel_order (leer = Bereichs-Standard)</label>
-            <input type="text" id="b${i}-order" placeholder="z. B. 2,3,1,0,5,4" style="width:100%"></div>
+          <div><label for="b${i}-area" data-i18n="card.areaId">area_id</label><input type="text" id="b${i}-area" placeholder="abcd-1234"></div>
+          <button class="secondary" id="b${i}-areas-btn" data-i18n="btn.loadAreas">Bereiche laden</button>
+          <div style="flex:1 1 100%"><label for="b${i}-order" data-i18n="card.channelOrder">channel_order (leer = Bereichs-Standard)</label>
+            <input type="text" id="b${i}-order" style="width:100%" data-i18n-ph="card.channelOrderPh"></div>
         </div>
-        <div class="areas" id="b${i}-arealist" style="margin-top:.5rem"><span class="muted">Noch nichts geladen.</span></div>
+        <div class="areas" id="b${i}-arealist" style="margin-top:.5rem"><span class="muted">${t("areas.notLoaded")}</span></div>
         <details style="margin-top:.7rem">
-          <summary class="muted">Effekt für diese Bridge anpassen</summary>
+          <summary class="muted" data-i18n="card.customizeEffect">Effekt für diese Bridge anpassen</summary>
           <div class="row" style="margin:.6rem 0">
-            <div><label for="b${i}-effect">Effekt</label>
+            <div><label for="b${i}-effect" data-i18n="card.effect">Effekt</label>
               <select id="b${i}-effect">
-                <option value="">wie Konfiguration</option>
-                <option value="pulse">pulse (Takt)</option>
-                <option value="comet">comet (Komet)</option>
-                <option value="glitter">glitter (Funkeln)</option>
-                <option value="police">police (Alarmlicht)</option>
-                <option value="lightning">lightning (Gewitter)</option>
-                <option value="heartbeat">heartbeat (Herzschlag)</option>
-                <option value="aurora">aurora (Polarlicht)</option>
-                <option value="rainbow">rainbow (Regenbogen)</option>
-                <option value="meteor">meteor (Meteore)</option>
-                <option value="wipe">wipe (Auffüllen)</option>
-                <option value="firework">firework (Feuerwerk)</option>
-                <option value="ripple">ripple (Echo)</option>
-                <option value="wave">wave (Welle)</option>
-                <option value="flicker">flicker (Flackern)</option>
-                <option value="strobe">strobe (Stroboskop)</option>
-                <option value="duel">duel (Duell)</option>
-                <option value="sunrise">sunrise (Sonnenaufgang)</option>
-                <option value="chase">chase (Lauflicht)</option>
-                <option value="neutral">neutral (nicht steuern)</option>
+                <option value="" data-i18n="opt.sameAsConfig">wie Konfiguration</option>
+                <option value="pulse" data-i18n="opt.pulse">pulse (Takt)</option>
+                <option value="comet" data-i18n="opt.comet">comet (Komet)</option>
+                <option value="glitter" data-i18n="opt.glitter">glitter (Funkeln)</option>
+                <option value="police" data-i18n="opt.police">police (Alarmlicht)</option>
+                <option value="lightning" data-i18n="opt.lightning">lightning (Gewitter)</option>
+                <option value="heartbeat" data-i18n="opt.heartbeat">heartbeat (Herzschlag)</option>
+                <option value="aurora" data-i18n="opt.aurora">aurora (Polarlicht)</option>
+                <option value="rainbow" data-i18n="opt.rainbow">rainbow (Regenbogen)</option>
+                <option value="meteor" data-i18n="opt.meteor">meteor (Meteore)</option>
+                <option value="wipe" data-i18n="opt.wipe">wipe (Auffüllen)</option>
+                <option value="firework" data-i18n="opt.firework">firework (Feuerwerk)</option>
+                <option value="ripple" data-i18n="opt.ripple">ripple (Echo)</option>
+                <option value="wave" data-i18n="opt.wave">wave (Welle)</option>
+                <option value="flicker" data-i18n="opt.flicker">flicker (Flackern)</option>
+                <option value="strobe" data-i18n="opt.strobe">strobe (Stroboskop)</option>
+                <option value="duel" data-i18n="opt.duel">duel (Duell)</option>
+                <option value="chase" data-i18n="opt.chase">chase (Lauflicht)</option>
+                <option value="neutral" data-i18n="opt.neutral">neutral (nicht steuern)</option>
               </select></div>
-            <div><label for="b${i}-color">Farbe (diese Bridge)</label>
+            <div><label for="b${i}-color" data-i18n="card.color">Farbe (diese Bridge)</label>
               <div class="color-row">
-                <input type="checkbox" id="b${i}-color-en" title="eigene Farbe verwenden">
+                <input type="checkbox" id="b${i}-color-en" data-i18n-title="title.useOwnColor">
                 <input type="color" id="b${i}-color" value="#ff0000" disabled>
               </div></div>
-            <div><label for="b${i}-sweep">sweep_seconds</label>
-              <input type="number" id="b${i}-sweep" min="0.3" max="5" step="0.1" placeholder="wie Konfiguration"></div>
-            <div><label for="b${i}-chpause">chase-Pause (s)</label>
-              <input type="number" id="b${i}-chpause" min="0" max="60" step="0.5" placeholder="wie Konfiguration"></div>
-            <div><label for="b${i}-attack">Attack (ms)</label>
-              <input type="number" id="b${i}-attack" min="0" max="2000" step="10" placeholder="wie Konfiguration"></div>
-            <div><label for="b${i}-release">Release (ms)</label>
-              <input type="number" id="b${i}-release" min="0" max="5000" step="10" placeholder="wie Konfiguration"></div>
-            <div><label for="b${i}-glowlow">glow_low (0–1)</label>
-              <input type="number" id="b${i}-glowlow" min="0" max="1" step="0.01" placeholder="wie Konfiguration"></div>
-            <div><label for="b${i}-glowhigh">glow_high (0–1)</label>
-              <input type="number" id="b${i}-glowhigh" min="0" max="1" step="0.01" placeholder="wie Konfiguration"></div>
-            <div><label for="b${i}-ginterval">glitter: Intervall (ms)</label>
-              <input type="number" id="b${i}-ginterval" min="5" max="5000" step="5" placeholder="wie Konfiguration"></div>
-            <div><label for="b${i}-gflash">glitter: Blitzdauer (ms)</label>
-              <input type="number" id="b${i}-gflash" min="20" max="5000" step="10" placeholder="wie Konfiguration"></div>
-            <div><label for="b${i}-gcolor0">glitter: Farben (diese Bridge)</label>
+            <div><label for="b${i}-sweep" data-i18n="card.sweep">sweep_seconds</label>
+              <input type="number" id="b${i}-sweep" min="0.3" max="5" step="0.1" data-i18n-ph="opt.sameAsConfig"></div>
+            <div><label for="b${i}-chpause" data-i18n="card.chasePause">chase-Pause (s)</label>
+              <input type="number" id="b${i}-chpause" min="0" max="60" step="0.5" data-i18n-ph="opt.sameAsConfig"></div>
+            <div><label for="b${i}-attack" data-i18n="card.attack">Attack (ms)</label>
+              <input type="number" id="b${i}-attack" min="0" max="2000" step="10" data-i18n-ph="opt.sameAsConfig"></div>
+            <div><label for="b${i}-release" data-i18n="card.release">Release (ms)</label>
+              <input type="number" id="b${i}-release" min="0" max="5000" step="10" data-i18n-ph="opt.sameAsConfig"></div>
+            <div><label for="b${i}-glowlow" data-i18n="card.glowLow">glow_low (0–1)</label>
+              <input type="number" id="b${i}-glowlow" min="0" max="1" step="0.01" data-i18n-ph="opt.sameAsConfig"></div>
+            <div><label for="b${i}-glowhigh" data-i18n="card.glowHigh">glow_high (0–1)</label>
+              <input type="number" id="b${i}-glowhigh" min="0" max="1" step="0.01" data-i18n-ph="opt.sameAsConfig"></div>
+            <div><label for="b${i}-ginterval" data-i18n="card.glitterInterval">glitter: Intervall (ms)</label>
+              <input type="number" id="b${i}-ginterval" min="5" max="5000" step="5" data-i18n-ph="opt.sameAsConfig"></div>
+            <div><label for="b${i}-gflash" data-i18n="card.glitterFlash">glitter: Blitzdauer (ms)</label>
+              <input type="number" id="b${i}-gflash" min="20" max="5000" step="10" data-i18n-ph="opt.sameAsConfig"></div>
+            <div><label for="b${i}-gcolor0" data-i18n="card.glitterColors">glitter: Farben (diese Bridge)</label>
               <div class="color-row">
-                <input type="checkbox" id="b${i}-gcolors-en" title="eigene Farben verwenden">
+                <input type="checkbox" id="b${i}-gcolors-en" data-i18n-title="title.useOwnColors">
                 <input type="color" id="b${i}-gcolor0" value="#ffffff" disabled>
                 <input type="color" id="b${i}-gcolor1" value="#cfe8ff" disabled>
                 <input type="color" id="b${i}-gcolor2" value="#fff1d0" disabled>
               </div></div>
-            <div><label for="b${i}-gcdir">chase: Richtung(en) – forward, backward oder bounce</label>
-              <input type="text" id="b${i}-gcdir"
-                placeholder="wie Konfiguration, z. B. forward"
-                title="forward / backward: umlaufend (wie ein Förderband); bounce: prallt an beiden Enden ab (Larson-Scanner). Bei mehreren Strips (siehe Strip-Längen) durch Komma getrennt, eine Richtung je Strip, z. B. forward,backward."></div>
-            <div><label for="b${i}-gcstrips">chase: Strip-Längen</label>
-              <input type="text" id="b${i}-gcstrips" placeholder="1 Strip, z. B. 7,5"></div>
-            <div><label for="b${i}-gccount">chase: Anzahl Chases</label>
-              <input type="number" id="b${i}-gccount" min="1" max="8" step="1" placeholder="wie Konfiguration"></div>
-            <div><label for="b${i}-gclength">chase: Länge (Segmente)</label>
-              <input type="number" id="b${i}-gclength" min="0.2" max="200" step="0.5" placeholder="wie Konfiguration"></div>
-            <div><label for="b${i}-gcspeed">chase: Geschwindigkeit (Segm./s)</label>
-              <input type="number" id="b${i}-gcspeed" min="0.01" max="50" step="0.5" placeholder="wie Konfiguration"></div>
-            <div><label for="b${i}-gcbg">chase: Background-Farbe (diese Bridge)</label>
+            <div><label for="b${i}-gcdir" data-i18n="card.gcDir">chase: Richtung(en) – forward, backward oder bounce</label>
+              <input type="text" id="b${i}-gcdir" data-i18n-ph="card.gcDirPh" data-i18n-title="title.gcDir"></div>
+            <div><label for="b${i}-gcstrips" data-i18n="card.gcStrips">chase: Strip-Längen</label>
+              <input type="text" id="b${i}-gcstrips" data-i18n-ph="card.gcStripsPh"></div>
+            <div><label for="b${i}-gccount" data-i18n="card.gcCount">chase: Anzahl Chases</label>
+              <input type="number" id="b${i}-gccount" min="1" max="8" step="1" data-i18n-ph="opt.sameAsConfig"></div>
+            <div><label for="b${i}-gclength" data-i18n="card.gcLength">chase: Länge (Segmente)</label>
+              <input type="number" id="b${i}-gclength" min="0.2" max="200" step="0.5" data-i18n-ph="opt.sameAsConfig"></div>
+            <div><label for="b${i}-gcspeed" data-i18n="card.gcSpeed">chase: Geschwindigkeit (Segm./s)</label>
+              <input type="number" id="b${i}-gcspeed" min="0.01" max="50" step="0.5" data-i18n-ph="opt.sameAsConfig"></div>
+            <div><label for="b${i}-gcbg" data-i18n="card.gcBg">chase: Background-Farbe (diese Bridge)</label>
               <div class="color-row">
-                <input type="checkbox" id="b${i}-gcbg-en" title="eigene Background-Farbe verwenden">
+                <input type="checkbox" id="b${i}-gcbg-en" data-i18n-title="title.useOwnBg">
                 <input type="color" id="b${i}-gcbg" value="#000000" disabled>
               </div></div>
-            <div><label><input type="checkbox" id="b${i}-gcglitter"> Chases funkeln</label></div>
-            <div><label><input type="checkbox" id="b${i}-gcpulse"> Background pulsiert</label></div>
-            <div><label for="b${i}-police2">zweite Farbe (diese Bridge) – für police, duel, sunrise</label>
+            <div><label><input type="checkbox" id="b${i}-gcglitter"> <span data-i18n="card.gcGlitter">Chases funkeln</span></label></div>
+            <div><label><input type="checkbox" id="b${i}-gcpulse"> <span data-i18n="card.gcPulse">Background pulsiert</span></label></div>
+            <div><label for="b${i}-color2" data-i18n="card.color2">zweite Farbe (diese Bridge) – für police, duel</label>
               <div class="color-row">
-                <input type="checkbox" id="b${i}-police2-en" title="eigene zweite Farbe verwenden">
-                <input type="color" id="b${i}-police2" value="#0000ff" disabled>
+                <input type="checkbox" id="b${i}-color2-en" data-i18n-title="title.useOwnColor2">
+                <input type="color" id="b${i}-color2" value="#0000ff" disabled>
               </div></div>
-            <div><label for="b${i}-lightint">lightning: Blitz-Intervall (ms)</label>
-              <input type="number" id="b${i}-lightint" min="50" max="60000" step="50" placeholder="wie Konfiguration"></div>
-            <div><label for="b${i}-lightflash">lightning: Blitzdauer (ms)</label>
-              <input type="number" id="b${i}-lightflash" min="20" max="5000" step="10" placeholder="wie Konfiguration"></div>
-            <div><label for="b${i}-mcount">meteor: Anzahl</label>
-              <input type="number" id="b${i}-mcount" min="1" max="8" step="1" placeholder="wie Konfiguration"></div>
-            <div><label for="b${i}-mspeed">meteor: Geschwindigkeit (Kanäle/s)</label>
-              <input type="number" id="b${i}-mspeed" min="0.05" max="20" step="0.1" placeholder="wie Konfiguration"></div>
-            <div><label for="b${i}-fwint">firework: Intervall (ms)</label>
-              <input type="number" id="b${i}-fwint" min="200" max="60000" step="100" placeholder="wie Konfiguration"></div>
-            <div><label for="b${i}-fwspeed">firework: Geschwindigkeit (Kanäle/s)</label>
-              <input type="number" id="b${i}-fwspeed" min="0.5" max="50" step="0.5" placeholder="wie Konfiguration"></div>
-            <div><label for="b${i}-ripint">ripple: Intervall (ms)</label>
-              <input type="number" id="b${i}-ripint" min="200" max="60000" step="100" placeholder="wie Konfiguration"></div>
-            <div><label for="b${i}-ripspeed">ripple: Geschwindigkeit (Kanäle/s)</label>
-              <input type="number" id="b${i}-ripspeed" min="0.5" max="50" step="0.5" placeholder="wie Konfiguration"></div>
-            <div><label for="b${i}-wavelen">wave: Wellenlänge (Kanäle)</label>
-              <input type="number" id="b${i}-wavelen" min="0.5" max="50" step="0.5" placeholder="wie Konfiguration"></div>
-            <div><label for="b${i}-flickint">flicker: Intervall (ms)</label>
-              <input type="number" id="b${i}-flickint" min="20" max="10000" step="10" placeholder="wie Konfiguration"></div>
-            <div><label for="b${i}-flickdip">flicker: Einbruchsdauer (ms)</label>
-              <input type="number" id="b${i}-flickdip" min="20" max="5000" step="10" placeholder="wie Konfiguration"></div>
+            <div><label for="b${i}-lightint" data-i18n="card.lightInt">lightning: Blitz-Intervall (ms)</label>
+              <input type="number" id="b${i}-lightint" min="50" max="60000" step="50" data-i18n-ph="opt.sameAsConfig"></div>
+            <div><label for="b${i}-lightflash" data-i18n="card.lightFlash">lightning: Blitzdauer (ms)</label>
+              <input type="number" id="b${i}-lightflash" min="20" max="5000" step="10" data-i18n-ph="opt.sameAsConfig"></div>
+            <div><label for="b${i}-mcount" data-i18n="card.mCount">meteor: Anzahl</label>
+              <input type="number" id="b${i}-mcount" min="1" max="8" step="1" data-i18n-ph="opt.sameAsConfig"></div>
+            <div><label for="b${i}-mspeed" data-i18n="card.mSpeed">meteor: Geschwindigkeit (Kanäle/s)</label>
+              <input type="number" id="b${i}-mspeed" min="0.05" max="20" step="0.1" data-i18n-ph="opt.sameAsConfig"></div>
+            <div><label for="b${i}-fwint" data-i18n="card.fwInt">firework: Intervall (ms)</label>
+              <input type="number" id="b${i}-fwint" min="200" max="60000" step="100" data-i18n-ph="opt.sameAsConfig"></div>
+            <div><label for="b${i}-fwspeed" data-i18n="card.fwSpeed">firework: Geschwindigkeit (Kanäle/s)</label>
+              <input type="number" id="b${i}-fwspeed" min="0.5" max="50" step="0.5" data-i18n-ph="opt.sameAsConfig"></div>
+            <div><label for="b${i}-ripint" data-i18n="card.ripInt">ripple: Intervall (ms)</label>
+              <input type="number" id="b${i}-ripint" min="200" max="60000" step="100" data-i18n-ph="opt.sameAsConfig"></div>
+            <div><label for="b${i}-ripspeed" data-i18n="card.ripSpeed">ripple: Geschwindigkeit (Kanäle/s)</label>
+              <input type="number" id="b${i}-ripspeed" min="0.5" max="50" step="0.5" data-i18n-ph="opt.sameAsConfig"></div>
+            <div><label for="b${i}-wavelen" data-i18n="card.waveLen">wave: Wellenlänge (Kanäle)</label>
+              <input type="number" id="b${i}-wavelen" min="0.5" max="50" step="0.5" data-i18n-ph="opt.sameAsConfig"></div>
+            <div><label for="b${i}-flickint" data-i18n="card.flickInt">flicker: Intervall (ms)</label>
+              <input type="number" id="b${i}-flickint" min="20" max="10000" step="10" data-i18n-ph="opt.sameAsConfig"></div>
+            <div><label for="b${i}-flickdip" data-i18n="card.flickDip">flicker: Einbruchsdauer (ms)</label>
+              <input type="number" id="b${i}-flickdip" min="20" max="5000" step="10" data-i18n-ph="opt.sameAsConfig"></div>
           </div>
         </details>
         <details style="margin-top:.5rem">
-          <summary class="muted">Lampen zuordnen</summary>
+          <summary class="muted" data-i18n="card.mapLamps">Lampen zuordnen</summary>
           <div class="row" style="margin:.6rem 0">
-            <div><label for="b${i}-idsecs">Sekunden je Kanal</label>
+            <div><label for="b${i}-idsecs" data-i18n="card.idSeconds">Sekunden je Kanal</label>
               <input type="number" id="b${i}-idsecs" min="1" max="15" step="1" placeholder="3"></div>
-            <button class="secondary" id="b${i}-identify-all">Alle Kanäle nacheinander</button>
+            <button class="secondary" id="b${i}-identify-all" data-i18n="btn.identifyAll">Alle Kanäle nacheinander</button>
           </div>
-          <div class="row" id="b${i}-identify-buttons"><span class="muted">Bereich oben wählen und „Bereiche laden“.</span></div>
+          <div class="row" id="b${i}-identify-buttons"><span class="muted">${t("areas.pickArea")}</span></div>
         </details>
       </div>`;
   }
@@ -441,13 +767,13 @@
     const a = AREAS[i].find((x) => x.id === $(`b${i}-area`).value.trim());
     box.innerHTML = "";
     if (!a) {
-      box.innerHTML = '<span class="muted">Bereich oben wählen und „Bereiche laden“.</span>';
+      box.innerHTML = `<span class="muted">${t("areas.pickArea")}</span>`;
       return;
     }
     for (const c of a.channels) {
       const btn = document.createElement("button");
       btn.className = "secondary";
-      btn.textContent = "Kanal " + c;
+      btn.textContent = t("areas.channel") + " " + c;
       btn.onclick = () => identify(i, { channel_id: c });
       box.appendChild(btn);
     }
@@ -460,7 +786,7 @@
 
   async function identify(i, extra) {
     const host = $(`b${i}-host`).value.trim();
-    if (!host) { logLine(`Bridge ${i + 1}: keine Bridge-IP eingetragen.`); return; }
+    if (!host) { logLine(t("log.noBridgeIp", i + 1)); return; }
     const body = Object.assign({ bridge_host: host }, extra);
     if ($(`b${i}-area`).value.trim()) body.area_id = $(`b${i}-area`).value.trim();
     if ($(`b${i}-idsecs`).value !== "") body.seconds = Number($(`b${i}-idsecs`).value);
@@ -515,8 +841,8 @@
       const on = $(`b${i}-gcolors-en`).checked;
       $(`b${i}-gcolor0`).disabled = $(`b${i}-gcolor1`).disabled = $(`b${i}-gcolor2`).disabled = !on;
     });
-    $(`b${i}-police2-en`).addEventListener("change", () => {
-      $(`b${i}-police2`).disabled = !$(`b${i}-police2-en`).checked;
+    $(`b${i}-color2-en`).addEventListener("change", () => {
+      $(`b${i}-color2`).disabled = !$(`b${i}-color2-en`).checked;
     });
     $(`b${i}-pair`).onclick = async () => {
       const body = {};
@@ -528,21 +854,21 @@
     };
     $(`b${i}-areas-btn`).onclick = async () => {
       const host = $(`b${i}-host`).value.trim();
-      if (!host) { logLine(`Bridge ${i + 1}: keine Bridge-IP eingetragen.`); return; }
+      if (!host) { logLine(t("log.noBridgeIp", i + 1)); return; }
       const { ok, data } = await api(`areas?bridge_host=${encodeURIComponent(host)}`);
       const box = $(`b${i}-arealist`); box.innerHTML = "";
       if (!ok || !Array.isArray(data) || data.length === 0) {
         AREAS[i] = []; renderIdentify(i);
-        box.innerHTML = '<span class="muted">Keine Bereiche gefunden.</span>'; return;
+        box.innerHTML = `<span class="muted">${t("areas.none")}</span>`; return;
       }
       AREAS[i] = data;
       for (const a of data) {
         const el = document.createElement("div");
         el.className = "area";
-        el.innerHTML = `<div><strong>${a.name || "(ohne Name)"}</strong><br><code>${a.id}</code> · Kanäle: ${a.channels.join(", ")}</div>`;
+        el.innerHTML = `<div><strong>${a.name || t("areas.noName")}</strong><br><code>${a.id}</code> · ${t("areas.channels")}: ${a.channels.join(", ")}</div>`;
         const btn = document.createElement("button");
-        btn.className = "secondary"; btn.textContent = "übernehmen";
-        btn.onclick = () => { $(`b${i}-area`).value = a.id; $(`b${i}-area`).dataset.touched = "1"; logLine(`Bridge ${i + 1}: area_id gesetzt: ` + a.id); renderIdentify(i); };
+        btn.className = "secondary"; btn.textContent = t("areas.apply");
+        btn.onclick = () => { $(`b${i}-area`).value = a.id; $(`b${i}-area`).dataset.touched = "1"; logLine(t("log.areaSet", i + 1, a.id)); renderIdentify(i); };
         el.appendChild(btn);
         box.appendChild(el);
       }
@@ -552,6 +878,7 @@
     $(`b${i}-area`).addEventListener("input", () => renderIdentify(i));
   }
   for (let i = 0; i < BRIDGE_COUNT; i++) wireBridgeCard(i);
+  setLang(LANG);
 
   // Feld nur setzen, wenn der Nutzer es noch nicht angefasst hat (verhindert,
   // dass der periodische Konfigurations-Sync eine laufende Eingabe bzw. eine
@@ -585,42 +912,42 @@
     const bridges = data.bridges || [];
     const anyPaired = bridges.some((b) => b.paired);
     setPill($("pill-pair"), anyPaired, anyPaired
-      ? `${bridges.filter((b) => b.paired).length}/${bridges.length || 0} gepaart`
-      : "keine gepaart");
-    setPill($("pill-run"), data.running, data.running ? "Effekt läuft" : "Effekt aus");
+      ? t("pill.pairedCount", bridges.filter((b) => b.paired).length, bridges.length || 0)
+      : t("pill.nonePaired"));
+    setPill($("pill-run"), data.running, data.running ? t("pill.running") : t("pill.stopped"));
     $("btn-start").classList.toggle("pressed", !!data.running);
     $("btn-stop").classList.toggle("pressed", !data.running);
 
     const s = $("status"); s.innerHTML = "";
     const fields = {
-      "Dauer (Konfiguration)": data.default_duration_s > 0 ? `${data.default_duration_s} s` : "unbegrenzt",
-      "Effekt (Konfiguration)": data.effect,
-      "Farbe (Konfiguration)": data.color,
-      "fps": data.fps,
-      "sweep_seconds (Konfiguration)": data.sweep_seconds,
-      "chase-Pause (Konfiguration)": data.chase_pause ? `${data.chase_pause} s` : "aus (durchgehend)",
-      "attack / release (Konfiguration)": `${data.attack_ms} / ${data.release_ms} ms`,
-      "glow low / high (Konfiguration)": `${data.glow_low} / ${data.glow_high}`,
-      "glitter (Konfiguration)": `${data.glitter_interval_ms} / ${data.glitter_flash_ms} ms · `
-        + (data.glitter_colors ? data.glitter_colors : "Bridge-Farbe"),
-      "chase (Konfiguration)": `${data.gc_direction} · ${data.gc_count}× · ${data.gc_length} Seg. · `
+      [t("field.duration")]: data.default_duration_s > 0 ? `${data.default_duration_s} s` : t("val.unlimited"),
+      [t("field.effect")]: data.effect,
+      [t("field.color")]: data.color,
+      [t("field.fps")]: data.fps,
+      [t("field.sweep")]: data.sweep_seconds,
+      [t("field.chasePause")]: data.chase_pause ? `${data.chase_pause} s` : t("val.offContinuous"),
+      [t("field.attackRelease")]: `${data.attack_ms} / ${data.release_ms} ms`,
+      [t("field.glow")]: `${data.glow_low} / ${data.glow_high}`,
+      [t("field.glitter")]: `${data.glitter_interval_ms} / ${data.glitter_flash_ms} ms · `
+        + (data.glitter_colors ? data.glitter_colors : t("val.bridgeColor")),
+      [t("field.chase")]: `${data.gc_direction} · ${data.gc_count}× · ${data.gc_length} Seg. · `
         + `${data.gc_speed} Seg./s · bg ${data.gc_background_color}`
-        + (data.gc_chase_glitter ? " · Chases funkeln" : "") + (data.gc_background_pulse ? " · bg pulsiert" : ""),
-      "police (Konfiguration)": `${data.color} / ${data.police_color2}`,
-      "lightning (Konfiguration)": `${data.lightning_interval_ms} / ${data.lightning_flash_ms} ms`,
-      "meteor (Konfiguration)": `${data.meteor_count}× · ${data.meteor_speed} Kanäle/s`,
-      "firework (Konfiguration)": `${data.firework_interval_ms} ms / ${data.firework_speed} Kanäle/s`,
-      "ripple (Konfiguration)": `${data.ripple_interval_ms} ms / ${data.ripple_speed} Kanäle/s`,
-      "wave (Konfiguration)": `${data.wave_length} Kanäle/Welle`,
-      "flicker (Konfiguration)": `${data.flicker_interval_ms} / ${data.flicker_dip_ms} ms`,
-      "Lichtzustand wiederherstellen": data.restore_state ? "ja" : "nein",
-      "Log-Level": data.log_level,
-      "Effektsets": (data.presets && data.presets.length) ? data.presets.join(", ") : "keine",
+        + (data.gc_chase_glitter ? " · " + t("card.gcGlitter") : "") + (data.gc_background_pulse ? " · " + t("card.gcPulse") : ""),
+      [t("field.color2")]: `${data.color} / ${data.color2}`,
+      [t("field.lightning")]: `${data.lightning_interval_ms} / ${data.lightning_flash_ms} ms`,
+      [t("field.meteor")]: `${data.meteor_count}× · ${data.meteor_speed} Kanäle/s`,
+      [t("field.firework")]: `${data.firework_interval_ms} ms / ${data.firework_speed} Kanäle/s`,
+      [t("field.ripple")]: `${data.ripple_interval_ms} ms / ${data.ripple_speed} Kanäle/s`,
+      [t("field.wave")]: `${data.wave_length} Kanäle/Welle`,
+      [t("field.flicker")]: `${data.flicker_interval_ms} / ${data.flicker_dip_ms} ms`,
+      [t("field.restoreState")]: data.restore_state ? t("val.yes") : t("val.no"),
+      [t("field.logLevel")]: data.log_level,
+      [t("field.presets")]: (data.presets && data.presets.length) ? data.presets.join(", ") : t("val.none"),
     };
     bridges.forEach((b, i) => {
-      const own = b.effect ? `${b.effect}${b.color ? " " + b.color : ""}` : "Konfiguration";
-      fields[`Bridge ${i + 1} (Konfiguration)`] =
-        `${b.bridge_host} · ${b.paired ? "gepaart" : "nicht gepaart"} · Bereich ${b.area_id || "–"} · Effekt: ${own}`;
+      const own = b.effect ? `${b.effect}${b.color ? " " + b.color : ""}` : t("val.config");
+      fields[t("field.bridgeN", i + 1)] =
+        t("val.bridgeSummary", b.bridge_host, b.paired ? t("pill.paired") : t("pill.notPaired"), b.area_id || "–", own);
     });
     for (const [k, v] of Object.entries(fields)) {
       const d = document.createElement("div");
@@ -652,7 +979,7 @@
       syncColorOverride(`b${i}-gcbg-en`, [`b${i}-gcbg`], b.gc_background_color);
       syncCheckboxIfUntouched(`b${i}-gcglitter`, b.gc_chase_glitter);
       syncCheckboxIfUntouched(`b${i}-gcpulse`, b.gc_background_pulse);
-      syncColorOverride(`b${i}-police2-en`, [`b${i}-police2`], b.police_color2);
+      syncColorOverride(`b${i}-color2-en`, [`b${i}-color2`], b.color2);
       syncIfUntouched(`b${i}-lightint`, b.lightning_interval_ms);
       syncIfUntouched(`b${i}-lightflash`, b.lightning_flash_ms);
       syncIfUntouched(`b${i}-mcount`, b.meteor_count);
@@ -664,7 +991,7 @@
       syncIfUntouched(`b${i}-wavelen`, b.wave_length);
       syncIfUntouched(`b${i}-flickint`, b.flicker_interval_ms);
       syncIfUntouched(`b${i}-flickdip`, b.flicker_dip_ms);
-      setPill($(`b${i}-pill`), b.paired, b.paired ? "gepaart" : "nicht gepaart");
+      setPill($(`b${i}-pill`), b.paired, b.paired ? t("pill.paired") : t("pill.notPaired"));
       renderIdentify(i);
     });
 
@@ -719,8 +1046,8 @@
       if (ownGcBg) entry.gc_background_color = ownGcBg;
       if ($(`b${i}-gcglitter`).checked) entry.gc_chase_glitter = true;
       if ($(`b${i}-gcpulse`).checked) entry.gc_background_pulse = true;
-      const ownPolice2 = colorOverride(`b${i}-police2-en`, `b${i}-police2`);
-      if (ownPolice2) entry.police_color2 = ownPolice2;
+      const ownColor2 = colorOverride(`b${i}-color2-en`, `b${i}-color2`);
+      if (ownColor2) entry.color2 = ownColor2;
       for (const [suf, key] of bridgeNum) {
         if ($(`b${i}-${suf}`).value !== "") entry[key] = Number($(`b${i}-${suf}`).value);
       }
@@ -764,7 +1091,7 @@
       setVal(`b${i}-gccount`, e.gc_count);
       setVal(`b${i}-gclength`, e.gc_length);
       setVal(`b${i}-gcspeed`, e.gc_speed);
-      setColorOverride(`b${i}-police2-en`, [`b${i}-police2`], e.police_color2);
+      setColorOverride(`b${i}-color2-en`, [`b${i}-color2`], e.color2);
       setVal(`b${i}-lightint`, e.lightning_interval_ms);
       setVal(`b${i}-lightflash`, e.lightning_flash_ms);
       setVal(`b${i}-mcount`, e.meteor_count);
@@ -794,32 +1121,32 @@
     const sel = $("preset-select");
     const want = keepSelection || sel.value;
     const names = data.names || Object.keys(PRESETS).sort();
-    sel.innerHTML = '<option value="">– keins –</option>'
+    sel.innerHTML = `<option value="">${t("preset.none")}</option>`
       + names.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
     if (want && names.includes(want)) sel.value = want;
   }
   $("btn-preset-load").onclick = () => {
     const name = $("preset-select").value;
-    if (!name || !PRESETS[name]) { logLine("Kein Set gewählt."); return; }
+    if (!name || !PRESETS[name]) { logLine(t("log.noPresetSelected")); return; }
     applyBody(PRESETS[name]);
     $("preset-name").value = name;
-    logLine(`Effektset „${name}“ ins Formular geladen.`);
+    logLine(t("log.presetLoaded", name));
   };
   $("btn-preset-start").onclick = async () => {
     const name = $("preset-select").value;
-    if (!name) { logLine("Kein Set gewählt."); return; }
+    if (!name) { logLine(t("log.noPresetSelected")); return; }
     await api("start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preset: name }) });
     refresh();
   };
   $("btn-preset-save").onclick = async () => {
     const name = $("preset-name").value.trim();
-    if (!name) { logLine("Bitte einen Namen für das Set eingeben."); return; }
+    if (!name) { logLine(t("log.presetNameRequired")); return; }
     const { ok } = await api("presets", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, config: collectBody() }) });
     if (ok) await loadPresets(name);
   };
   $("btn-preset-delete").onclick = async () => {
     const name = $("preset-select").value;
-    if (!name) { logLine("Kein Set gewählt."); return; }
+    if (!name) { logLine(t("log.noPresetSelected")); return; }
     await api("presets?name=" + encodeURIComponent(name), { method: "DELETE" });
     await loadPresets("");
   };
@@ -838,22 +1165,21 @@
     if (!file) return;
     let parsed;
     try { parsed = JSON.parse(await file.text()); }
-    catch (err) { logLine("Upload fehlgeschlagen – keine gültige JSON-Datei: " + err); return; }
+    catch (err) { logLine(t("log.uploadInvalidJson", err)); return; }
     let name, config;
     if (parsed && typeof parsed === "object" && parsed.config && typeof parsed.config === "object") {
       name = parsed.name; config = parsed.config;
     } else { config = parsed; name = parsed && parsed.name; }
     name = String(name || $("preset-name").value.trim() || file.name.replace(/\.json$/i, "")).trim();
-    if (!name) { logLine("Upload: kein Name für das Set – bitte oben einen eintragen."); return; }
-    if (!config || typeof config !== "object") { logLine("Upload: Datei enthält keine Einstellungen."); return; }
+    if (!name) { logLine(t("log.uploadNoName")); return; }
+    if (!config || typeof config !== "object") { logLine(t("log.uploadNoConfig")); return; }
     const { ok } = await api("presets", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, config }) });
-    if (ok) { await loadPresets(name); logLine(`Effektset „${name}“ hochgeladen.`); }
+    if (ok) { await loadPresets(name); logLine(t("log.uploaded", name)); }
   };
   $("btn-stop").onclick = async () => {
     await api("stop", { method: "POST" });
     refresh();
   };
-  refresh();
   setInterval(refresh, 5000);
   // Browser drosseln setInterval in inaktiven/versteckten Tabs (Ingress-Panel
   // im Hintergrund) teils auf über eine Minute - beim Zurückkehren sofort

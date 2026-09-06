@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.14.0
+
+- **Doku jetzt auch auf Englisch.** Neu: `README.en.md`, `redalert/DOCS.en.md`,
+  `custom_components/redalert/README.en.md`, `info.en.md` – jeweils
+  eigenständige, vollständige Übersetzung statt zweisprachiger Datei (da HAs
+  Dokumentations-Tab keine Sprachumschaltung kennt). Jede Datei verlinkt oben
+  auf ihr Pendant in der jeweils anderen Sprache.
+
+## 1.13.0
+
+- **Web-UI jetzt zweisprachig (Deutsch/Englisch).** Umschalter oben rechts
+  (DE/EN), Wahl wird pro Browser gespeichert; Vorbelegung anhand der
+  Browsersprache. Betrifft alle Beschriftungen, Erklärtexte, Optionsnamen und
+  Protokollmeldungen der Bedienoberfläche – die REST-API selbst bleibt
+  unverändert (Feldnamen, Fehlermeldungen).
+
+## 1.12.0
+
+- **Breaking: Effekt `sunrise` entfernt.** War zu ähnlich zu `aurora`/`pulse`
+  und wurde kaum genutzt. Bestehende Effektsets, gespeicherte `bridges`-
+  Optionen und `rest_command`-Aufrufe mit `effect: sunrise` werden nicht mehr
+  erkannt und fallen auf `pulse` zurück.
+- **Breaking: Option `police_color2` in `color2` umbenannt**, da sie schon
+  seit `duel` (v1.11.0) nicht mehr nur für `police` gilt, sondern auch die
+  zweite Kometfarbe von `duel` liefert. Bestehende Konfigurationen und
+  `/start`-Aufrufe mit `police_color2` müssen auf `color2` angepasst werden.
+- **Rechtlicher Hinweis zur Audiodatei entfernt** (README.md §10) – war reine
+  Klarstellung ohne rechtliche Bindungswirkung; die App selbst verarbeitet
+  keine Audiodateien.
+
 ## 1.11.0
 
 - **6 weitere neue Effekte** (jetzt 18 insgesamt):
