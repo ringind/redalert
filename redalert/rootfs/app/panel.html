@@ -307,8 +307,10 @@
                 <input type="color" id="b${i}-gcolor1" value="#cfe8ff" disabled>
                 <input type="color" id="b${i}-gcolor2" value="#fff1d0" disabled>
               </div></div>
-            <div><label for="b${i}-gcdir">chase: Richtung(en)</label>
-              <input type="text" id="b${i}-gcdir" placeholder="wie Konfiguration, z. B. forward,backward"></div>
+            <div><label for="b${i}-gcdir">chase: Richtung(en) – forward, backward oder bounce</label>
+              <input type="text" id="b${i}-gcdir"
+                placeholder="wie Konfiguration, z. B. forward"
+                title="forward / backward: umlaufend (wie ein Förderband); bounce: prallt an beiden Enden ab (Larson-Scanner). Bei mehreren Strips (siehe Strip-Längen) durch Komma getrennt, eine Richtung je Strip, z. B. forward,backward."></div>
             <div><label for="b${i}-gcstrips">chase: Strip-Längen</label>
               <input type="text" id="b${i}-gcstrips" placeholder="1 Strip, z. B. 7,5"></div>
             <div><label for="b${i}-gccount">chase: Anzahl Chases</label>

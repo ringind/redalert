@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.9.2
+
+- **Web-UI:** das Feld „chase: Richtung(en)“ (`gc_direction`) beschreibt jetzt
+  direkt im Label und per Tooltip die gültigen Werte (`forward`, `backward`,
+  `bounce`) statt sie nur im Platzhaltertext anzudeuten.
+- **Doku (README.md, info.md):** Einleitung überarbeitet – die App ist ein
+  allgemeiner, per Effektset konfigurierbarer Hue-Entertainment-
+  Lichteffekt-Player (Puls, Komet, Funkeln, Lauflicht für Gradient-
+  Lightstrips, frei wählbare Farben), die Star-Trek-„Alarmstufe Rot“-Szene
+  ist nur ein Beispiel-Effektset. `media_player`/Audiodatei als Voraussetzung
+  jetzt klar als optional (nur für die Sound+Licht-Automation) markiert.
+
 ## 1.9.1
 
 - **Fix: Web-UI reagierte manchmal nicht mehr, erst ein Reload half.**

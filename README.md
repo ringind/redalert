@@ -3,21 +3,28 @@
 [![Build](https://github.com/ringind/redalert/actions/workflows/build.yaml/badge.svg)](https://github.com/ringind/redalert/actions/workflows/build.yaml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Home-Assistant-App für eine Star-Trek-„Alarmstufe Rot“-Szene über mehrere
+Home-Assistant-App für frei konfigurierbare Licht-Effekte über mehrere
 Philips-Hue-Lampen, gesteuert über das echte **Hue Entertainment API**
-(DTLS-Streaming, nicht die normale Bridge-Szene). Unterstützt **bis zu 3 Hue
-Bridges**, die gleichzeitig loslegen – jede mit ihrem eigenen Effekt, ihrer
-eigenen Farbe und eigenem Timing. Effekte: `pulse` – alle Lampen einer
-Bridge blenden gemeinsam auf und ab (Standard) –, `comet` – ein umlaufender
-Komet, der einen Schweif hinter sich herzieht –, `glitter` – jede Lampe
-funkelt für sich in sehr kurzen Abständen in wechselnden Farben auf
+(DTLS-Streaming, nicht die normale, träge Bridge-Szene). Ursprünglich für die
+Star-Trek-„Alarmstufe Rot“-Szene gebaut (daher der Name) – inzwischen ein
+allgemeiner Lichteffekt-Player: beliebig viele **Effektsets** (Effekt, Farbe,
+Timing je Bridge) lassen sich benannt speichern und per Knopfdruck, Sprache
+oder Automation abrufen, von der namensgebenden roten Alarmstufe bis zu einer
+ruhigen Ambiente-Beleuchtung oder einem Diamant-Funkeln zur Party. Unterstützt
+**bis zu 3 Hue Bridges**, die gleichzeitig loslegen – jede mit ihrem eigenen
+Effekt, ihrer eigenen Farbe und eigenem Timing. Effekte: `pulse` – alle Lampen
+einer Bridge blenden gemeinsam auf und ab (Standard) –, `comet` – ein
+umlaufender Komet, der einen Schweif hinter sich herzieht –, `glitter` – jede
+Lampe funkelt für sich in sehr kurzen Abständen in wechselnden Farben auf
 (Diamant-Gefunkel) – und `chase` – für Gradient Lightstrips: weich
-überblendete Farbbänder laufen über die Segmente. Mit `effect: neutral` je
-Bridge bleibt eine Bridge ganz unangetastet, während die anderen laufen.
-Läuft für eine konfigurierbare Dauer
-(Option `duration`, gilt für alle Bridges gemeinsam; `0` = unbegrenzt, läuft
-bis `/stop`). Alle Start-Parameter lassen sich als benanntes **Effektset**
-speichern, wieder laden/starten und als JSON-Datei aus- und einlesen.
+überblendete Farbbänder laufen über die Segmente. Farbe(n), Timing und
+Helligkeit sind für jeden Effekt frei einstellbar (Web-UI-Farbwähler, App-
+Option oder REST-Body), nicht nur Rot. Mit `effect: neutral` je Bridge bleibt
+eine Bridge ganz unangetastet, während die anderen laufen. Läuft für eine
+konfigurierbare Dauer (Option `duration`, gilt für alle Bridges gemeinsam;
+`0` = unbegrenzt, läuft bis `/stop`). Alle Start-Parameter lassen sich als
+benanntes **Effektset** speichern, wieder laden/starten und als JSON-Datei
+aus- und einlesen.
 
 Nutzt die Bibliothek [`hue-entertainment`](https://github.com/music-assistant/hue-entertainment)
 (dieselbe, die auch das Hue-Entertainment-Plugin von Music Assistant antreibt).
@@ -66,7 +73,7 @@ Home Assistant nicht nativ, deshalb übernimmt das eine kleine eigenständige
 App:
 
 ```
-HA-Automation ──┬──> media_player.play_media (dein Sound, z. B. Sonos)
+HA-Automation ──┬──> media_player.play_media (optional: dein Sound, z. B. Sonos)
                 └──> rest_command → App /start
                                         │
                                         ▼
@@ -99,12 +106,16 @@ Automationen ansprichst.
   V1-Bridges unterstützen kein Entertainment-Streaming.
 - Pro Bridge: Hue-Lampen (Farbe/Farbtemperatur-fähig), einem Entertainment-Bereich
   zugeordnet.
+- Zugriff auf den HA-Host per Samba- oder SSH-App, um den App-Ordner
+  nach `/addons/` zu kopieren.
+
+Nur für die Sound+Licht-Automation nach Star-Trek-Vorbild (optional – die App
+selbst braucht keinen Ton):
+
 - Ein `media_player`-Entity in Home Assistant (Sonos/Chromecast/Speaker o. ä.)
   für die Sound-Wiedergabe.
 - Eine eigene, legal erworbene Audiodatei mit dem Alarm-Sound (siehe
   [Rechtlicher Hinweis](#10-rechtlicher-hinweis-zur-audiodatei)).
-- Zugriff auf den HA-Host per Samba- oder SSH-App, um den App-Ordner
-  nach `/addons/` zu kopieren.
 
 ## Schnellstart
 
@@ -254,9 +265,12 @@ rest_command:
     method: POST
 ```
 
-Automation, die Sound und Lauflicht gemeinsam auslöst (eigene, legal
-erworbene Audiodatei z. B. unter `config/www/red_alert.mp3` bzw. im
-Medienordner):
+Beispiel-Automation, die Sound und Licht zur namensgebenden Alarmstufe-Rot-
+Szene kombiniert (eigene, legal erworbene Audiodatei z. B. unter
+`config/www/red_alert.mp3` bzw. im Medienordner) – jedes andere Effektset
+(ruhiges Ambiente, Diamant-Funkeln zur Party, …) lässt sich genauso an eine
+Automation hängen, z. B. über `rest_command.redalert_start_preset` und
+`{"preset": "<Name>"}`, siehe [„Effektsets“ in der App-Doku](redalert/DOCS.md#effektsets):
 
 ```yaml
 automation:

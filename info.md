@@ -1,8 +1,12 @@
 # Red Alert Entertainment – Home-Assistant-Integration
 
-Diese Integration steuert die **Red Alert Entertainment App** (Hue-Entertainment-
-Lauflicht, Star Trek „Alarmstufe Rot“) aus Home Assistant heraus – sie spricht
-ausschließlich deren REST-API an und enthält keine eigene Licht-/Bridge-Logik.
+Diese Integration steuert die **Red Alert Entertainment App** aus Home
+Assistant heraus – eine App für frei konfigurierbare Hue-Entertainment-
+Lichteffekte (Puls, Komet, Diamant-Funkeln, Lauflicht für Gradient-
+Lightstrips; Farbe, Timing und bis zu 3 Bridges je Effektset einstellbar).
+Die namensgebende Star-Trek-„Alarmstufe Rot“-Szene ist nur eines von beliebig
+vielen speicherbaren **Effektsets**. Diese Integration spricht ausschließlich
+die REST-API der App an und enthält keine eigene Licht-/Bridge-Logik.
 Einrichtung der App selbst (Hue-Bridge pairen, Entertainment-Bereich, Effekte)
 steht in deren eigener Doku, nicht hier:
 [App-Dokumentation](https://github.com/ringind/redalert/blob/main/redalert/DOCS.md) ·
