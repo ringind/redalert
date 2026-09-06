@@ -21,10 +21,16 @@ instead of one cosine hump), `aurora` (slow colour waves blended from a
 palette, drifting across lamps), `rainbow` (phase-offset hue-cycle sweeping
 across lamps), `meteor` (several randomised independent comets), `wipe`
 (sequential fill-and-hold, repeating), `firework` (one-shot bursts radiating
-from the centre channel, repeating), `chase` (Gradient Lightstrips only —
-soft-edged two-colour bands sliding along the segments) or `neutral` (bridge
-left untouched — no stream/restore; per-bridge only, for effect sets where
-some bridges run and others don't). **Effect, colour, and timing are
+from the centre channel, repeating), `ripple` (like firework but the wave
+reflects off both ends and echoes back), `wave` (scrolling spatial sine wave,
+several crests visible at once), `flicker` (per-lamp brief dips from full
+brightness, like a failing bulb), `strobe` (hard instant on/off flash, no
+fade), `duel` (two comets launched from opposite ends, meeting and bouncing
+back), `sunrise` (one slow colour/brightness arc, same for every lamp at
+once), `chase` (Gradient Lightstrips only — soft-edged two-colour bands
+sliding along the segments) or `neutral` (bridge left untouched — no
+stream/restore; per-bridge only, for effect sets where some bridges run and
+others don't). 18 effects total. **Effect, colour, and timing are
 configurable per bridge**
 (falling back to shared defaults when not overridden); all bridges still start
 **simultaneously** (parallel DTLS handshakes, shared start epoch) for a
@@ -79,20 +85,23 @@ redalert/                  the app
   icon.png / logo.png      store graphics (generated, solid-red beacon)
   rootfs/etc/s6-overlay/s6-rc.d/redalert/{type,run,finish}  s6 service (bashio)
   rootfs/app/main.py        REST server + streaming loop + serves panel.html
-  rootfs/app/chase.py       12 effects' pure math, no I/O: RedAlertPulse
+  rootfs/app/chase.py       18 effects' pure math, no I/O: RedAlertPulse
     (pulse beat-gate, also drives heartbeat via .heartbeat()) +
     RedAlertComet (comet+tail) + RedAlertGlitter (per-lamp sparkle) +
     RedAlertChase (Gradient Lightstrip bands) + RedAlertPolice (two-group
     strobe) + RedAlertLightning (shared flash, stateful) + RedAlertAurora /
     RedAlertRainbow (per-lamp colour, no brightness shape) + RedAlertMeteor
     (randomised multi-comet) + RedAlertWipe (fill-and-hold) + RedAlertFirework
-    (radiating one-shot bursts)
+    (radiating one-shot bursts) + RedAlertRipple (firework that echoes back) +
+    RedAlertWave (scrolling sine) + RedAlertFlicker (per-lamp dips, stateful) +
+    RedAlertStrobe (hard on/off) + RedAlertDuel (two comets, two shapes) +
+    RedAlertSunrise (single shared colour/brightness blend)
   rootfs/app/panel.html     Ingress web UI (vanilla JS, relative fetch URLs)
 ```
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.10.0**.
+No build system, linter, or test suite. Current version: **1.11.0**.
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
   after every code change — the only static check available.

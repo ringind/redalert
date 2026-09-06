@@ -1,11 +1,12 @@
 name: "Red Alert Entertainment"
-version: "1.10.0"
+version: "1.11.0"
 slug: "redalert"
 description: >-
   Konfigurierbare Hue-Entertainment-Lichteffekte über mehrere Bridges
   gleichzeitig (Puls, Komet, Funkeln, Alarmlicht, Gewitter, Herzschlag,
-  Polarlicht, Regenbogen, Meteore, Auffüll-Balken, Feuerwerk, Lauflicht für
-  Gradient-Lightstrips) – ursprünglich für Star Trek »Alarmstufe Rot«.
+  Polarlicht, Regenbogen, Meteore, Auffüll-Balken, Feuerwerk, Echo, Welle,
+  Flackern, Stroboskop, Duell, Sonnenaufgang, Lauflicht für Gradient-
+  Lightstrips) – ursprünglich für Star Trek »Alarmstufe Rot«.
 url: "https://github.com/ringind/redalert/tree/main/redalert"
 arch:
   - aarch64
@@ -49,6 +50,11 @@ options:
   meteor_speed: 1.2
   firework_interval_ms: 3000.0
   firework_speed: 6.0
+  ripple_interval_ms: 3000.0
+  ripple_speed: 6.0
+  wave_length: 3.0
+  flicker_interval_ms: 600.0
+  flicker_dip_ms: 150.0
   restore_state: true
   duration: 0.0
   log_level: info
@@ -57,9 +63,9 @@ schema:
     - bridge_host: "str"
       area_id: "str"
       channel_order: "str?"
-      effect: "list(pulse|comet|glitter|chase|police|lightning|heartbeat|aurora|rainbow|meteor|wipe|firework|neutral)?"
+      effect: "list(pulse|comet|glitter|chase|police|lightning|heartbeat|aurora|rainbow|meteor|wipe|firework|ripple|wave|flicker|strobe|duel|sunrise|neutral)?"
       color: "match(^#[0-9A-Fa-f]{6}$)?"
-      sweep_seconds: "float(0.3,5.0)?"
+      sweep_seconds: "float(0.3,300.0)?"
       chase_pause: "float(0,60)?"
       attack_ms: "int(0,2000)?"
       release_ms: "int(0,5000)?"
@@ -83,10 +89,15 @@ schema:
       meteor_speed: "float(0.05,20)?"
       firework_interval_ms: "float(200,60000)?"
       firework_speed: "float(0.5,50)?"
-  effect: "list(pulse|comet|glitter|chase|police|lightning|heartbeat|aurora|rainbow|meteor|wipe|firework|neutral)?"
+      ripple_interval_ms: "float(200,60000)?"
+      ripple_speed: "float(0.5,50)?"
+      wave_length: "float(0.5,50)?"
+      flicker_interval_ms: "float(20,10000)?"
+      flicker_dip_ms: "float(20,5000)?"
+  effect: "list(pulse|comet|glitter|chase|police|lightning|heartbeat|aurora|rainbow|meteor|wipe|firework|ripple|wave|flicker|strobe|duel|sunrise|neutral)?"
   color: "match(^#[0-9A-Fa-f]{6}$)?"
   fps: "int(5,50)"
-  sweep_seconds: "float(0.3,5.0)"
+  sweep_seconds: "float(0.3,300.0)"
   chase_pause: "float(0,60)?"
   attack_ms: "int(0,2000)?"
   release_ms: "int(0,5000)?"
@@ -109,6 +120,11 @@ schema:
   meteor_speed: "float(0.05,20)?"
   firework_interval_ms: "float(200,60000)?"
   firework_speed: "float(0.5,50)?"
+  ripple_interval_ms: "float(200,60000)?"
+  ripple_speed: "float(0.5,50)?"
+  wave_length: "float(0.5,50)?"
+  flicker_interval_ms: "float(20,10000)?"
+  flicker_dip_ms: "float(20,5000)?"
   restore_state: "bool?"
   duration: "float(0,86400)?"
   log_level: "list(trace|debug|info|notice|warning|error|fatal)?"

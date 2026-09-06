@@ -39,13 +39,19 @@ from chase import (
     RedAlertAurora,
     RedAlertChase,
     RedAlertComet,
+    RedAlertDuel,
     RedAlertFirework,
+    RedAlertFlicker,
     RedAlertGlitter,
     RedAlertLightning,
     RedAlertMeteor,
     RedAlertPolice,
     RedAlertPulse,
     RedAlertRainbow,
+    RedAlertRipple,
+    RedAlertStrobe,
+    RedAlertSunrise,
+    RedAlertWave,
     RedAlertWipe,
 )
 
@@ -113,6 +119,12 @@ _EFFECTS = (
     "meteor",
     "wipe",
     "firework",
+    "ripple",
+    "wave",
+    "flicker",
+    "strobe",
+    "duel",
+    "sunrise",
     "neutral",
 )
 
@@ -205,6 +217,11 @@ _BRIDGE_NUMERIC_OVERRIDES = (
     ("firework_speed", float),
     ("lightning_interval_ms", float),
     ("lightning_flash_ms", float),
+    ("ripple_interval_ms", float),
+    ("ripple_speed", float),
+    ("wave_length", float),
+    ("flicker_interval_ms", float),
+    ("flicker_dip_ms", float),
 )
 
 
@@ -220,7 +237,9 @@ def _parse_bridges_option(value) -> list[dict]:
     ``gc_length``, ``gc_speed``, ``gc_background_color``, ``gc_chase_glitter``,
     ``gc_background_pulse``, ``police_color2``, ``meteor_count``,
     ``meteor_speed``, ``firework_interval_ms``, ``firework_speed``,
-    ``lightning_interval_ms``, ``lightning_flash_ms``) sind
+    ``lightning_interval_ms``, ``lightning_flash_ms``, ``ripple_interval_ms``,
+    ``ripple_speed``, ``wave_length``, ``flicker_interval_ms``,
+    ``flicker_dip_ms``) sind
     optional und überschreiben nur für diese eine
     Bridge den sonst gültigen Standard (Body bzw. App-Option). ``gc_strip_lengths``
     teilt die Kanäle dieser Bridge (nach ``channel_order``) in aufeinanderfolgende
@@ -359,6 +378,14 @@ state = {
     # Nur effect lightning:
     "lightning_interval_ms": max(1.0, float(options.get("lightning_interval_ms", 4000.0))),
     "lightning_flash_ms": max(1.0, float(options.get("lightning_flash_ms", 500.0))),
+    # Nur effect ripple:
+    "ripple_interval_ms": max(1.0, float(options.get("ripple_interval_ms", 3000.0))),
+    "ripple_speed": max(0.5, float(options.get("ripple_speed", 6.0))),
+    # Nur effect wave:
+    "wave_length": max(0.5, float(options.get("wave_length", 3.0))),
+    # Nur effect flicker:
+    "flicker_interval_ms": max(1.0, float(options.get("flicker_interval_ms", 600.0))),
+    "flicker_dip_ms": max(1.0, float(options.get("flicker_dip_ms", 150.0))),
     "restore_state": bool(options.get("restore_state", True)),
     # 0 = unbegrenzt (läuft bis POST /stop).
     "duration": max(0.0, float(options.get("duration", 0.0))),
@@ -376,6 +403,7 @@ log.info(
     "chase=dir=%s/count=%s/length=%s/speed=%s bg=%s glitter=%s pulse=%s "
     "police_color2=%s meteor=count=%s/speed=%s firework=interval=%sms/speed=%s "
     "lightning=interval=%sms/flash=%sms "
+    "ripple=interval=%sms/speed=%s wave=length=%s flicker=interval=%sms/dip=%sms "
     "duration=%ss (0=unbegrenzt) presets=%s",
     [
         {"bridge_host": b["bridge_host"], "area_id": b["area_id"], "channel_order": b["channel_order"],
@@ -386,7 +414,9 @@ log.info(
                                "gc_speed", "gc_background_color", "gc_chase_glitter",
                                "gc_background_pulse", "police_color2", "meteor_count",
                                "meteor_speed", "firework_interval_ms", "firework_speed",
-                               "lightning_interval_ms", "lightning_flash_ms") if k in b}}
+                               "lightning_interval_ms", "lightning_flash_ms",
+                               "ripple_interval_ms", "ripple_speed", "wave_length",
+                               "flicker_interval_ms", "flicker_dip_ms") if k in b}}
         for b in state["bridges"]
     ],
     state["effect"],
@@ -415,6 +445,11 @@ log.info(
     state["firework_speed"],
     state["lightning_interval_ms"],
     state["lightning_flash_ms"],
+    state["ripple_interval_ms"],
+    state["ripple_speed"],
+    state["wave_length"],
+    state["flicker_interval_ms"],
+    state["flicker_dip_ms"],
     state["duration"],
     sorted(state["presets"].keys()) or "(keine)",
 )
@@ -576,6 +611,11 @@ async def handle_config(request: web.Request) -> web.Response:
                     "firework_speed": bg.get("firework_speed"),
                     "lightning_interval_ms": bg.get("lightning_interval_ms"),
                     "lightning_flash_ms": bg.get("lightning_flash_ms"),
+                    "ripple_interval_ms": bg.get("ripple_interval_ms"),
+                    "ripple_speed": bg.get("ripple_speed"),
+                    "wave_length": bg.get("wave_length"),
+                    "flicker_interval_ms": bg.get("flicker_interval_ms"),
+                    "flicker_dip_ms": bg.get("flicker_dip_ms"),
                 }
                 for bg in state["bridges"]
             ],
@@ -605,6 +645,11 @@ async def handle_config(request: web.Request) -> web.Response:
             "firework_speed": state["firework_speed"],
             "lightning_interval_ms": state["lightning_interval_ms"],
             "lightning_flash_ms": state["lightning_flash_ms"],
+            "ripple_interval_ms": state["ripple_interval_ms"],
+            "ripple_speed": state["ripple_speed"],
+            "wave_length": state["wave_length"],
+            "flicker_interval_ms": state["flicker_interval_ms"],
+            "flicker_dip_ms": state["flicker_dip_ms"],
             "restore_state": state["restore_state"],
             "log_level": str(options.get("log_level", "info")),
             "default_duration_s": state["duration"],
@@ -797,6 +842,20 @@ async def _run_effect(
             interval_s=ctx["firework_interval_ms"] / 1000.0,
             speed=ctx["firework_speed"],
         )
+        ctx["ripple"] = RedAlertRipple(
+            num_lights=n,
+            interval_s=ctx["ripple_interval_ms"] / 1000.0,
+            speed=ctx["ripple_speed"],
+        )
+        ctx["wave"] = RedAlertWave(num_lights=n, period_s=ctx["sweep_seconds"], wavelength=ctx["wave_length"])
+        ctx["flicker"] = RedAlertFlicker(
+            num_lights=n,
+            interval_s=ctx["flicker_interval_ms"] / 1000.0,
+            dip_s=ctx["flicker_dip_ms"] / 1000.0,
+        )
+        ctx["strobe"] = RedAlertStrobe(num_lights=n, period_s=ctx["sweep_seconds"])
+        ctx["duel"] = RedAlertDuel(num_lights=n, period_s=ctx["sweep_seconds"])
+        ctx["sunrise"] = RedAlertSunrise(period_s=ctx["sweep_seconds"])
     frames = 0
     snapshots: dict[str, list[dict]] = {}
     loop = asyncio.get_event_loop()
@@ -875,6 +934,34 @@ async def _run_effect(
                 elif effect == "rainbow":
                     # reine Farbrotation, konstant auf glow_high
                     chans = [(r, g, b, glow_high) for r, g, b in ctx["rainbow"].colors_for(elapsed)]
+                elif effect == "flicker":
+                    # 1.0-Ruhezustand (= normales An) mit gelegentlichen Einbrüchen
+                    levels = ctx["flicker"].step(dt)
+                    cr, cg, cb = ctx["color"]
+                    chans = [(cr, cg, cb, glow_low + glow_span * lvl) for lvl in levels]
+                elif effect == "duel":
+                    # zwei Kometen aus entgegengesetzten Enden, je eigene Farbe
+                    levels_a, levels_b = ctx["duel"].brightness_for(elapsed)
+                    ca, cb = ctx["color"], ctx["police_color2"]
+                    chans = []
+                    for la, lb in zip(levels_a, levels_b):
+                        total = la + lb
+                        if total > 1e-6:
+                            r = (ca[0] * la + cb[0] * lb) / total
+                            g = (ca[1] * la + cb[1] * lb) / total
+                            b = (ca[2] * la + cb[2] * lb) / total
+                        else:
+                            r = g = b = 0.0
+                        chans.append((r, g, b, glow_low + glow_span * min(1.0, total)))
+                elif effect == "sunrise":
+                    # eine gemeinsame Farbe/Helligkeit für alle Lampen, wandert
+                    # zwischen police_color2 (dunkel/warm) und color (hell)
+                    bl = ctx["sunrise"].blend_for(elapsed)
+                    ca, cb = ctx["police_color2"], ctx["color"]
+                    r = ca[0] + (cb[0] - ca[0]) * bl
+                    g = ca[1] + (cb[1] - ca[1]) * bl
+                    b = ca[2] + (cb[2] - ca[2]) * bl
+                    chans = [(r, g, b, glow_low + glow_span * bl)] * len(ctx["channel_ids"])
                 else:
                     # Effekte, die nur eine 0..1-Helligkeitskurve je Lampe liefern
                     # und dabei die gemeinsame Bridge-Farbe verwenden.
@@ -886,6 +973,12 @@ async def _run_effect(
                         levels = ctx["wipe"].brightness_for(elapsed)
                     elif effect == "firework":
                         levels = ctx["firework"].brightness_for(elapsed)
+                    elif effect == "ripple":
+                        levels = ctx["ripple"].brightness_for(elapsed)
+                    elif effect == "wave":
+                        levels = ctx["wave"].brightness_for(elapsed)
+                    elif effect == "strobe":
+                        levels = ctx["strobe"].brightness_for(elapsed)
                     elif effect == "heartbeat":
                         target = RedAlertPulse.heartbeat(elapsed, ctx["sweep_seconds"])
                         levels = ctx["pulse"].step(target, dt)
@@ -1074,7 +1167,9 @@ async def handle_start(request: web.Request) -> web.Response:
     ``gc_direction``, ``gc_count``, ``gc_length``, ``gc_speed``,
     ``gc_background_color``, ``gc_chase_glitter``, ``gc_background_pulse``,
     ``police_color2``, ``meteor_count``, ``meteor_speed``,
-    ``firework_interval_ms``, ``firework_speed`` im
+    ``firework_interval_ms``, ``firework_speed``, ``lightning_interval_ms``,
+    ``lightning_flash_ms``, ``ripple_interval_ms``, ``ripple_speed``,
+    ``wave_length``, ``flicker_interval_ms``, ``flicker_dip_ms`` im
     Body sind die **Standardwerte** für Bridges, die diese Parameter nicht
     selbst setzen. ``bridges`` (Liste von ``{bridge_host, area_id,
     channel_order, effect?, color?, sweep_seconds?, chase_pause?, attack_ms?,
@@ -1083,7 +1178,8 @@ async def handle_start(request: web.Request) -> web.Response:
     gc_count?, gc_length?, gc_speed?, gc_background_color?, gc_chase_glitter?,
     gc_background_pulse?, police_color2?, meteor_count?, meteor_speed?,
     firework_interval_ms?, firework_speed?, lightning_interval_ms?,
-    lightning_flash_ms?}``) übersteuert für diesen Aufruf die Option
+    lightning_flash_ms?, ripple_interval_ms?, ripple_speed?, wave_length?,
+    flicker_interval_ms?, flicker_dip_ms?}``) übersteuert für diesen Aufruf die Option
     ``bridges`` – jede Bridge kann ihren eigenen Effekt/Farbe/Timing haben.
     ``gc_strip_lengths`` (nur ``effect: chase``, je Bridge, z. B.
     ``[7, 5]``) teilt die Kanäle dieser Bridge in aufeinanderfolgende Gradient-
@@ -1226,6 +1322,35 @@ async def handle_start(request: web.Request) -> web.Response:
         )
     except (TypeError, ValueError):
         defaults["lightning_flash_ms"] = state["lightning_flash_ms"]
+    # Nur effect ripple.
+    try:
+        defaults["ripple_interval_ms"] = max(
+            1.0, float(body.get("ripple_interval_ms") or state["ripple_interval_ms"])
+        )
+    except (TypeError, ValueError):
+        defaults["ripple_interval_ms"] = state["ripple_interval_ms"]
+    try:
+        defaults["ripple_speed"] = max(0.5, float(body.get("ripple_speed") or state["ripple_speed"]))
+    except (TypeError, ValueError):
+        defaults["ripple_speed"] = state["ripple_speed"]
+    # Nur effect wave.
+    try:
+        defaults["wave_length"] = max(0.5, float(body.get("wave_length") or state["wave_length"]))
+    except (TypeError, ValueError):
+        defaults["wave_length"] = state["wave_length"]
+    # Nur effect flicker.
+    try:
+        defaults["flicker_interval_ms"] = max(
+            1.0, float(body.get("flicker_interval_ms") or state["flicker_interval_ms"])
+        )
+    except (TypeError, ValueError):
+        defaults["flicker_interval_ms"] = state["flicker_interval_ms"]
+    try:
+        defaults["flicker_dip_ms"] = max(
+            1.0, float(body.get("flicker_dip_ms") or state["flicker_dip_ms"])
+        )
+    except (TypeError, ValueError):
+        defaults["flicker_dip_ms"] = state["flicker_dip_ms"]
 
     async def _resolve(cfg: dict) -> dict:
         """Eine Bridge auflösen: gepaart? erreichbar? area_id/Kanäle gültig?
@@ -1332,6 +1457,17 @@ async def handle_start(request: web.Request) -> web.Response:
             "lightning_flash_ms": max(
                 1.0, cfg.get("lightning_flash_ms", defaults["lightning_flash_ms"])
             ),
+            "ripple_interval_ms": max(
+                1.0, cfg.get("ripple_interval_ms", defaults["ripple_interval_ms"])
+            ),
+            "ripple_speed": max(0.5, cfg.get("ripple_speed", defaults["ripple_speed"])),
+            "wave_length": max(0.5, cfg.get("wave_length", defaults["wave_length"])),
+            "flicker_interval_ms": max(
+                1.0, cfg.get("flicker_interval_ms", defaults["flicker_interval_ms"])
+            ),
+            "flicker_dip_ms": max(
+                1.0, cfg.get("flicker_dip_ms", defaults["flicker_dip_ms"])
+            ),
         }
 
     # "neutral": diese Bridge wird gar nicht angefasst (kein DTLS, kein
@@ -1410,6 +1546,11 @@ async def handle_start(request: web.Request) -> web.Response:
                 "firework_speed": c["firework_speed"],
                 "lightning_interval_ms": round(c["lightning_interval_ms"]),
                 "lightning_flash_ms": round(c["lightning_flash_ms"]),
+                "ripple_interval_ms": round(c["ripple_interval_ms"]),
+                "ripple_speed": c["ripple_speed"],
+                "wave_length": c["wave_length"],
+                "flicker_interval_ms": round(c["flicker_interval_ms"]),
+                "flicker_dip_ms": round(c["flicker_dip_ms"]),
             }
             for c in ctxs
         ],

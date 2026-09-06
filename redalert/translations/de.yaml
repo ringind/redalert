@@ -8,9 +8,10 @@ configuration:
       gc_direction/gc_strip_lengths/gc_count/gc_length/gc_speed/
       gc_background_color/gc_chase_glitter/gc_background_pulse/
       police_color2/lightning_interval_ms/lightning_flash_ms/meteor_count/
-      meteor_speed/firework_interval_ms/firework_speed sind je Bridge
-      optional – leer gelassen gilt der gleichnamige Wert weiter unten als
-      Standard für diese Bridge.
+      meteor_speed/firework_interval_ms/firework_speed/ripple_interval_ms/
+      ripple_speed/wave_length/flicker_interval_ms/flicker_dip_ms sind je
+      Bridge optional – leer gelassen gilt der gleichnamige Wert weiter unten
+      als Standard für diese Bridge.
     bridge_host:
       name: Hue-Bridge-IP
       description: >-
@@ -130,10 +131,11 @@ configuration:
         Überschreibt die Option gc_background_pulse für diese eine Bridge.
         Leer = Standard weiter unten.
     police_color2:
-      name: police – zweite Farbe (diese Bridge)
+      name: zweite Farbe (diese Bridge)
       description: >-
-        Überschreibt die Option police_color2 für diese eine Bridge. Leer =
-        Standard weiter unten.
+        Überschreibt die Option police_color2 für diese eine Bridge – zweite
+        Farbe für police (Gruppe 2), duel (zweiter Komet) und sunrise
+        (dunkles/warmes Ende). Leer = Standard weiter unten.
     lightning_interval_ms:
       name: lightning – Blitz-Intervall ms (diese Bridge)
       description: >-
@@ -164,6 +166,31 @@ configuration:
       description: >-
         Überschreibt die Option firework_speed für diese eine Bridge. Leer =
         Standard weiter unten.
+    ripple_interval_ms:
+      name: ripple – Intervall ms (diese Bridge)
+      description: >-
+        Überschreibt die Option ripple_interval_ms für diese eine Bridge.
+        Leer = Standard weiter unten.
+    ripple_speed:
+      name: ripple – Geschwindigkeit (diese Bridge)
+      description: >-
+        Überschreibt die Option ripple_speed für diese eine Bridge. Leer =
+        Standard weiter unten.
+    wave_length:
+      name: wave – Wellenlänge (diese Bridge)
+      description: >-
+        Überschreibt die Option wave_length für diese eine Bridge. Leer =
+        Standard weiter unten.
+    flicker_interval_ms:
+      name: flicker – Intervall ms (diese Bridge)
+      description: >-
+        Überschreibt die Option flicker_interval_ms für diese eine Bridge.
+        Leer = Standard weiter unten.
+    flicker_dip_ms:
+      name: flicker – Einbruchsdauer ms (diese Bridge)
+      description: >-
+        Überschreibt die Option flicker_dip_ms für diese eine Bridge. Leer =
+        Standard weiter unten.
   effect:
     name: Effekt (Standard)
     description: >-
@@ -182,7 +209,17 @@ configuration:
       Meteore mit zufälliger Geschwindigkeit und Helligkeit. wipe = ein
       Auffüll-Balken läuft einmal über die Kanäle, hält kurz voll und beginnt
       von vorn. firework = wiederkehrende Feuerwerk-Ausbrüche von der Mitte
-      aus. chase = nur für Gradient Lightstrips: ein oder mehrere weich
+      aus. ripple = ein Helligkeitsimpuls läuft von der Mitte aus, prallt an
+      beiden Enden ab und läuft als Echo zurück, bevor er verblasst und von
+      vorn beginnt. wave = eine durchgehende, wandernde Sinuswelle über die
+      Kanäle, mehrere Wellenberge gleichzeitig sichtbar. flicker = Lampen
+      brechen sporadisch kurz ein, wie eine defekte Glühbirne. strobe = ein
+      hartes, sofortiges Blitzen ohne Überblendung, im Party-Stroboskop-Stil.
+      duel = zwei Kometen starten an entgegengesetzten Enden, treffen sich in
+      der Mitte und prallen zurück. sunrise = ein langsamer Farb- und
+      Helligkeitsbogen für alle Lampen gemeinsam, wandert zwischen der
+      zweiten Farbe (dunkel/warm) und der Bridge-Farbe (hell) und zurück.
+      chase = nur für Gradient Lightstrips: ein oder mehrere weich
       überblendete Zwei-Farben-Bänder laufen über die Segmente, siehe die
       gc_*-Optionen. neutral = die Lampen werden nicht gesteuert (z. B. für
       ein Effektset, in dem nur einzelne Bridges laufen).
@@ -200,8 +237,11 @@ configuration:
     name: Sweep-Dauer (Standard)
     description: >-
       Standard für Bridges ohne eigene Einstellung. comet: Sekunden für eine
-      volle Umrundung aller Lampen. pulse: Dauer eines vollständigen
-      Auf-/Ab-Zyklus (0.3–5.0).
+      volle Umrundung aller Lampen. pulse/heartbeat: Dauer eines Zyklus.
+      wave/strobe/duel: Periodendauer. sunrise: Dauer einer Richtung (dunkel
+      → hell); ein voller Zyklus dauert doppelt so lange. Wertebereich
+      0.3–300 – für sunrise ruhig deutlich höher als für die schnellen
+      Effekte wählen.
   chase_pause:
     name: chase-Pause in Sekunden (Standard)
     description: >-
@@ -331,6 +371,33 @@ configuration:
     description: >-
       Nur effect firework. Wie schnell sich der Ausbruch von der Mitte nach
       außen ausbreitet, in Kanälen pro Sekunde (Standard 6.0).
+  ripple_interval_ms:
+    name: ripple – Intervall ms (Standard)
+    description: >-
+      Nur effect ripple. Wie oft (in Millisekunden) ein neuer
+      Helligkeitsimpuls von der Mitte der Kanäle losläuft (Standard 3000).
+  ripple_speed:
+    name: ripple – Geschwindigkeit (Standard)
+    description: >-
+      Nur effect ripple. Wie schnell sich die Wellenfront von der Mitte weg
+      (und beim Echo wieder zurück) bewegt, in Kanälen pro Sekunde (Standard
+      6.0).
+  wave_length:
+    name: wave – Wellenlänge (Standard)
+    description: >-
+      Nur effect wave. Anzahl Kanäle pro voller Sinuswelle – klein = mehrere
+      kurze Wellenberge gleichzeitig sichtbar, groß = eine lange, sanfte
+      Welle (Standard 3.0).
+  flicker_interval_ms:
+    name: flicker – Intervall ms (Standard)
+    description: >-
+      Nur effect flicker. Mittlerer Abstand in Millisekunden zwischen zwei
+      Einbrüchen über alle Lampen einer Bridge (Standard 600).
+  flicker_dip_ms:
+    name: flicker – Einbruchsdauer ms (Standard)
+    description: >-
+      Nur effect flicker. Wie schnell eine Lampe nach einem Einbruch wieder
+      auf normale Helligkeit zurückfindet, in Millisekunden (Standard 150).
   restore_state:
     name: Lichtzustand wiederherstellen
     description: >-

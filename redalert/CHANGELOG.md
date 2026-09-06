@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.11.0
+
+- **6 weitere neue Effekte** (jetzt 18 insgesamt):
+  - **`ripple`** – wie `firework`, aber die Welle prallt an beiden Enden der
+    Kanäle ab und läuft als Echo zurück, bevor sie verblasst. Neue Optionen
+    `ripple_interval_ms` (Standard 3000), `ripple_speed` (Standard 6.0).
+  - **`wave`** – eine durchgehende Sinuswelle aus Helligkeit läuft über die
+    Kanäle, mehrere Wellenberge gleichzeitig sichtbar. Neue Option
+    `wave_length` (Kanäle pro voller Welle, Standard 3.0).
+  - **`flicker`** – Lampen brechen sporadisch kurz von voller Helligkeit ein,
+    wie eine defekte Glühbirne. Neue Optionen `flicker_interval_ms`
+    (Standard 600), `flicker_dip_ms` (Standard 150).
+  - **`strobe`** – ein hartes, sofortiges Blitzen ohne Überblendung
+    (Party-Stroboskop). Nutzt `sweep_seconds` für die Periodendauer, keine
+    neuen Optionen.
+  - **`duel`** – zwei Kometen starten an entgegengesetzten Enden, treffen
+    sich in der Mitte und prallen zurück. Nutzt `sweep_seconds` und die neu
+    für mehrere Effekte freigegebene Option `police_color2` als Farbe des
+    zweiten Kometen.
+  - **`sunrise`** – ein langsamer Farb- und Helligkeitsbogen für alle Lampen
+    einer Bridge gemeinsam, wandert zwischen `police_color2` (dunkel/warm)
+    und `color` (hell) und zurück. `sweep_seconds` ist jetzt bis 300 (statt
+    5) Sekunden einstellbar, damit ein Sonnenaufgang mehrere Minuten dauern
+    kann – die anderen Effekte funktionieren mit den bisherigen kurzen
+    Werten unverändert weiter.
+  - `police_color2` heißt jetzt allgemein „zweite Farbe“, da sie neben
+    `police` jetzt auch von `duel` und `sunrise` genutzt wird.
+- Web-UI: neue Effekt-Optionen in der Auswahl jeder Bridge-Karte, neue
+  Eingabefelder für `ripple`/`wave`/`flicker`, Status zeigt die neuen
+  Konfigurationswerte.
+- Live gegen die echte Bridge getestet: alle 6 neuen Effekte liefen sauber
+  (korrekte Frame-Zahl, keine Tracebacks).
+
 ## 1.10.0
 
 - **8 neue Effekte.** Die App ist damit kein reiner Star-Trek-Effekt mehr,

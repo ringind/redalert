@@ -8,9 +8,10 @@ configuration:
       gc_direction/gc_strip_lengths/gc_count/gc_length/gc_speed/
       gc_background_color/gc_chase_glitter/gc_background_pulse/
       police_color2/lightning_interval_ms/lightning_flash_ms/meteor_count/
-      meteor_speed/firework_interval_ms/firework_speed are optional
-      per bridge – leave empty and the like-named option below is used as
-      this bridge's default.
+      meteor_speed/firework_interval_ms/firework_speed/ripple_interval_ms/
+      ripple_speed/wave_length/flicker_interval_ms/flicker_dip_ms are
+      optional per bridge – leave empty and the like-named option below is
+      used as this bridge's default.
     bridge_host:
       name: Hue Bridge IP
       description: >-
@@ -129,10 +130,11 @@ configuration:
         Overrides the gc_background_pulse option for this one bridge. Empty =
         use the default below.
     police_color2:
-      name: police second colour (this bridge)
+      name: second colour (this bridge)
       description: >-
-        Overrides the police_color2 option for this one bridge. Empty = use
-        the default below.
+        Overrides the police_color2 option for this one bridge – second
+        colour for police (group 2), duel (second comet) and sunrise (dark/
+        warm end). Empty = use the default below.
     lightning_interval_ms:
       name: lightning strike interval ms (this bridge)
       description: >-
@@ -163,6 +165,31 @@ configuration:
       description: >-
         Overrides the firework_speed option for this one bridge. Empty = use
         the default below.
+    ripple_interval_ms:
+      name: ripple interval ms (this bridge)
+      description: >-
+        Overrides the ripple_interval_ms option for this one bridge. Empty =
+        use the default below.
+    ripple_speed:
+      name: ripple speed (this bridge)
+      description: >-
+        Overrides the ripple_speed option for this one bridge. Empty = use
+        the default below.
+    wave_length:
+      name: wave length (this bridge)
+      description: >-
+        Overrides the wave_length option for this one bridge. Empty = use
+        the default below.
+    flicker_interval_ms:
+      name: flicker interval ms (this bridge)
+      description: >-
+        Overrides the flicker_interval_ms option for this one bridge. Empty
+        = use the default below.
+    flicker_dip_ms:
+      name: flicker dip time ms (this bridge)
+      description: >-
+        Overrides the flicker_dip_ms option for this one bridge. Empty = use
+        the default below.
   effect:
     name: Effect (default)
     description: >-
@@ -179,10 +206,20 @@ configuration:
       hue-cycle sweeps across the lamps. meteor = several independent
       meteors at randomised speed and brightness. wipe = a fill bar runs
       once across the channels, holds briefly, then starts over. firework =
-      recurring bursts radiating outward from the centre. chase = Gradient
-      Lightstrips only: one or more soft-edged two-colour bands slide along
-      the segments, see the gc_* options. neutral = the lamps are not driven
-      at all (e.g. for an effect set where only some bridges run).
+      recurring bursts radiating outward from the centre. ripple = a
+      brightness pulse radiates from the centre, reflects off both ends and
+      echoes back inward before fading and starting over. wave = a
+      continuous scrolling sine wave of brightness across the channels,
+      several crests visible at once. flicker = lamps sporadically dip
+      briefly, like a failing bulb. strobe = a hard, instant flash with no
+      fade, party-strobe style. duel = two comets launch from opposite ends,
+      meet in the middle and bounce back. sunrise = one slow colour-and-
+      brightness arc for all lamps together, drifting between the second
+      colour (dark/warm) and the bridge colour (bright) and back. chase =
+      Gradient Lightstrips only: one or more soft-edged two-colour bands
+      slide along the segments, see the gc_* options. neutral = the lamps
+      are not driven at all (e.g. for an effect set where only some bridges
+      run).
   color:
     name: Colour (default)
     description: >-
@@ -197,8 +234,11 @@ configuration:
     name: Sweep duration (default)
     description: >-
       Default for bridges without their own setting. comet: seconds for one
-      full loop of the comet around all lamps. pulse: length of one full
-      up/down cycle (0.3–5.0).
+      full loop of the comet around all lamps. pulse/heartbeat: length of one
+      cycle. wave/strobe/duel: period length. sunrise: duration of one
+      direction (dark → bright); a full cycle takes twice as long. Range
+      0.3–300 – for sunrise, pick something much higher than for the fast
+      effects.
   chase_pause:
     name: chase pause in seconds (default)
     description: >-
@@ -327,6 +367,32 @@ configuration:
     description: >-
       effect firework only. How fast the burst expands outward from the
       centre, in channels per second (default 6.0).
+  ripple_interval_ms:
+    name: ripple interval ms (default)
+    description: >-
+      effect ripple only. How often (in milliseconds) a new brightness pulse
+      starts from the centre of the channels (default 3000).
+  ripple_speed:
+    name: ripple speed (default)
+    description: >-
+      effect ripple only. How fast the wavefront moves away from the centre
+      (and back on the echo), in channels per second (default 6.0).
+  wave_length:
+    name: wave length (default)
+    description: >-
+      effect wave only. Number of channels per full sine cycle – small =
+      several short crests visible at once, large = one long, gentle wave
+      (default 3.0).
+  flicker_interval_ms:
+    name: flicker interval ms (default)
+    description: >-
+      effect flicker only. Mean gap in milliseconds between two dips across
+      all of a bridge's lamps (default 600).
+  flicker_dip_ms:
+    name: flicker dip time ms (default)
+    description: >-
+      effect flicker only. How fast a lamp recovers to normal brightness
+      after a dip, in milliseconds (default 150).
   restore_state:
     name: Restore light state
     description: >-

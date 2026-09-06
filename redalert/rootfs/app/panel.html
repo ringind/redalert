@@ -159,6 +159,28 @@
       Ausbrüche in der Bridge-Farbe breiten sich von der Mitte der Kanäle nach außen
       aus und verblassen; <code>Intervall</code>/<code>Geschwindigkeit</code> steuern
       wie oft und wie schnell.<br>
+      <strong>ripple</strong> (nur <code>effect: ripple</code>): wie
+      <code>firework</code>, aber die Welle prallt an beiden Enden ab und läuft als
+      Echo zurück, bevor sie verblasst.<br>
+      <strong>wave</strong> (nur <code>effect: wave</code>): eine durchgehende
+      Sinuswelle aus Helligkeit wandert über die Kanäle, mehrere Wellenberge
+      gleichzeitig sichtbar; <code>Wellenlänge</code> = Kanäle pro voller Welle
+      (klein = mehr Wellenberge), <code>sweep_seconds</code> = Tempo.<br>
+      <strong>flicker</strong> (nur <code>effect: flicker</code>): Lampen brechen
+      sporadisch kurz von <code>glow_high</code> ein, wie eine defekte Glühbirne;
+      <code>Intervall</code>/<code>Einbruchsdauer</code> steuern wie oft und wie
+      schnell sich eine Lampe erholt.<br>
+      <strong>strobe</strong> (nur <code>effect: strobe</code>): ein hartes,
+      sofortiges Blitzen ohne Überblendung in der Bridge-Farbe;
+      <code>sweep_seconds</code> steuert das Tempo.<br>
+      <strong>duel</strong> (nur <code>effect: duel</code>): zwei Kometen starten an
+      entgegengesetzten Enden – einer in der Bridge-Farbe, einer in
+      <code>zweite Farbe</code> –, treffen sich in der Mitte und prallen zurück;
+      <code>sweep_seconds</code> steuert das Tempo.<br>
+      <strong>sunrise</strong> (nur <code>effect: sunrise</code>): ein langsamer
+      Farb-/Helligkeitsbogen für alle Lampen gemeinsam, wandert zwischen
+      <code>zweite Farbe</code> (dunkel/warm) und der Bridge-Farbe (hell) und
+      zurück; <code>sweep_seconds</code> = Dauer einer Richtung.<br>
       <strong>chase</strong> (nur <code>effect: chase</code>, für
       Gradient Lightstrips): ein oder mehrere weich überblendete Bänder in der
       Bridge-Farbe laufen über die Segmente, dazwischen die
@@ -313,6 +335,12 @@
                 <option value="meteor">meteor (Meteore)</option>
                 <option value="wipe">wipe (Auffüllen)</option>
                 <option value="firework">firework (Feuerwerk)</option>
+                <option value="ripple">ripple (Echo)</option>
+                <option value="wave">wave (Welle)</option>
+                <option value="flicker">flicker (Flackern)</option>
+                <option value="strobe">strobe (Stroboskop)</option>
+                <option value="duel">duel (Duell)</option>
+                <option value="sunrise">sunrise (Sonnenaufgang)</option>
                 <option value="chase">chase (Lauflicht)</option>
                 <option value="neutral">neutral (nicht steuern)</option>
               </select></div>
@@ -363,7 +391,7 @@
               </div></div>
             <div><label><input type="checkbox" id="b${i}-gcglitter"> Chases funkeln</label></div>
             <div><label><input type="checkbox" id="b${i}-gcpulse"> Background pulsiert</label></div>
-            <div><label for="b${i}-police2">police: zweite Farbe (diese Bridge)</label>
+            <div><label for="b${i}-police2">zweite Farbe (diese Bridge) – für police, duel, sunrise</label>
               <div class="color-row">
                 <input type="checkbox" id="b${i}-police2-en" title="eigene zweite Farbe verwenden">
                 <input type="color" id="b${i}-police2" value="#0000ff" disabled>
@@ -380,6 +408,16 @@
               <input type="number" id="b${i}-fwint" min="200" max="60000" step="100" placeholder="wie Konfiguration"></div>
             <div><label for="b${i}-fwspeed">firework: Geschwindigkeit (Kanäle/s)</label>
               <input type="number" id="b${i}-fwspeed" min="0.5" max="50" step="0.5" placeholder="wie Konfiguration"></div>
+            <div><label for="b${i}-ripint">ripple: Intervall (ms)</label>
+              <input type="number" id="b${i}-ripint" min="200" max="60000" step="100" placeholder="wie Konfiguration"></div>
+            <div><label for="b${i}-ripspeed">ripple: Geschwindigkeit (Kanäle/s)</label>
+              <input type="number" id="b${i}-ripspeed" min="0.5" max="50" step="0.5" placeholder="wie Konfiguration"></div>
+            <div><label for="b${i}-wavelen">wave: Wellenlänge (Kanäle)</label>
+              <input type="number" id="b${i}-wavelen" min="0.5" max="50" step="0.5" placeholder="wie Konfiguration"></div>
+            <div><label for="b${i}-flickint">flicker: Intervall (ms)</label>
+              <input type="number" id="b${i}-flickint" min="20" max="10000" step="10" placeholder="wie Konfiguration"></div>
+            <div><label for="b${i}-flickdip">flicker: Einbruchsdauer (ms)</label>
+              <input type="number" id="b${i}-flickdip" min="20" max="5000" step="10" placeholder="wie Konfiguration"></div>
           </div>
         </details>
         <details style="margin-top:.5rem">
@@ -572,6 +610,9 @@
       "lightning (Konfiguration)": `${data.lightning_interval_ms} / ${data.lightning_flash_ms} ms`,
       "meteor (Konfiguration)": `${data.meteor_count}× · ${data.meteor_speed} Kanäle/s`,
       "firework (Konfiguration)": `${data.firework_interval_ms} ms / ${data.firework_speed} Kanäle/s`,
+      "ripple (Konfiguration)": `${data.ripple_interval_ms} ms / ${data.ripple_speed} Kanäle/s`,
+      "wave (Konfiguration)": `${data.wave_length} Kanäle/Welle`,
+      "flicker (Konfiguration)": `${data.flicker_interval_ms} / ${data.flicker_dip_ms} ms`,
       "Lichtzustand wiederherstellen": data.restore_state ? "ja" : "nein",
       "Log-Level": data.log_level,
       "Effektsets": (data.presets && data.presets.length) ? data.presets.join(", ") : "keine",
@@ -618,6 +659,11 @@
       syncIfUntouched(`b${i}-mspeed`, b.meteor_speed);
       syncIfUntouched(`b${i}-fwint`, b.firework_interval_ms);
       syncIfUntouched(`b${i}-fwspeed`, b.firework_speed);
+      syncIfUntouched(`b${i}-ripint`, b.ripple_interval_ms);
+      syncIfUntouched(`b${i}-ripspeed`, b.ripple_speed);
+      syncIfUntouched(`b${i}-wavelen`, b.wave_length);
+      syncIfUntouched(`b${i}-flickint`, b.flicker_interval_ms);
+      syncIfUntouched(`b${i}-flickdip`, b.flicker_dip_ms);
       setPill($(`b${i}-pill`), b.paired, b.paired ? "gepaart" : "nicht gepaart");
       renderIdentify(i);
     });
@@ -644,6 +690,9 @@
       ["lightint", "lightning_interval_ms"], ["lightflash", "lightning_flash_ms"],
       ["mcount", "meteor_count"], ["mspeed", "meteor_speed"],
       ["fwint", "firework_interval_ms"], ["fwspeed", "firework_speed"],
+      ["ripint", "ripple_interval_ms"], ["ripspeed", "ripple_speed"],
+      ["wavelen", "wave_length"],
+      ["flickint", "flicker_interval_ms"], ["flickdip", "flicker_dip_ms"],
     ];
     const bridges = [];
     for (let i = 0; i < BRIDGE_COUNT; i++) {
@@ -722,6 +771,11 @@
       setVal(`b${i}-mspeed`, e.meteor_speed);
       setVal(`b${i}-fwint`, e.firework_interval_ms);
       setVal(`b${i}-fwspeed`, e.firework_speed);
+      setVal(`b${i}-ripint`, e.ripple_interval_ms);
+      setVal(`b${i}-ripspeed`, e.ripple_speed);
+      setVal(`b${i}-wavelen`, e.wave_length);
+      setVal(`b${i}-flickint`, e.flicker_interval_ms);
+      setVal(`b${i}-flickdip`, e.flicker_dip_ms);
       renderIdentify(i);
     }
   }
