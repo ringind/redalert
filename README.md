@@ -231,7 +231,7 @@ nicht erreichbar, starten die übrigen trotzdem (best effort) – siehe
 ## 7. Home Assistant einbinden
 
 **Fertige Integration:** [`custom_components/redalert/`](custom_components/redalert)
-in diesem Repo legt vier Entities an (`binary_sensor` „läuft“, `switch`
+in diesem Repo legt vier Entities an (`binary_sensor` „Betriebszustand“, `switch`
 „Animation“, `select` „Effektset“, `sensor` „geladenes Effektset“). Installation
 über **HACS** (repo-Kategorie *Integration* als benutzerdefiniertes Repository
 hinzufügen – `hacs.json` im Wurzelverzeichnis) oder manuell (Ordner nach

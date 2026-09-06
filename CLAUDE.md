@@ -78,7 +78,7 @@ redalert/                  the app
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.9.0**.
+No build system, linter, or test suite. Current version: **1.9.1**.
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
   after every code change — the only static check available.
@@ -227,8 +227,16 @@ Concurrency is guarded by `state["task"]` still running (`/start` →
 inside cancels every bridge's in-flight work too).
 
 **Web UI (`panel.html`):** vanilla JS, all `fetch` calls use **relative** URLs so
-it works both behind Ingress (path-prefixed) and via published port 8099. Polls
-`/config` every 5 s. Section "1 · Bridges" renders `BRIDGE_COUNT` = 3 identical
+it works both behind Ingress (path-prefixed) and via published port 8099. All
+requests go through `api()`, which wraps `fetch` in an `AbortController` timeout
+(`DEFAULT_TIMEOUT_MS` = 15 s; `/pair` passes 35 s since the server itself awaits
+up to 30 s for the link-button press) — since 1.9.1, after a bug where a hung
+fetch (no timeout) plus the naive 5 s poll piled up requests against the
+browser's per-origin connection limit until the whole panel stopped responding
+until reload. `refresh()` now also guards against overlapping polls
+(`refreshBusy`) and a `visibilitychange` listener forces an immediate refresh
+when the tab regains focus (browsers throttle `setInterval` in hidden tabs).
+Polls `/config` every 5 s. Section "1 · Bridges" renders `BRIDGE_COUNT` = 3 identical
 cards (`bridgeCardHTML(i)`, ids `b${i}-*`) — pairing, area list/pick, own
 `channel_order` field, a nested `<details>` "Effekt für diese Bridge anpassen"
 (`b${i}-effect` with a blank "wie Konfiguration" option + `b${i}-color/sweep/
@@ -246,8 +254,8 @@ listener); the periodic `/config` sync in `refresh()` (`syncIfUntouched` /
 deliberate choice (including explicitly picking "wie Konfiguration") survives
 later polls. Section "2 · Steuerung" has **no input fields** — effect
 parameters, `duration` and `fps` all come from the app configuration (or a
-bridge's own override); the section just renders the parameter descriptions
-plus **Start**/**Stop**. On Start, `collectBody()` assembles `body.bridges`
+bridge's own override); the section renders **Start**/**Stop** first, then the
+parameter descriptions below them. On Start, `collectBody()` assembles `body.bridges`
 from whichever of the 3 cards have both `bridge_host` and `area_id` filled in
 (each entry including only the per-bridge fields actually overridden; empty
 cards are skipped, and if none are filled `bridges` is omitted so the server

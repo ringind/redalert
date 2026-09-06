@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.9.1
+
+- **Fix: Web-UI reagierte manchmal nicht mehr, erst ein Reload half.**
+  Ursache: `fetch()`-Aufrufe im Web-UI hatten kein Zeitlimit – blieb einer
+  hängen (z. B. Bridge kurz nicht erreichbar), stauten sich dahinter weitere
+  Aufrufe (der 5s-Status-Poll eingeschlossen), bis der Browser sein Limit an
+  gleichzeitigen Verbindungen pro Origin erreichte und auch Klicks auf
+  Start/Stop/Pairen ins Leere liefen. Jeder Aufruf hat jetzt ein Zeitlimit
+  (15 s, `/pair` 35 s – wartet serverseitig bis zu 30 s auf den Link-Button)
+  und bricht kontrolliert ab statt unbegrenzt zu hängen; überlappende
+  Status-Polls (falls einer doch mal länger braucht) werden jetzt
+  übersprungen statt sich zu stauen; beim Zurückkehren zu einem
+  zwischenzeitlich inaktiven Browser-Tab (Ingress-Panel im Hintergrund, vom
+  Browser gedrosselt) wird sofort neu geladen statt bis zu einer Minute auf
+  den nächsten Tick zu warten. Zusätzlich bekommen die App-eigenen
+  Hue-CLIP-v2-Aufrufe beim Sichern/Wiederherstellen des Lichtzustands ein
+  8s-Zeitlimit (vorher aiohttp-Standard 300 s), damit eine kurz nicht
+  erreichbare Bridge `state["task"]` nicht minutenlang fälschlich auf
+  „läuft“ hält.
+- **Effekt-Bezeichnungen im Web-UI korrigiert:** `chase` (Gradient-Lightstrip-
+  Bänder) heißt jetzt „Lauflicht“ (vorher fälschlich „Gradient-Strip“),
+  `comet` heißt jetzt „Komet“ (vorher fälschlich „Lauflicht“).
+- **Web-UI, „2 · Steuerung“:** Start/Stop stehen jetzt oben am Anfang des
+  Abschnitts statt nach den Parameter-Erklärungen.
+- **Home-Assistant-Integration:** Der `binary_sensor` heißt auf Deutsch jetzt
+  „Betriebszustand“ (vorher „Läuft“); außerdem stand die deutsche
+  Quell-Übersetzung (`strings.json`) versehentlich in der Datei, aus der Home
+  Assistant beim ersten Einrichten die technischen Entity-IDs ableitet – die
+  ist jetzt (wie bei HA-Integrationen vorgesehen) Englisch, sodass neu
+  angelegte Entities englische technische Namen bekommen (z. B.
+  `binary_sensor.<gerät>_running`), unabhängig von der UI-Sprache.
+
 ## 1.9.0
 
 - **Breaking: Effekt-Namen umbenannt.** Der bisherige Komet-Effekt heißt jetzt

@@ -99,6 +99,10 @@
 
   <section class="card">
     <h2>2 · Steuerung</h2>
+    <div class="row" style="margin-bottom:.9rem">
+      <button id="btn-start">▶ Start</button>
+      <button class="secondary" id="btn-stop">■ Stop</button>
+    </div>
     <p class="muted" style="margin-top:0">
       Alle Parameter (Effekt, Farbe, Timing, Dauer, fps, …) kommen aus der
       App-Konfiguration (Tab „Konfiguration“) bzw. aus den Overrides der
@@ -143,10 +147,6 @@
       <strong>neutral</strong>: die Bridge wird nicht angefasst – so kann ein Effektset
       z. B. Bridge 1 laufen lassen und Bridge 2 auslassen.
     </p>
-    <div class="row" style="margin-top:.9rem">
-      <button id="btn-start">▶ Start</button>
-      <button class="secondary" id="btn-stop">■ Stop</button>
-    </div>
   </section>
 
   <section class="card">
@@ -200,20 +200,31 @@
     LOG_ENTRIES.unshift(`[${t}] ${msg}` + (obj !== undefined ? "\n" + JSON.stringify(obj, null, 2) : ""));
     renderLog();
   }
-  async function api(path, opts) {
+  // Ohne Timeout blieb ein hängender fetch() (z. B. Bridge kurz nicht
+  // erreichbar) unbegrenzt offen; der Browser erlaubt nur wenige gleichzeitige
+  // Verbindungen pro Origin, sodass sich weitere Aufrufe (auch der 5s-Poll)
+  // dahinter stauten und das Web-UI erst nach einem Reload wieder reagierte.
+  // Jeder Aufruf bekommt daher ein Zeitlimit (Standard 15 s; /pair braucht
+  // länger, siehe dessen Aufruf) und bricht danach kontrolliert ab.
+  const DEFAULT_TIMEOUT_MS = 15000;
+  async function api(path, opts, timeoutMs) {
     if ($("log-requests").checked) {
       let reqBody = opts?.body;
       try { reqBody = opts?.body ? JSON.parse(opts.body) : undefined; } catch { /* keep raw */ }
       logLine(`→ ${opts?.method || "GET"} ${path}`, reqBody);
     }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs || DEFAULT_TIMEOUT_MS);
     try {
-      const res = await fetch(path, opts);
+      const res = await fetch(path, Object.assign({}, opts, { signal: controller.signal }));
       const data = await res.json().catch(() => ({}));
       logLine(`${opts?.method || "GET"} ${path} → ${res.status}`, data);
       return { ok: res.ok, data };
     } catch (e) {
-      logLine(`${path} → Netzwerkfehler: ${e}`);
+      logLine(`${path} → ${e.name === "AbortError" ? "Zeitüberschreitung" : "Netzwerkfehler: " + e}`);
       return { ok: false, data: {} };
+    } finally {
+      clearTimeout(timer);
     }
   }
   function downloadText(text, filename, mime) {
@@ -263,9 +274,9 @@
               <select id="b${i}-effect">
                 <option value="">wie Konfiguration</option>
                 <option value="pulse">pulse (Takt)</option>
-                <option value="comet">comet (Lauflicht)</option>
+                <option value="comet">comet (Komet)</option>
                 <option value="glitter">glitter (Funkeln)</option>
-                <option value="chase">chase (Gradient-Strip)</option>
+                <option value="chase">chase (Lauflicht)</option>
                 <option value="neutral">neutral (nicht steuern)</option>
               </select></div>
             <div><label for="b${i}-color">Farbe (diese Bridge)</label>
@@ -413,7 +424,9 @@
     $(`b${i}-pair`).onclick = async () => {
       const body = {};
       if ($(`b${i}-host`).value.trim()) body.bridge_host = $(`b${i}-host`).value.trim();
-      await api("pair", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      // /pair hält die Antwort serverseitig bis zu 30 s offen (wartet auf den
+      // Link-Button-Druck) - eigenes, großzügigeres Zeitlimit.
+      await api("pair", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, 35000);
       refresh();
     };
     $(`b${i}-areas-btn`).onclick = async () => {
@@ -456,7 +469,20 @@
   }
 
   // --- Status / Steuerung ---------------------------------------------------
+  // Verhindert, dass sich bei einem langsamen/hängenden Aufruf mehrere
+  // überlappende refresh()-Aufrufe stauen (setInterval wartet nicht auf die
+  // vorherige async-Ausführung) - siehe DEFAULT_TIMEOUT_MS oben.
+  let refreshBusy = false;
   async function refresh() {
+    if (refreshBusy) return;
+    refreshBusy = true;
+    try {
+      await doRefresh();
+    } finally {
+      refreshBusy = false;
+    }
+  }
+  async function doRefresh() {
     const { ok, data } = await api("config");
     if (!ok) return;
     const bridges = data.bridges || [];
@@ -693,6 +719,12 @@
   };
   refresh();
   setInterval(refresh, 5000);
+  // Browser drosseln setInterval in inaktiven/versteckten Tabs (Ingress-Panel
+  // im Hintergrund) teils auf über eine Minute - beim Zurückkehren sofort
+  // aktualisieren, statt auf den nächsten Tick zu warten.
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refresh();
+  });
 </script>
 </body>
 </html>

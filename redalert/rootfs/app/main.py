@@ -41,6 +41,10 @@ PANEL_HTML = (APP_DIR / "panel.html").read_text(encoding="utf-8")
 # Mehr konfigurierte bridges-Einträge als das werden beim Laden abgeschnitten.
 MAX_BRIDGES = 3
 
+# Timeout je Hue-CLIP-v2-Aufruf (Lichtzustand sichern/wiederherstellen) – ohne
+# eigenes Limit greift aiohttps Standard von 300s, falls die Bridge kurz weg ist.
+_CLIP_TIMEOUT = aiohttp.ClientTimeout(total=8)
+
 _LEVELS = {
     "trace": logging.DEBUG,
     "debug": logging.DEBUG,
@@ -377,7 +381,10 @@ async def capture_light_state(host: str, key: str, area_id: str) -> list[dict]:
     """on/Helligkeit/Farbe aller Lampen des Entertainment-Bereichs als Snapshot."""
     snap: list[dict] = []
     try:
-        async with aiohttp.ClientSession() as sess:
+        # Ohne Timeout hängt ein einzelner CLIP-v2-Aufruf bis zu 5 Minuten (aiohttp-
+        # Standard), falls die Bridge genau jetzt kurz nicht erreichbar ist – so
+        # lange bliebe state["task"] fälschlich "läuft" und /start "already_running".
+        async with aiohttp.ClientSession(timeout=_CLIP_TIMEOUT) as sess:
             cfg = await _clip(sess, host, key, "GET", f"entertainment_configuration/{area_id}")
             data = (cfg.get("data") or [{}])[0]
             light_ids = [
@@ -410,7 +417,7 @@ async def restore_light_state(host: str, key: str, snap: list[dict]) -> None:
     await asyncio.sleep(0.4)
     ok = 0
     try:
-        async with aiohttp.ClientSession() as sess:
+        async with aiohttp.ClientSession(timeout=_CLIP_TIMEOUT) as sess:
             for st in snap:
                 body: dict = {"on": {"on": bool(st["on"])}}
                 if st["brightness"] is not None:

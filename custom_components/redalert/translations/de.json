@@ -22,7 +22,7 @@
   "entity": {
     "binary_sensor": {
       "running": {
-        "name": "Läuft"
+        "name": "Betriebszustand"
       }
     },
     "sensor": {
