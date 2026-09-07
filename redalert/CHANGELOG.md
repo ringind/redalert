@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.15.0
+
+- **Jede Bridge einzeln start-/stoppbar.** Neuer optionaler `bridge_host` in
+  `POST /start`/`/stop` startet/stoppt nur diese eine Bridge, unabhängig vom
+  Zustand der anderen – so lassen sich Bridges nacheinander statt nur
+  gemeinsam starten. Web-UI: jede Bridge-Karte hat jetzt eigene Start/Stop-
+  Knöpfe (der globale Start/Stop unter „2 · Steuerung“ startet weiterhin
+  alle Bridges gleichzeitig). Home-Assistant-Integration: eine zusätzliche
+  Switch-Entity je gepaarter Bridge. `/health`/`/config`s `running` meint
+  jetzt „irgendeine Bridge aktiv“, `/config`s `bridges[]` hat zusätzlich ein
+  `running` je Bridge; ein `/start`-Aufruf ohne `bridge_host` überspringt
+  bereits laufende Bridges (`skipped_bridges`) statt den ganzen Aufruf
+  abzulehnen.
+- **Effekt-Parameter im Web-UI neu sortiert.** Unter „Effekt für diese
+  Bridge anpassen“ sind die Parameter jetzt gruppiert (übergreifend → von
+  mehreren Effekten genutzt → je Effekt, alphabetisch) statt einer langen
+  flachen Liste; Farbe und zweite Farbe stehen direkt nacheinander.
+- **Fix: Web-UI reagierte teils erst nach bis zu 5 s.** Ein Klick auf Start/
+  Stop/Pairen/Identify, der zufällig mit dem periodischen 5s-Status-Poll
+  zusammenfiel, wurde bisher stillschweigend verworfen statt nachgeholt –
+  die Oberfläche aktualisierte sich dann erst beim nächsten Poll.
+
 ## 1.14.0
 
 - **Doku jetzt auch auf Englisch.** Neu: `README.en.md`, `redalert/DOCS.en.md`,

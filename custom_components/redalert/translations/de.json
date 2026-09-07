@@ -33,6 +33,9 @@
     "switch": {
       "animation": {
         "name": "Animation"
+      },
+      "bridge_animation": {
+        "name": "Animation ({host})"
       }
     },
     "select": {

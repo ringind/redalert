@@ -65,14 +65,21 @@ class RedAlertApiClient:
         return await self._request("GET", "/config")
 
     async def async_start(
-        self, preset: str | None = None, body: dict[str, Any] | None = None
+        self,
+        preset: str | None = None,
+        body: dict[str, Any] | None = None,
+        bridge_host: str | None = None,
     ) -> dict[str, Any]:
-        """POST /start – optional ein gespeichertes Effektset laden."""
+        """POST /start – optional ein gespeichertes Effektset laden, optional
+        auf eine einzelne Bridge beschränkt (``bridge_host`` – siehe main.py)."""
         payload = dict(body or {})
         if preset is not None:
             payload["preset"] = preset
+        if bridge_host is not None:
+            payload["bridge_host"] = bridge_host
         return await self._request("POST", "/start", json=payload)
 
-    async def async_stop(self) -> dict[str, Any]:
-        """POST /stop."""
-        return await self._request("POST", "/stop")
+    async def async_stop(self, bridge_host: str | None = None) -> dict[str, Any]:
+        """POST /stop – optional auf eine einzelne Bridge beschränkt."""
+        payload = {"bridge_host": bridge_host} if bridge_host is not None else None
+        return await self._request("POST", "/stop", json=payload)

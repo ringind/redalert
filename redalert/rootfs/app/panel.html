@@ -68,6 +68,8 @@
   details > summary { cursor: pointer; }
   .bridge-card h3 { margin: 0; font-size: .9rem; font-weight: 600; }
   .bridge-card + .bridge-card { border-top: 1px solid var(--line); margin-top: 1rem; padding-top: 1rem; }
+  .field-group-heading { flex-basis: 100%; margin: .5rem 0 -.1rem; font-size: .8rem;
+    font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; }
 </style>
 </head>
 <body>
@@ -175,7 +177,9 @@
       jeweiligen Bridge-Karte oben – siehe „Status“ für die aktuell
       wirksamen Werte. <strong>Start</strong> / <strong>Stop</strong> starten/stoppen
       alle eingerichteten Bridges gleichzeitig; die beiden Knöpfe zeigen per
-      gedrücktem Zustand an, ob der Effekt gerade läuft.`,
+      gedrücktem Zustand an, ob der Effekt gerade läuft. Für einzelne
+      Bridges siehe die Start/Stop-Knöpfe auf der jeweiligen Bridge-Karte
+      oben unter „1 · Bridges“.`,
       "section2.effects": `<strong>Dauer</strong> (App-Option <code>duration</code>): wie lange der
       Effekt läuft, bevor er von selbst endet (oder vorher per „Stop“).
       <code>0</code> = unbegrenzt, läuft bis „Stop“.<br>
@@ -302,6 +306,11 @@
       "card.channelOrder": "channel_order (leer = Bereichs-Standard)",
       "card.channelOrderPh": "z. B. 2,3,1,0,5,4",
       "card.customizeEffect": "Effekt für diese Bridge anpassen",
+      "group.universal": "Übergreifende Parameter",
+      "group.shared": "Farbe & Timing (mehrere Effekte)",
+      "group.chase": "Chase", "group.firework": "Firework", "group.flicker": "Flicker",
+      "group.lightning": "Lightning", "group.meteor": "Meteor", "group.ripple": "Ripple",
+      "group.wave": "Wave",
       "card.effect": "Effekt",
       "card.color": "Farbe (diese Bridge)", "title.useOwnColor": "eigene Farbe verwenden",
       "card.sweep": "sweep_seconds", "card.chasePause": "chase-Pause (s)",
@@ -361,7 +370,8 @@
       bridge card above – see "Status" for the currently effective values.
       <strong>Start</strong> / <strong>Stop</strong> start/stop all configured
       bridges at once; both buttons show a pressed state to indicate whether
-      the effect is currently running.`,
+      the effect is currently running. For individual bridges, see the
+      Start/Stop buttons on that bridge's card above under "1 · Bridges".`,
       "section2.effects": `<strong>Duration</strong> (app option <code>duration</code>): how long the
       effect runs before ending on its own (or earlier via "Stop").
       <code>0</code> = unlimited, runs until "Stop".<br>
@@ -487,6 +497,11 @@
       "card.channelOrder": "channel_order (empty = area's default)",
       "card.channelOrderPh": "e.g. 2,3,1,0,5,4",
       "card.customizeEffect": "Customize effect for this bridge",
+      "group.universal": "Universal parameters",
+      "group.shared": "Colour & timing (multiple effects)",
+      "group.chase": "Chase", "group.firework": "Firework", "group.flicker": "Flicker",
+      "group.lightning": "Lightning", "group.meteor": "Meteor", "group.ripple": "Ripple",
+      "group.wave": "Wave",
       "card.effect": "Effect",
       "card.color": "Colour (this bridge)", "title.useOwnColor": "use custom colour",
       "card.sweep": "sweep_seconds", "card.chasePause": "chase pause (s)",
@@ -560,6 +575,8 @@
     for (let i = 0; i < BRIDGE_COUNT; i++) {
       const pill = $(`b${i}-pill`);
       setPill(pill, pill.classList.contains("on"), pill.classList.contains("on") ? t("pill.paired") : t("pill.notPaired"));
+      const runPill = $(`b${i}-run-pill`);
+      setPill(runPill, runPill.classList.contains("on"), runPill.classList.contains("on") ? t("pill.running") : t("pill.stopped"));
       if (AREAS[i].length === 0) {
         $(`b${i}-arealist`).innerHTML = `<span class="muted">${t("areas.notLoaded")}</span>`;
       }
@@ -639,6 +656,9 @@
           <div><label for="b${i}-host" data-i18n="card.bridgeIp">Bridge-IP</label><input type="text" id="b${i}-host" placeholder="192.168.1.50"></div>
           <button id="b${i}-pair" data-i18n="btn.pair">Pairen</button>
           <span class="pill" id="b${i}-pill"><span class="led"></span> ${t("pill.notPaired")}</span>
+          <button id="b${i}-start" data-i18n="btn.start">▶ Start</button>
+          <button class="secondary" id="b${i}-stop" data-i18n="btn.stop">■ Stop</button>
+          <span class="pill" id="b${i}-run-pill"><span class="led"></span> <span data-i18n="status.effect">Effekt</span></span>
         </div>
         <div class="row" style="margin-top:.6rem">
           <div><label for="b${i}-area" data-i18n="card.areaId">area_id</label><input type="text" id="b${i}-area" placeholder="abcd-1234"></div>
@@ -672,10 +692,23 @@
                 <option value="chase" data-i18n="opt.chase">chase (Lauflicht)</option>
                 <option value="neutral" data-i18n="opt.neutral">neutral (nicht steuern)</option>
               </select></div>
+
+            <div class="field-group-heading" data-i18n="group.universal">Übergreifende Parameter</div>
+            <div><label for="b${i}-glowlow" data-i18n="card.glowLow">glow_low (0–1)</label>
+              <input type="number" id="b${i}-glowlow" min="0" max="1" step="0.01" data-i18n-ph="opt.sameAsConfig"></div>
+            <div><label for="b${i}-glowhigh" data-i18n="card.glowHigh">glow_high (0–1)</label>
+              <input type="number" id="b${i}-glowhigh" min="0" max="1" step="0.01" data-i18n-ph="opt.sameAsConfig"></div>
+
+            <div class="field-group-heading" data-i18n="group.shared">Farbe &amp; Timing (mehrere Effekte)</div>
             <div><label for="b${i}-color" data-i18n="card.color">Farbe (diese Bridge)</label>
               <div class="color-row">
                 <input type="checkbox" id="b${i}-color-en" data-i18n-title="title.useOwnColor">
                 <input type="color" id="b${i}-color" value="#ff0000" disabled>
+              </div></div>
+            <div><label for="b${i}-color2" data-i18n="card.color2">zweite Farbe (diese Bridge) – für police, duel</label>
+              <div class="color-row">
+                <input type="checkbox" id="b${i}-color2-en" data-i18n-title="title.useOwnColor2">
+                <input type="color" id="b${i}-color2" value="#0000ff" disabled>
               </div></div>
             <div><label for="b${i}-sweep" data-i18n="card.sweep">sweep_seconds</label>
               <input type="number" id="b${i}-sweep" min="0.3" max="5" step="0.1" data-i18n-ph="opt.sameAsConfig"></div>
@@ -685,10 +718,6 @@
               <input type="number" id="b${i}-attack" min="0" max="2000" step="10" data-i18n-ph="opt.sameAsConfig"></div>
             <div><label for="b${i}-release" data-i18n="card.release">Release (ms)</label>
               <input type="number" id="b${i}-release" min="0" max="5000" step="10" data-i18n-ph="opt.sameAsConfig"></div>
-            <div><label for="b${i}-glowlow" data-i18n="card.glowLow">glow_low (0–1)</label>
-              <input type="number" id="b${i}-glowlow" min="0" max="1" step="0.01" data-i18n-ph="opt.sameAsConfig"></div>
-            <div><label for="b${i}-glowhigh" data-i18n="card.glowHigh">glow_high (0–1)</label>
-              <input type="number" id="b${i}-glowhigh" min="0" max="1" step="0.01" data-i18n-ph="opt.sameAsConfig"></div>
             <div><label for="b${i}-ginterval" data-i18n="card.glitterInterval">glitter: Intervall (ms)</label>
               <input type="number" id="b${i}-ginterval" min="5" max="5000" step="5" data-i18n-ph="opt.sameAsConfig"></div>
             <div><label for="b${i}-gflash" data-i18n="card.glitterFlash">glitter: Blitzdauer (ms)</label>
@@ -700,6 +729,8 @@
                 <input type="color" id="b${i}-gcolor1" value="#cfe8ff" disabled>
                 <input type="color" id="b${i}-gcolor2" value="#fff1d0" disabled>
               </div></div>
+
+            <div class="field-group-heading" data-i18n="group.chase">Chase</div>
             <div><label for="b${i}-gcdir" data-i18n="card.gcDir">chase: Richtung(en) – forward, backward oder bounce</label>
               <input type="text" id="b${i}-gcdir" data-i18n-ph="card.gcDirPh" data-i18n-title="title.gcDir"></div>
             <div><label for="b${i}-gcstrips" data-i18n="card.gcStrips">chase: Strip-Längen</label>
@@ -717,33 +748,40 @@
               </div></div>
             <div><label><input type="checkbox" id="b${i}-gcglitter"> <span data-i18n="card.gcGlitter">Chases funkeln</span></label></div>
             <div><label><input type="checkbox" id="b${i}-gcpulse"> <span data-i18n="card.gcPulse">Background pulsiert</span></label></div>
-            <div><label for="b${i}-color2" data-i18n="card.color2">zweite Farbe (diese Bridge) – für police, duel</label>
-              <div class="color-row">
-                <input type="checkbox" id="b${i}-color2-en" data-i18n-title="title.useOwnColor2">
-                <input type="color" id="b${i}-color2" value="#0000ff" disabled>
-              </div></div>
-            <div><label for="b${i}-lightint" data-i18n="card.lightInt">lightning: Blitz-Intervall (ms)</label>
-              <input type="number" id="b${i}-lightint" min="50" max="60000" step="50" data-i18n-ph="opt.sameAsConfig"></div>
-            <div><label for="b${i}-lightflash" data-i18n="card.lightFlash">lightning: Blitzdauer (ms)</label>
-              <input type="number" id="b${i}-lightflash" min="20" max="5000" step="10" data-i18n-ph="opt.sameAsConfig"></div>
-            <div><label for="b${i}-mcount" data-i18n="card.mCount">meteor: Anzahl</label>
-              <input type="number" id="b${i}-mcount" min="1" max="8" step="1" data-i18n-ph="opt.sameAsConfig"></div>
-            <div><label for="b${i}-mspeed" data-i18n="card.mSpeed">meteor: Geschwindigkeit (Kanäle/s)</label>
-              <input type="number" id="b${i}-mspeed" min="0.05" max="20" step="0.1" data-i18n-ph="opt.sameAsConfig"></div>
+
+            <div class="field-group-heading" data-i18n="group.firework">Firework</div>
             <div><label for="b${i}-fwint" data-i18n="card.fwInt">firework: Intervall (ms)</label>
               <input type="number" id="b${i}-fwint" min="200" max="60000" step="100" data-i18n-ph="opt.sameAsConfig"></div>
             <div><label for="b${i}-fwspeed" data-i18n="card.fwSpeed">firework: Geschwindigkeit (Kanäle/s)</label>
               <input type="number" id="b${i}-fwspeed" min="0.5" max="50" step="0.5" data-i18n-ph="opt.sameAsConfig"></div>
-            <div><label for="b${i}-ripint" data-i18n="card.ripInt">ripple: Intervall (ms)</label>
-              <input type="number" id="b${i}-ripint" min="200" max="60000" step="100" data-i18n-ph="opt.sameAsConfig"></div>
-            <div><label for="b${i}-ripspeed" data-i18n="card.ripSpeed">ripple: Geschwindigkeit (Kanäle/s)</label>
-              <input type="number" id="b${i}-ripspeed" min="0.5" max="50" step="0.5" data-i18n-ph="opt.sameAsConfig"></div>
-            <div><label for="b${i}-wavelen" data-i18n="card.waveLen">wave: Wellenlänge (Kanäle)</label>
-              <input type="number" id="b${i}-wavelen" min="0.5" max="50" step="0.5" data-i18n-ph="opt.sameAsConfig"></div>
+
+            <div class="field-group-heading" data-i18n="group.flicker">Flicker</div>
             <div><label for="b${i}-flickint" data-i18n="card.flickInt">flicker: Intervall (ms)</label>
               <input type="number" id="b${i}-flickint" min="20" max="10000" step="10" data-i18n-ph="opt.sameAsConfig"></div>
             <div><label for="b${i}-flickdip" data-i18n="card.flickDip">flicker: Einbruchsdauer (ms)</label>
               <input type="number" id="b${i}-flickdip" min="20" max="5000" step="10" data-i18n-ph="opt.sameAsConfig"></div>
+
+            <div class="field-group-heading" data-i18n="group.lightning">Lightning</div>
+            <div><label for="b${i}-lightint" data-i18n="card.lightInt">lightning: Blitz-Intervall (ms)</label>
+              <input type="number" id="b${i}-lightint" min="50" max="60000" step="50" data-i18n-ph="opt.sameAsConfig"></div>
+            <div><label for="b${i}-lightflash" data-i18n="card.lightFlash">lightning: Blitzdauer (ms)</label>
+              <input type="number" id="b${i}-lightflash" min="20" max="5000" step="10" data-i18n-ph="opt.sameAsConfig"></div>
+
+            <div class="field-group-heading" data-i18n="group.meteor">Meteor</div>
+            <div><label for="b${i}-mcount" data-i18n="card.mCount">meteor: Anzahl</label>
+              <input type="number" id="b${i}-mcount" min="1" max="8" step="1" data-i18n-ph="opt.sameAsConfig"></div>
+            <div><label for="b${i}-mspeed" data-i18n="card.mSpeed">meteor: Geschwindigkeit (Kanäle/s)</label>
+              <input type="number" id="b${i}-mspeed" min="0.05" max="20" step="0.1" data-i18n-ph="opt.sameAsConfig"></div>
+
+            <div class="field-group-heading" data-i18n="group.ripple">Ripple</div>
+            <div><label for="b${i}-ripint" data-i18n="card.ripInt">ripple: Intervall (ms)</label>
+              <input type="number" id="b${i}-ripint" min="200" max="60000" step="100" data-i18n-ph="opt.sameAsConfig"></div>
+            <div><label for="b${i}-ripspeed" data-i18n="card.ripSpeed">ripple: Geschwindigkeit (Kanäle/s)</label>
+              <input type="number" id="b${i}-ripspeed" min="0.5" max="50" step="0.5" data-i18n-ph="opt.sameAsConfig"></div>
+
+            <div class="field-group-heading" data-i18n="group.wave">Wave</div>
+            <div><label for="b${i}-wavelen" data-i18n="card.waveLen">wave: Wellenlänge (Kanäle)</label>
+              <input type="number" id="b${i}-wavelen" min="0.5" max="50" step="0.5" data-i18n-ph="opt.sameAsConfig"></div>
           </div>
         </details>
         <details style="margin-top:.5rem">
@@ -876,9 +914,25 @@
     };
     $(`b${i}-identify-all`).onclick = () => identify(i, {});
     $(`b${i}-area`).addEventListener("input", () => renderIdentify(i));
+    $(`b${i}-start`).onclick = async () => {
+      const host = $(`b${i}-host`).value.trim();
+      if (!host) { logLine(t("log.noBridgeIp", i + 1)); return; }
+      // collectBody() sammelt wie beim globalen Start alle ausgefüllten
+      // Bridge-Karten inkl. ihrer Overrides; bridge_host filtert serverseitig
+      // auf genau diese eine Bridge – die anderen Karten dürfen mitgeschickt
+      // werden, sie werden dadurch nicht ebenfalls gestartet.
+      const body = Object.assign(collectBody(), { bridge_host: host });
+      await api("start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      refresh();
+    };
+    $(`b${i}-stop`).onclick = async () => {
+      const host = $(`b${i}-host`).value.trim();
+      if (!host) { logLine(t("log.noBridgeIp", i + 1)); return; }
+      await api("stop", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bridge_host: host }) });
+      refresh();
+    };
   }
   for (let i = 0; i < BRIDGE_COUNT; i++) wireBridgeCard(i);
-  setLang(LANG);
 
   // Feld nur setzen, wenn der Nutzer es noch nicht angefasst hat (verhindert,
   // dass der periodische Konfigurations-Sync eine laufende Eingabe bzw. eine
@@ -895,15 +949,26 @@
   // --- Status / Steuerung ---------------------------------------------------
   // Verhindert, dass sich bei einem langsamen/hängenden Aufruf mehrere
   // überlappende refresh()-Aufrufe stauen (setInterval wartet nicht auf die
-  // vorherige async-Ausführung) - siehe DEFAULT_TIMEOUT_MS oben.
+  // vorherige async-Ausführung) - siehe DEFAULT_TIMEOUT_MS oben. Ein Aufruf,
+  // der während eines laufenden refresh() eintrifft (z. B. der periodische
+  // 5s-Poll überschneidet sich mit dem refresh() eines Button-Klicks), wird
+  // nicht verworfen, sondern per refreshQueued nachgeholt, sobald der
+  // laufende Durchlauf fertig ist – sonst hätte ein Klick auf Start/Stop/
+  // Pairen/Identify bis zu 5s auf die nächste periodische Aktualisierung
+  // warten müssen, obwohl die Aktion selbst längst durch war.
   let refreshBusy = false;
+  let refreshQueued = false;
   async function refresh() {
-    if (refreshBusy) return;
+    if (refreshBusy) { refreshQueued = true; return; }
     refreshBusy = true;
     try {
       await doRefresh();
     } finally {
       refreshBusy = false;
+      if (refreshQueued) {
+        refreshQueued = false;
+        refresh();
+      }
     }
   }
   async function doRefresh() {
@@ -992,6 +1057,9 @@
       syncIfUntouched(`b${i}-flickint`, b.flicker_interval_ms);
       syncIfUntouched(`b${i}-flickdip`, b.flicker_dip_ms);
       setPill($(`b${i}-pill`), b.paired, b.paired ? t("pill.paired") : t("pill.notPaired"));
+      setPill($(`b${i}-run-pill`), b.running, b.running ? t("pill.running") : t("pill.stopped"));
+      $(`b${i}-start`).classList.toggle("pressed", !!b.running);
+      $(`b${i}-stop`).classList.toggle("pressed", !b.running);
       renderIdentify(i);
     });
 
@@ -1180,6 +1248,13 @@
     await api("stop", { method: "POST" });
     refresh();
   };
+  // setLang() (und damit sein abschließendes refresh()) läuft erst hier, nach
+  // allen let/const-Deklarationen des Scripts (u. a. refreshBusy/
+  // refreshQueued, PRESETS, LOADED_EXTRA) - sonst wirft der erste Aufruf beim
+  // Seitenladen einen TDZ-ReferenceError (refresh() griffe auf sie zu, bevor
+  // ihre Deklarationszeile ausgeführt wurde), was den allerersten refresh()
+  // beim Laden stillschweigend als unhandled rejection scheitern ließe.
+  setLang(LANG);
   setInterval(refresh, 5000);
   // Browser drosseln setInterval in inaktiven/versteckten Tabs (Ingress-Panel
   // im Hintergrund) teils auf über eine Minute - beim Zurückkehren sofort

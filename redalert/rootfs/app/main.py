@@ -13,10 +13,15 @@ Sammel-Blitzen (``effect: lightning``), ein Herzschlag-Doppelpuls
 sequenzieller Auffüll-Balken (``effect: wipe``), wiederkehrende
 Feuerwerk-Ausbrüche (``effect: firework``) oder – für Gradient Lightstrips –
 weich überblendete Farbbänder (``effect: chase``).
-Effekt, Farbe und Timing sind pro Bridge einzeln einstellbar; alle Bridges
-starten trotzdem gleichzeitig (gemeinsame Start-Uhr nach parallelen
-DTLS-Handshakes). Läuft für ``duration`` Sekunden (Standardwert aus der
-gleichnamigen App-Option, für alle Bridges gemeinsam; `0` = unbegrenzt,
+Effekt, Farbe und Timing sind pro Bridge einzeln einstellbar; jede Bridge
+läuft in ihrem eigenen, unabhängig start-/stoppbaren Task
+(``state["tasks"]``) – ein ``POST /start``/``/stop`` mit ``bridge_host``
+im Body betrifft nur diese eine Bridge, während andere unberührt
+weiterlaufen. Mehrere Bridges im selben ``/start``-Aufruf starten trotzdem
+gleichzeitig (eine gemeinsame Barriere lässt jeden Task nach seinem eigenen
+DTLS-Handshake auf die anderen warten, bevor die Start-Uhr gesetzt wird).
+Läuft für ``duration`` Sekunden (Standardwert aus der gleichnamigen
+App-Option, für alle Bridges eines Aufrufs gemeinsam; `0` = unbegrenzt,
 läuft bis ``POST /stop``).
 
 Der komplette Satz an Start-Parametern (alle Bridges + Steuerung) lässt sich
@@ -388,11 +393,22 @@ state = {
     "restore_state": bool(options.get("restore_state", True)),
     # 0 = unbegrenzt (läuft bis POST /stop).
     "duration": max(0.0, float(options.get("duration", 0.0))),
-    "task": None,
-    "last_start": None,
+    # Ein asyncio.Task je Bridge, die gerade einen Effekt oder einen Identify-
+    # Durchlauf fährt (bridge_host -> Task); beide teilen sich denselben Slot
+    # pro Bridge (already_running-Guard), sind aber zwischen Bridges völlig
+    # unabhängig – eine Bridge starten/stoppen berührt keine andere.
+    "tasks": {},
+    # Zuletzt aufgelöste Effekt-Parameter je Bridge (bridge_host -> Dict),
+    # bleibt über einzelne /start-Aufrufe hinweg bestehen (ein Solo-Start
+    # aktualisiert nur den eigenen Eintrag). Für die im Aufruf gemeinsam
+    # geltenden Werte (duration/fps/restore_state) siehe last_start_meta.
+    "last_start": {},
+    "last_start_meta": {},
     # Name des zuletzt per {"preset": "..."} geladenen Effektsets – None bei
     # Ad-hoc-Starts ohne preset. Für die Home-Assistant-Integration (Select-
-    # Entity "geladenes Effektset"), siehe /health & /config.
+    # Entity "geladenes Effektset"), siehe /health & /config. Ein Solo-Start
+    # für eine einzelne Bridge (bridge_host im Body) ändert dies nie – ein
+    # Effektset gilt als Mehr-Bridge-Konzept, siehe handle_start.
     "current_preset": None,
 }
 
@@ -486,7 +502,8 @@ async def capture_light_state(host: str, key: str, area_id: str) -> list[dict]:
     try:
         # Ohne Timeout hängt ein einzelner CLIP-v2-Aufruf bis zu 5 Minuten (aiohttp-
         # Standard), falls die Bridge genau jetzt kurz nicht erreichbar ist – so
-        # lange bliebe state["task"] fälschlich "läuft" und /start "already_running".
+        # lange bliebe die Bridge in state["tasks"] fälschlich "läuft" und
+        # /start für sie "already_running".
         async with aiohttp.ClientSession(timeout=_CLIP_TIMEOUT) as sess:
             cfg = await _clip(sess, host, key, "GET", f"entertainment_configuration/{area_id}")
             data = (cfg.get("data") or [{}])[0]
@@ -540,6 +557,18 @@ async def restore_light_state(host: str, key: str, snap: list[dict]) -> None:
         log.exception("Wiederherstellung (%s) fehlgeschlagen", host)
 
 
+def _is_running(host: str) -> bool:
+    """Läuft gerade ein Effekt oder Identify-Durchlauf auf dieser Bridge?"""
+    task = state["tasks"].get(host)
+    return bool(task and not task.done())
+
+
+def _any_running() -> bool:
+    """Irgendeine Bridge aktiv? Für Konsumenten, die (noch) nicht je Bridge
+    unterscheiden (z. B. die Home-Assistant-Integration – siehe /health)."""
+    return any(not t.done() for t in state["tasks"].values())
+
+
 # --------------------------------------------------------------------------- #
 # Web-UI (Ingress) + Status
 # --------------------------------------------------------------------------- #
@@ -548,12 +577,11 @@ async def handle_panel(request: web.Request) -> web.Response:
 
 
 async def handle_health(request: web.Request) -> web.Response:
-    task = state["task"]
     return web.json_response(
         {
             "status": "ok",
             "paired": bool(state["credentials"]),
-            "running": bool(task and not task.done()),
+            "running": _any_running(),
             "current_preset": state["current_preset"],
         }
     )
@@ -574,7 +602,6 @@ def _bridge_field_hex(b: dict, key: str) -> str | None:
 
 
 async def handle_config(request: web.Request) -> web.Response:
-    task = state["task"]
     r, g, b = state["color"]
     return web.json_response(
         {
@@ -584,6 +611,7 @@ async def handle_config(request: web.Request) -> web.Response:
                     "area_id": bg["area_id"],
                     "channel_order": bg["channel_order"],
                     "paired": bg["bridge_host"] in state["credentials"],
+                    "running": _is_running(bg["bridge_host"]),
                     "effect": bg.get("effect"),
                     "color": _bridge_color_hex(bg),
                     "sweep_seconds": bg.get("sweep_seconds"),
@@ -654,8 +682,13 @@ async def handle_config(request: web.Request) -> web.Response:
             "default_duration_s": state["duration"],
             "presets": sorted(state["presets"].keys()),
             "current_preset": state["current_preset"],
-            "running": bool(task and not task.done()),
-            "last_start": state["last_start"],
+            "running": _any_running(),
+            "last_start": {
+                "duration": state["last_start_meta"].get("duration"),
+                "fps": state["last_start_meta"].get("fps"),
+                "restore_state": state["last_start_meta"].get("restore_state"),
+                "bridges": list(state["last_start"].values()),
+            } if state["last_start"] else None,
         }
     )
 
@@ -781,112 +814,115 @@ def _chase_chans(
     return chans
 
 
-async def _run_effect(
-    bridge_ctxs: list[dict],
+async def _run_single_bridge(
+    ctx: dict,
     duration: float,
     fps: int,
     restore: bool,
+    start_barrier: asyncio.Barrier | None,
 ) -> None:
-    """Effekt auf mehreren Bridges gleichzeitig fahren, jede mit ihrem eigenen
-    Effekt/Farbe/Timing (siehe ``handle_start._resolve``).
+    """Effekt auf einer einzelnen Bridge fahren – eigener Task, eigene Sitzung.
 
-    Jede Bridge bekommt ihre eigenen ``RedAlertComet``/``RedAlertPulse``/
-    ``RedAlertGlitter``/``RedAlertChase``-Instanzen (Kanalzahl, Timing
-    und Effekt-Art können pro Bridge unterschiedlich sein). Damit sie trotzdem
-    **gleichzeitig** loslegen statt nacheinander, starten alle DTLS-Handshakes
-    parallel, und die gemeinsame ``elapsed``-Uhr beginnt erst, wenn alle fertig
-    sind (oder fehlgeschlagen sind – eine fehlschlagende Bridge fliegt
-    best-effort raus).
+    Für einen gemeinsamen Batch-Start (mehrere Bridges im selben ``/start``-
+    Aufruf, siehe ``handle_start``) teilen sich alle beteiligten Tasks eine
+    ``start_barrier``: jeder Task wartet nach seinem eigenen erfolgreichen
+    DTLS-Handshake dort, bis alle anderen ebenfalls so weit sind, bevor die
+    ``start``-Zeit gesetzt wird – so leuchten alle Bridges eines Batches
+    trotz unabhängiger Tasks gleichzeitig los, bleiben aber einzeln über
+    ``state["tasks"]`` kündbar (Stop auf einer Bridge lässt die anderen
+    unberührt). Scheitert der Handshake dieser Bridge, wird die Barriere
+    abgebrochen (``abort()``), damit die übrigen nicht auf eine nie
+    erscheinende Bridge warten, sondern sofort lostarten (best effort – wie
+    zuvor im gemeinsamen Loop). Ein Solo-Start (keine weitere Bridge im
+    selben Aufruf) bekommt ``start_barrier=None`` und startet ohne
+    Wartezeit.
     """
-    for ctx in bridge_ctxs:
-        n = len(ctx["channel_ids"])
-        ctx["pulse"] = RedAlertPulse(num_lights=n, attack_s=ctx["attack_s"], release_s=ctx["release_s"])
-        ctx["comet"] = RedAlertComet(
-            num_lights=n, sweep_seconds=ctx["sweep_seconds"], pause_seconds=ctx["chase_pause"]
+    n = len(ctx["channel_ids"])
+    ctx["pulse"] = RedAlertPulse(num_lights=n, attack_s=ctx["attack_s"], release_s=ctx["release_s"])
+    ctx["comet"] = RedAlertComet(
+        num_lights=n, sweep_seconds=ctx["sweep_seconds"], pause_seconds=ctx["chase_pause"]
+    )
+    ctx["glitter"] = RedAlertGlitter(
+        num_lights=n,
+        interval_s=ctx["glitter_interval_ms"] / 1000.0,
+        flash_s=ctx["glitter_flash_ms"] / 1000.0,
+        palette=ctx["glitter_palette"],
+    )
+    # Ein RedAlertChase je Gradient-Lightstrip dieser Bridge (siehe
+    # gc_strips in handle_start._resolve) – jeder mit seiner eigenen
+    # Chase-Richtung, aber gemeinsamer count/length/speed.
+    ctx["chase"] = [
+        RedAlertChase(
+            num_lights=strip["length"],
+            direction=strip["direction"],
+            count=ctx["gc_count"],
+            length_segments=ctx["gc_length"],
+            speed_segments_per_s=ctx["gc_speed"],
         )
-        ctx["glitter"] = RedAlertGlitter(
-            num_lights=n,
-            interval_s=ctx["glitter_interval_ms"] / 1000.0,
-            flash_s=ctx["glitter_flash_ms"] / 1000.0,
-            palette=ctx["glitter_palette"],
-        )
-        # Ein RedAlertChase je Gradient-Lightstrip dieser Bridge (siehe
-        # gc_strips in handle_start._resolve) – jeder mit seiner eigenen
-        # Chase-Richtung, aber gemeinsamer count/length/speed.
-        ctx["chase"] = [
-            RedAlertChase(
-                num_lights=strip["length"],
-                direction=strip["direction"],
-                count=ctx["gc_count"],
-                length_segments=ctx["gc_length"],
-                speed_segments_per_s=ctx["gc_speed"],
-            )
-            for strip in ctx["gc_strips"]
-        ]
-        ctx["police"] = RedAlertPolice(num_lights=n, period_s=ctx["sweep_seconds"])
-        ctx["lightning"] = RedAlertLightning(
-            interval_s=ctx["lightning_interval_ms"] / 1000.0,
-            flash_s=ctx["lightning_flash_ms"] / 1000.0,
-        )
-        ctx["aurora"] = RedAlertAurora(
-            num_lights=n, palette=ctx["glitter_palette"], period_s=ctx["sweep_seconds"] * 4.0
-        )
-        ctx["rainbow"] = RedAlertRainbow(num_lights=n, period_s=ctx["sweep_seconds"] * 4.0)
-        ctx["meteor"] = RedAlertMeteor(num_lights=n, count=ctx["meteor_count"], speed=ctx["meteor_speed"])
-        ctx["wipe"] = RedAlertWipe(
-            num_lights=n, sweep_seconds=ctx["sweep_seconds"], pause_seconds=ctx["chase_pause"]
-        )
-        ctx["firework"] = RedAlertFirework(
-            num_lights=n,
-            interval_s=ctx["firework_interval_ms"] / 1000.0,
-            speed=ctx["firework_speed"],
-        )
-        ctx["ripple"] = RedAlertRipple(
-            num_lights=n,
-            interval_s=ctx["ripple_interval_ms"] / 1000.0,
-            speed=ctx["ripple_speed"],
-        )
-        ctx["wave"] = RedAlertWave(num_lights=n, period_s=ctx["sweep_seconds"], wavelength=ctx["wave_length"])
-        ctx["flicker"] = RedAlertFlicker(
-            num_lights=n,
-            interval_s=ctx["flicker_interval_ms"] / 1000.0,
-            dip_s=ctx["flicker_dip_ms"] / 1000.0,
-        )
-        ctx["strobe"] = RedAlertStrobe(num_lights=n, period_s=ctx["sweep_seconds"])
-        ctx["duel"] = RedAlertDuel(num_lights=n, period_s=ctx["sweep_seconds"])
-    frames = 0
-    snapshots: dict[str, list[dict]] = {}
-    loop = asyncio.get_event_loop()
-    active: list[dict] = []
-    try:
-        # Vor dem Streaming den aktuellen Lichtzustand aller Bridges sichern.
-        if restore:
-            snaps = await asyncio.gather(
-                *(capture_light_state(c["bridge_host"], c["app_key"], c["area_id"]) for c in bridge_ctxs)
-            )
-            for ctx, snap in zip(bridge_ctxs, snaps):
-                snapshots[ctx["bridge_host"]] = snap
+        for strip in ctx["gc_strips"]
+    ]
+    ctx["police"] = RedAlertPolice(num_lights=n, period_s=ctx["sweep_seconds"])
+    ctx["lightning"] = RedAlertLightning(
+        interval_s=ctx["lightning_interval_ms"] / 1000.0,
+        flash_s=ctx["lightning_flash_ms"] / 1000.0,
+    )
+    ctx["aurora"] = RedAlertAurora(
+        num_lights=n, palette=ctx["glitter_palette"], period_s=ctx["sweep_seconds"] * 4.0
+    )
+    ctx["rainbow"] = RedAlertRainbow(num_lights=n, period_s=ctx["sweep_seconds"] * 4.0)
+    ctx["meteor"] = RedAlertMeteor(num_lights=n, count=ctx["meteor_count"], speed=ctx["meteor_speed"])
+    ctx["wipe"] = RedAlertWipe(
+        num_lights=n, sweep_seconds=ctx["sweep_seconds"], pause_seconds=ctx["chase_pause"]
+    )
+    ctx["firework"] = RedAlertFirework(
+        num_lights=n,
+        interval_s=ctx["firework_interval_ms"] / 1000.0,
+        speed=ctx["firework_speed"],
+    )
+    ctx["ripple"] = RedAlertRipple(
+        num_lights=n,
+        interval_s=ctx["ripple_interval_ms"] / 1000.0,
+        speed=ctx["ripple_speed"],
+    )
+    ctx["wave"] = RedAlertWave(num_lights=n, period_s=ctx["sweep_seconds"], wavelength=ctx["wave_length"])
+    ctx["flicker"] = RedAlertFlicker(
+        num_lights=n,
+        interval_s=ctx["flicker_interval_ms"] / 1000.0,
+        dip_s=ctx["flicker_dip_ms"] / 1000.0,
+    )
+    ctx["strobe"] = RedAlertStrobe(num_lights=n, period_s=ctx["sweep_seconds"])
+    ctx["duel"] = RedAlertDuel(num_lights=n, period_s=ctx["sweep_seconds"])
 
-        # Alle DTLS-Handshakes parallel (je ~3-9s) statt nacheinander, damit die
-        # Bridges eine gemeinsame Startzeit bekommen. Eine fehlschlagende Bridge
-        # fliegt raus (best effort), blockiert aber die anderen nicht.
-        results = await asyncio.gather(
-            *(ctx["session"].start(ctx["area_id"]) for ctx in bridge_ctxs), return_exceptions=True
-        )
-        for ctx, res in zip(bridge_ctxs, results):
-            if isinstance(res, Exception):
-                log.error("Bridge %s: DTLS-Handshake fehlgeschlagen (%s)", ctx["bridge_host"], res)
-                continue
-            active.append(ctx)
-        if not active:
-            log.error("Effekt-Loop: keine Bridge erfolgreich verbunden.")
+    frames = 0
+    snapshot: list[dict] = []
+    loop = asyncio.get_event_loop()
+    host = ctx["bridge_host"]
+    try:
+        # Vor dem Streaming den aktuellen Lichtzustand dieser Bridge sichern.
+        if restore:
+            snapshot = await capture_light_state(host, ctx["app_key"], ctx["area_id"])
+
+        try:
+            await ctx["session"].start(ctx["area_id"])
+        except Exception as exc:  # noqa: BLE001
+            log.error("Bridge %s: DTLS-Handshake fehlgeschlagen (%s)", host, exc)
+            if start_barrier is not None:
+                start_barrier.abort()
             return
+
+        if start_barrier is not None:
+            try:
+                await start_barrier.wait()
+            except asyncio.BrokenBarrierError:
+                log.warning(
+                    "Bridge %s: eine andere Bridge im selben Start ist ausgefallen – "
+                    "startet ohne weiteres Warten.", host,
+                )
 
         start = loop.time()
         log.info(
-            "Effekt läuft: bridges=%s fps=%s duration=%s",
-            [(c["bridge_host"], c["effect"]) for c in active], fps,
-            duration if duration > 0 else "unbegrenzt",
+            "Effekt läuft: bridge=%s effect=%s fps=%s duration=%s",
+            host, ctx["effect"], fps, duration if duration > 0 else "unbegrenzt",
         )
         prev = start
         while True:
@@ -897,96 +933,95 @@ async def _run_effect(
             dt = now - prev
             prev = now
 
-            for ctx in active:
-                glow_low, glow_high = ctx["glow_low"], ctx["glow_high"]
-                glow_span = glow_high - glow_low
-                effect = ctx["effect"]
-                if effect == "glitter":
-                    # jede Lampe eigene Farbe + eigener Pegel (Diamant-Gefunkel)
-                    chans = [
-                        (r, g, b, glow_low + glow_span * lvl)
-                        for lvl, (r, g, b) in ctx["glitter"].step(dt)
-                    ]
-                elif effect == "chase":
-                    chans = _chase_chans(ctx, elapsed, dt, glow_low, glow_span)
-                elif effect == "police":
-                    # zwei Lampengruppen blinken abwechselnd in zwei Farben
-                    levels = ctx["police"].brightness_for(elapsed)
-                    ca, cb = ctx["color"], ctx["color2"]
-                    chans = [
-                        (*(ca if is_a else cb), glow_low + glow_span * lvl)
-                        for lvl, is_a in zip(levels, ctx["police"].group_a)
-                    ]
-                elif effect == "lightning":
-                    # alle Lampen zusammen blitzen (Gewitter), nicht je Lampe einzeln wie glitter
-                    lvl = ctx["lightning"].step(dt)
-                    cr, cg, cb = ctx["color"]
-                    chans = [(cr, cg, cb, glow_low + glow_span * lvl)] * len(ctx["channel_ids"])
-                elif effect == "aurora":
-                    # Farbe kommt aus der Palette, Helligkeit atmet langsam mit
-                    lvl = RedAlertPulse.periodic(elapsed, ctx["sweep_seconds"] * 4.0)
-                    chans = [
-                        (r, g, b, glow_low + glow_span * lvl)
-                        for r, g, b in ctx["aurora"].colors_for(elapsed)
-                    ]
-                elif effect == "rainbow":
-                    # reine Farbrotation, konstant auf glow_high
-                    chans = [(r, g, b, glow_high) for r, g, b in ctx["rainbow"].colors_for(elapsed)]
-                elif effect == "flicker":
-                    # 1.0-Ruhezustand (= normales An) mit gelegentlichen Einbrüchen
-                    levels = ctx["flicker"].step(dt)
-                    cr, cg, cb = ctx["color"]
-                    chans = [(cr, cg, cb, glow_low + glow_span * lvl) for lvl in levels]
-                elif effect == "duel":
-                    # zwei Kometen aus entgegengesetzten Enden, je eigene Farbe
-                    levels_a, levels_b = ctx["duel"].brightness_for(elapsed)
-                    ca, cb = ctx["color"], ctx["color2"]
-                    chans = []
-                    for la, lb in zip(levels_a, levels_b):
-                        total = la + lb
-                        if total > 1e-6:
-                            r = (ca[0] * la + cb[0] * lb) / total
-                            g = (ca[1] * la + cb[1] * lb) / total
-                            b = (ca[2] * la + cb[2] * lb) / total
-                        else:
-                            r = g = b = 0.0
-                        chans.append((r, g, b, glow_low + glow_span * min(1.0, total)))
-                else:
-                    # Effekte, die nur eine 0..1-Helligkeitskurve je Lampe liefern
-                    # und dabei die gemeinsame Bridge-Farbe verwenden.
-                    if effect == "comet":
-                        levels = ctx["comet"].brightness_for(elapsed)
-                    elif effect == "meteor":
-                        levels = ctx["meteor"].brightness_for(elapsed)
-                    elif effect == "wipe":
-                        levels = ctx["wipe"].brightness_for(elapsed)
-                    elif effect == "firework":
-                        levels = ctx["firework"].brightness_for(elapsed)
-                    elif effect == "ripple":
-                        levels = ctx["ripple"].brightness_for(elapsed)
-                    elif effect == "wave":
-                        levels = ctx["wave"].brightness_for(elapsed)
-                    elif effect == "strobe":
-                        levels = ctx["strobe"].brightness_for(elapsed)
-                    elif effect == "heartbeat":
-                        target = RedAlertPulse.heartbeat(elapsed, ctx["sweep_seconds"])
-                        levels = ctx["pulse"].step(target, dt)
-                    else:  # pulse
-                        target = RedAlertPulse.periodic(elapsed, ctx["sweep_seconds"])
-                        levels = ctx["pulse"].step(target, dt)
-                    cr, cg, cb = ctx["color"]
-                    chans = [(cr, cg, cb, glow_low + glow_span * lvl) for lvl in levels]
-                ctx["session"].send(
-                    [
-                        LightColorCommand(
-                            channel_id=cid,
-                            red=int(r * 257 * s),
-                            green=int(g * 257 * s),
-                            blue=int(b * 257 * s),
-                        )
-                        for cid, (r, g, b, s) in zip(ctx["channel_ids"], chans)
-                    ]
-                )
+            glow_low, glow_high = ctx["glow_low"], ctx["glow_high"]
+            glow_span = glow_high - glow_low
+            effect = ctx["effect"]
+            if effect == "glitter":
+                # jede Lampe eigene Farbe + eigener Pegel (Diamant-Gefunkel)
+                chans = [
+                    (r, g, b, glow_low + glow_span * lvl)
+                    for lvl, (r, g, b) in ctx["glitter"].step(dt)
+                ]
+            elif effect == "chase":
+                chans = _chase_chans(ctx, elapsed, dt, glow_low, glow_span)
+            elif effect == "police":
+                # zwei Lampengruppen blinken abwechselnd in zwei Farben
+                levels = ctx["police"].brightness_for(elapsed)
+                ca, cb = ctx["color"], ctx["color2"]
+                chans = [
+                    (*(ca if is_a else cb), glow_low + glow_span * lvl)
+                    for lvl, is_a in zip(levels, ctx["police"].group_a)
+                ]
+            elif effect == "lightning":
+                # alle Lampen zusammen blitzen (Gewitter), nicht je Lampe einzeln wie glitter
+                lvl = ctx["lightning"].step(dt)
+                cr, cg, cb = ctx["color"]
+                chans = [(cr, cg, cb, glow_low + glow_span * lvl)] * len(ctx["channel_ids"])
+            elif effect == "aurora":
+                # Farbe kommt aus der Palette, Helligkeit atmet langsam mit
+                lvl = RedAlertPulse.periodic(elapsed, ctx["sweep_seconds"] * 4.0)
+                chans = [
+                    (r, g, b, glow_low + glow_span * lvl)
+                    for r, g, b in ctx["aurora"].colors_for(elapsed)
+                ]
+            elif effect == "rainbow":
+                # reine Farbrotation, konstant auf glow_high
+                chans = [(r, g, b, glow_high) for r, g, b in ctx["rainbow"].colors_for(elapsed)]
+            elif effect == "flicker":
+                # 1.0-Ruhezustand (= normales An) mit gelegentlichen Einbrüchen
+                levels = ctx["flicker"].step(dt)
+                cr, cg, cb = ctx["color"]
+                chans = [(cr, cg, cb, glow_low + glow_span * lvl) for lvl in levels]
+            elif effect == "duel":
+                # zwei Kometen aus entgegengesetzten Enden, je eigene Farbe
+                levels_a, levels_b = ctx["duel"].brightness_for(elapsed)
+                ca, cb = ctx["color"], ctx["color2"]
+                chans = []
+                for la, lb in zip(levels_a, levels_b):
+                    total = la + lb
+                    if total > 1e-6:
+                        r = (ca[0] * la + cb[0] * lb) / total
+                        g = (ca[1] * la + cb[1] * lb) / total
+                        b = (ca[2] * la + cb[2] * lb) / total
+                    else:
+                        r = g = b = 0.0
+                    chans.append((r, g, b, glow_low + glow_span * min(1.0, total)))
+            else:
+                # Effekte, die nur eine 0..1-Helligkeitskurve je Lampe liefern
+                # und dabei die gemeinsame Bridge-Farbe verwenden.
+                if effect == "comet":
+                    levels = ctx["comet"].brightness_for(elapsed)
+                elif effect == "meteor":
+                    levels = ctx["meteor"].brightness_for(elapsed)
+                elif effect == "wipe":
+                    levels = ctx["wipe"].brightness_for(elapsed)
+                elif effect == "firework":
+                    levels = ctx["firework"].brightness_for(elapsed)
+                elif effect == "ripple":
+                    levels = ctx["ripple"].brightness_for(elapsed)
+                elif effect == "wave":
+                    levels = ctx["wave"].brightness_for(elapsed)
+                elif effect == "strobe":
+                    levels = ctx["strobe"].brightness_for(elapsed)
+                elif effect == "heartbeat":
+                    target = RedAlertPulse.heartbeat(elapsed, ctx["sweep_seconds"])
+                    levels = ctx["pulse"].step(target, dt)
+                else:  # pulse
+                    target = RedAlertPulse.periodic(elapsed, ctx["sweep_seconds"])
+                    levels = ctx["pulse"].step(target, dt)
+                cr, cg, cb = ctx["color"]
+                chans = [(cr, cg, cb, glow_low + glow_span * lvl) for lvl in levels]
+            ctx["session"].send(
+                [
+                    LightColorCommand(
+                        channel_id=cid,
+                        red=int(r * 257 * s),
+                        green=int(g * 257 * s),
+                        blue=int(b * 257 * s),
+                    )
+                    for cid, (r, g, b, s) in zip(ctx["channel_ids"], chans)
+                ]
+            )
             frames += 1
             # Frames gegen eine absolute Uhr planen, damit die Licht-Zeitachse
             # nicht gegenüber der Wanduhr wegdriftet (sonst summiert sich der
@@ -997,20 +1032,12 @@ async def _run_effect(
     except asyncio.CancelledError:
         pass
     except Exception:  # noqa: BLE001
-        log.exception("Effekt-Loop abgebrochen (DTLS-Start oder Senden fehlgeschlagen)")
+        log.exception("Effekt-Loop (%s) abgebrochen (DTLS-Start oder Senden fehlgeschlagen)", host)
     finally:
-        log.info("Effekt beendet (%s Frames).", frames)
-        await asyncio.gather(
-            *(ctx["session"].aclose() for ctx in bridge_ctxs), return_exceptions=True
-        )
+        log.info("Effekt beendet (%s, %s Frames).", host, frames)
+        await ctx["session"].aclose()
         # Nach dem Ende des Streams den gesicherten Lichtzustand zurückschreiben.
-        await asyncio.gather(
-            *(
-                restore_light_state(ctx["bridge_host"], ctx["app_key"], snapshots.get(ctx["bridge_host"], []))
-                for ctx in bridge_ctxs
-            ),
-            return_exceptions=True,
-        )
+        await restore_light_state(host, ctx["app_key"], snapshot)
 
 
 async def _run_identify(
@@ -1069,11 +1096,12 @@ async def handle_identify(request: web.Request) -> web.Response:
     ``area_id`` (opt., sonst aus der bridges-Konfiguration), ``channel_id``
     (opt.; fehlt = alle nacheinander), ``seconds`` (opt.), ``color`` (opt.),
     ``restore_state`` (opt.).
-    """
-    existing = state["task"]
-    if existing and not existing.done():
-        return web.json_response({"status": "already_running"})
 
+    Belegt denselben Task-Slot wie ein Effekt auf dieser Bridge
+    (``state["tasks"][host]``) – blockiert also nur, wenn **diese** Bridge
+    gerade einen Effekt oder einen anderen Identify-Durchlauf fährt, nicht
+    wenn eine andere Bridge aktiv ist.
+    """
     body = await _json_body(request)
     host = body.get("bridge_host") or body.get("bridge_ip")
     if not host and len(state["bridges"]) == 1:
@@ -1082,6 +1110,8 @@ async def handle_identify(request: web.Request) -> web.Response:
         return web.json_response(
             {"error": "bridge_host fehlt im Body – bei mehreren Bridges Pflichtfeld"}, status=400
         )
+    if _is_running(host):
+        return web.json_response({"status": "already_running", "bridge_host": host})
     creds = state["credentials"].get(host)
     if not creds:
         return web.json_response(
@@ -1131,7 +1161,7 @@ async def handle_identify(request: web.Request) -> web.Response:
             )
         targets, hold = [cid], (seconds or 3.0)
 
-    state["task"] = asyncio.create_task(
+    state["tasks"][host] = asyncio.create_task(
         _run_identify(
             session, area_id, native_ids, targets, hold, color,
             host, creds["username"], restore,
@@ -1147,7 +1177,8 @@ async def handle_identify(request: web.Request) -> web.Response:
 
 async def handle_start(request: web.Request) -> web.Response:
     """POST /start – Effekt auf allen konfigurierten (oder im Body übergebenen)
-    Bridges gleichzeitig starten.
+    Bridges gleichzeitig starten, oder – mit ``bridge_host`` im Body – auf nur
+    einer einzelnen Bridge, unabhängig vom Zustand der anderen (siehe unten).
 
     Body optional: ``duration``, ``fps``, ``restore_state`` gelten für **alle**
     Bridges gemeinsam. ``effect``, ``color``, ``sweep_seconds``, ``chase_pause``,
@@ -1181,12 +1212,20 @@ async def handle_start(request: web.Request) -> web.Response:
 
     ``preset``: Name eines gespeicherten Effektsets (siehe ``/presets``); dessen
     gespeicherter Body dient als Basis, alle weiteren Body-Felder überschreiben
-    ihn für diesen Aufruf.
-    """
-    existing = state["task"]
-    if existing and not existing.done():
-        return web.json_response({"status": "already_running"})
+    ihn für diesen Aufruf. Nicht mit ``bridge_host`` kombinierbar (400) – ein
+    Effektset ist ein Mehr-Bridge-Konzept.
 
+    ``bridge_host``: startet nur diese eine Bridge, unabhängig vom Zustand
+    anderer Bridges – wirkt als Filter auf die oben aufgelöste ``bridges``-
+    Liste (Option oder Body), keine eigene Auswahl. `already_running` gilt
+    dann nur für diese eine Bridge. Ein Solo-Start setzt nie
+    ``current_preset`` (siehe ``/health``/``/config``). Ohne ``bridge_host``
+    (Standard, alle konfigurierten/übergebenen Bridges) werden bereits
+    laufende Bridges übersprungen statt den ganzen Aufruf abzulehnen – die
+    Antwort listet sie unter ``skipped_bridges``; nur wenn **keine** Bridge
+    (weder neu noch bereits laufend) übrig bleibt und keine fehlgeschlagen
+    ist, antwortet ``/start`` mit ``no_active_bridges``.
+    """
     body = await _json_body(request)
 
     preset_name = body.get("preset")
@@ -1199,6 +1238,18 @@ async def handle_start(request: web.Request) -> web.Response:
         merged = dict(base)
         merged.update({k: v for k, v in body.items() if k != "preset"})
         body = merged
+
+    bridge_host = body.get("bridge_host")
+    if bridge_host and preset_name:
+        return web.json_response(
+            {
+                "error": "bridge_host und preset zusammen werden nicht unterstützt – "
+                         "preset gilt nur für alle Bridges gemeinsam"
+            },
+            status=400,
+        )
+    if bridge_host and _is_running(bridge_host):
+        return web.json_response({"status": "already_running", "bridge_host": bridge_host})
 
     if "bridges" in body:
         req_bridges = _parse_bridges_option(body["bridges"])
@@ -1213,6 +1264,13 @@ async def handle_start(request: web.Request) -> web.Response:
             {"error": "keine Bridge konfiguriert (Option bridges oder /start-Body bridges)"},
             status=400,
         )
+    if bridge_host:
+        req_bridges = [c for c in req_bridges if c["bridge_host"] == bridge_host]
+        if not req_bridges:
+            return web.json_response(
+                {"error": f"bridge_host {bridge_host} nicht in bridges (Option oder Body) konfiguriert"},
+                status=400,
+            )
 
     fps = int(body.get("fps") or options.get("fps", 25))
     restore = bool(body.get("restore_state", state["restore_state"]))
@@ -1464,10 +1522,21 @@ async def handle_start(request: web.Request) -> web.Response:
     # Sichern/Wiederherstellen) – so lässt sich in einem Effektset eine Bridge
     # bewusst auslassen, während die anderen einen Effekt fahren.
     neutral = [c for c in req_bridges if c.get("effect", defaults["effect"]) == "neutral"]
-    to_run = [c for c in req_bridges if c.get("effect", defaults["effect"]) != "neutral"]
+    non_neutral = [c for c in req_bridges if c.get("effect", defaults["effect"]) != "neutral"]
     neutral_report = [{"bridge_host": c["bridge_host"], "effect": "neutral"} for c in neutral]
     for c in neutral:
         log.info("Start: Bridge %s neutral – wird nicht gesteuert.", c["bridge_host"])
+
+    # Bereits laufende Bridges überspringen statt den ganzen Aufruf
+    # abzulehnen – bei einem gezielten Solo-Start (bridge_host im Body) ist
+    # das oben bereits per already_running abgelehnt worden, hier also nur
+    # für einen Aufruf ohne bridge_host relevant, wenn einzelne Bridges
+    # bereits unabhängig laufen.
+    already = [c for c in non_neutral if _is_running(c["bridge_host"])]
+    to_run = [c for c in non_neutral if not _is_running(c["bridge_host"])]
+    skipped_report = [{"bridge_host": c["bridge_host"], "status": "already_running"} for c in already]
+    for c in already:
+        log.info("Start: Bridge %s läuft bereits – übersprungen.", c["bridge_host"])
 
     # area_id/Kanäle für alle zu fahrenden Bridges parallel auflösen (kein DTLS).
     resolved = await asyncio.gather(*(_resolve(cfg) for cfg in to_run))
@@ -1477,90 +1546,135 @@ async def handle_start(request: web.Request) -> web.Response:
         log.warning("Start: Bridge %s übersprungen (%s)", r["bridge_host"], r["error"])
 
     if not ctxs:
-        if neutral and not failed:
-            # Effektset war gültig (nur eben komplett neutral) – gilt für die
-            # HA-Integration (Select/Sensor "geladenes Effektset") als geladen.
-            state["current_preset"] = str(preset_name) if preset_name else None
-            state["last_start"] = {
+        if not failed:
+            # Nichts Neues zu starten (nur neutral und/oder bereits aktiv),
+            # aber auch kein echter Fehler – für die HA-Integration
+            # (Select/Sensor "geladenes Effektset") gilt ein reiner Batch-
+            # Aufruf trotzdem als "geladen"; ein Solo-Start lässt
+            # current_preset unangetastet (siehe Docstring oben).
+            if bridge_host is None:
+                state["current_preset"] = str(preset_name) if preset_name else None
+            log.info(
+                "Start: keine neue Bridge zu starten (neutral: %s, bereits aktiv: %s).",
+                [c["bridge_host"] for c in neutral], [c["bridge_host"] for c in already],
+            )
+            return web.json_response({
+                "status": "no_active_bridges",
                 "duration": duration, "fps": fps, "restore_state": restore,
-                "bridges": [], "failed_bridges": [], "neutral_bridges": neutral_report,
-            }
-            log.info("Start: alle konfigurierten Bridges neutral – nichts zu tun.")
-            return web.json_response({"status": "no_active_bridges", **state["last_start"]})
+                "bridges": [], "failed_bridges": [],
+                "neutral_bridges": neutral_report, "skipped_bridges": skipped_report,
+            })
         return web.json_response(
-            {"error": "keine Bridge verfügbar", "bridges": failed, "neutral_bridges": neutral_report},
+            {
+                "error": "keine Bridge verfügbar",
+                "bridges": failed,
+                "neutral_bridges": neutral_report,
+                "skipped_bridges": skipped_report,
+            },
             status=502,
         )
 
     # Für die HA-Integration (Select-Entity "geladenes Effektset"): erst hier
     # setzen, nicht schon bei jedem preset-Versuch – ein 400/404/502 vorher
     # soll "geladenes Effektset" nicht auf einen nie gestarteten Namen setzen.
-    # Ad-hoc-Start ohne preset räumt die Anzeige wieder auf None.
-    state["current_preset"] = str(preset_name) if preset_name else None
+    # Ad-hoc-Start ohne preset räumt die Anzeige wieder auf None. Ein Solo-
+    # Start (bridge_host im Body) lässt current_preset unangetastet.
+    if bridge_host is None:
+        state["current_preset"] = str(preset_name) if preset_name else None
 
-    # session.start() (DTLS-Handshake, ~einige Sekunden) passiert im Task,
-    # damit die HTTP-Antwort nicht blockiert (HA rest_command-Timeout).
-    state["task"] = asyncio.create_task(_run_effect(ctxs, duration, fps, restore))
-    state["last_start"] = {
+    # session.start() (DTLS-Handshake, ~einige Sekunden) passiert je Bridge in
+    # einem eigenen Task, damit die HTTP-Antwort nicht blockiert (HA
+    # rest_command-Timeout). Mehrere Bridges in diesem einen Aufruf teilen
+    # sich eine Barriere, damit sie trotzdem gleichzeitig loslegen, bleiben
+    # aber einzeln über state["tasks"] unabhängig kündbar.
+    barrier = asyncio.Barrier(len(ctxs)) if len(ctxs) > 1 else None
+    for c in ctxs:
+        state["tasks"][c["bridge_host"]] = asyncio.create_task(
+            _run_single_bridge(c, duration, fps, restore, barrier)
+        )
+    state["last_start_meta"] = {"duration": duration, "fps": fps, "restore_state": restore}
+    started_report = []
+    for c in ctxs:
+        entry = {
+            "bridge_host": c["bridge_host"],
+            "area_id": c["area_id"],
+            "channels": c["channel_ids"],
+            "effect": c["effect"],
+            "color": "#{:02X}{:02X}{:02X}".format(*c["color"]),
+            "sweep_seconds": c["sweep_seconds"],
+            "chase_pause": c["chase_pause"],
+            "attack_ms": round(c["attack_s"] * 1000),
+            "release_ms": round(c["release_s"] * 1000),
+            "glow_low": round(c["glow_low"], 3),
+            "glow_high": round(c["glow_high"], 3),
+            "glitter_interval_ms": round(c["glitter_interval_ms"]),
+            "glitter_flash_ms": round(c["glitter_flash_ms"]),
+            "glitter_colors": _colors_to_hex(c["glitter_palette"]),
+            "gc_strips": c["gc_strips"],
+            "gc_count": c["gc_count"],
+            "gc_length": c["gc_length"],
+            "gc_speed": c["gc_speed"],
+            "gc_background_color": "#{:02X}{:02X}{:02X}".format(*c["gc_background_color"]),
+            "gc_chase_glitter": c["gc_chase_glitter"],
+            "gc_background_pulse": c["gc_background_pulse"],
+            "color2": "#{:02X}{:02X}{:02X}".format(*c["color2"]),
+            "meteor_count": c["meteor_count"],
+            "meteor_speed": c["meteor_speed"],
+            "firework_interval_ms": round(c["firework_interval_ms"]),
+            "firework_speed": c["firework_speed"],
+            "lightning_interval_ms": round(c["lightning_interval_ms"]),
+            "lightning_flash_ms": round(c["lightning_flash_ms"]),
+            "ripple_interval_ms": round(c["ripple_interval_ms"]),
+            "ripple_speed": c["ripple_speed"],
+            "wave_length": c["wave_length"],
+            "flicker_interval_ms": round(c["flicker_interval_ms"]),
+            "flicker_dip_ms": round(c["flicker_dip_ms"]),
+        }
+        state["last_start"][c["bridge_host"]] = entry
+        started_report.append(entry)
+    result = {
         "duration": duration,
         "fps": fps,
         "restore_state": restore,
         "neutral_bridges": neutral_report,
-        "bridges": [
-            {
-                "bridge_host": c["bridge_host"],
-                "area_id": c["area_id"],
-                "channels": c["channel_ids"],
-                "effect": c["effect"],
-                "color": "#{:02X}{:02X}{:02X}".format(*c["color"]),
-                "sweep_seconds": c["sweep_seconds"],
-                "chase_pause": c["chase_pause"],
-                "attack_ms": round(c["attack_s"] * 1000),
-                "release_ms": round(c["release_s"] * 1000),
-                "glow_low": round(c["glow_low"], 3),
-                "glow_high": round(c["glow_high"], 3),
-                "glitter_interval_ms": round(c["glitter_interval_ms"]),
-                "glitter_flash_ms": round(c["glitter_flash_ms"]),
-                "glitter_colors": _colors_to_hex(c["glitter_palette"]),
-                "gc_strips": c["gc_strips"],
-                "gc_count": c["gc_count"],
-                "gc_length": c["gc_length"],
-                "gc_speed": c["gc_speed"],
-                "gc_background_color": "#{:02X}{:02X}{:02X}".format(*c["gc_background_color"]),
-                "gc_chase_glitter": c["gc_chase_glitter"],
-                "gc_background_pulse": c["gc_background_pulse"],
-                "color2": "#{:02X}{:02X}{:02X}".format(*c["color2"]),
-                "meteor_count": c["meteor_count"],
-                "meteor_speed": c["meteor_speed"],
-                "firework_interval_ms": round(c["firework_interval_ms"]),
-                "firework_speed": c["firework_speed"],
-                "lightning_interval_ms": round(c["lightning_interval_ms"]),
-                "lightning_flash_ms": round(c["lightning_flash_ms"]),
-                "ripple_interval_ms": round(c["ripple_interval_ms"]),
-                "ripple_speed": c["ripple_speed"],
-                "wave_length": c["wave_length"],
-                "flicker_interval_ms": round(c["flicker_interval_ms"]),
-                "flicker_dip_ms": round(c["flicker_dip_ms"]),
-            }
-            for c in ctxs
-        ],
+        "skipped_bridges": skipped_report,
+        "bridges": started_report,
         "failed_bridges": failed,
     }
-    log.info("Start angefordert: %s", state["last_start"])
-    return web.json_response({"status": "started", **state["last_start"]})
+    log.info("Start angefordert: %s", result)
+    return web.json_response({"status": "started", **result})
 
 
 async def handle_stop(request: web.Request) -> web.Response:
-    task = state["task"]
-    if not task or task.done():
+    """POST /stop – Effekt(e) stoppen.
+
+    Body optional: ``bridge_host`` – stoppt nur diese eine Bridge, unabhängig
+    vom Zustand anderer Bridges. Ohne ``bridge_host``: stoppt alle gerade
+    laufenden Bridges (bisheriges Verhalten).
+    """
+    body = await _json_body(request)
+    bridge_host = body.get("bridge_host")
+
+    if bridge_host:
+        task = state["tasks"].get(bridge_host)
+        if not task or task.done():
+            return web.json_response({"status": "not_running", "bridge_host": bridge_host})
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        log.info("Effekt auf Bridge %s per /stop beendet.", bridge_host)
+        return web.json_response({"status": "stopped", "bridge_hosts": [bridge_host]})
+
+    running = {host: t for host, t in state["tasks"].items() if not t.done()}
+    if not running:
         return web.json_response({"status": "not_running"})
-    task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass
-    log.info("Effekt per /stop beendet.")
-    return web.json_response({"status": "stopped"})
+    for t in running.values():
+        t.cancel()
+    await asyncio.gather(*running.values(), return_exceptions=True)
+    log.info("Effekt auf allen Bridges per /stop beendet: %s", sorted(running))
+    return web.json_response({"status": "stopped", "bridge_hosts": sorted(running)})
 
 
 # --------------------------------------------------------------------------- #

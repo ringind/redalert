@@ -74,10 +74,12 @@ info.md / info.en.md       what HACS renders instead of README.md when
                             to the app's own docs rather than duplicating them
 custom_components/redalert/  HA integration talking to the app's REST API
   manifest.json, const.py, api.py, coordinator.py, config_flow.py, entity.py
-  binary_sensor.py (running) / switch.py (start+stop) / select.py (pick+load
-  a preset) / sensor.py (currently loaded preset) — one DataUpdateCoordinator
-  polling GET /config every 10s; README.md/README.en.md document install +
-  entities
+  binary_sensor.py (running, any bridge) / switch.py (global start+stop, plus
+  one per-bridge switch per paired bridge since 1.15.0 — dynamically added
+  from coordinator data via a coordinator-listener, this platform's only
+  dynamic-entity registration) / select.py (pick+load a preset) / sensor.py
+  (currently loaded preset) — one DataUpdateCoordinator polling GET /config
+  every 10s; README.md/README.en.md document install + entities
   brand/icon.png, brand/logo.png — copies of redalert/{icon,logo}.png; HA
   2026.3+ shows these inline (no home-assistant/brands PR needed), and the
   `hacs/action` CI check requires them regardless of HA version
@@ -107,7 +109,7 @@ redalert/                  the app
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.14.0**.
+No build system, linter, or test suite. Current version: **1.15.0**.
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
   after every code change — the only static check available.
@@ -147,9 +149,11 @@ curl -s -X POST $B/start -H 'Content-Type: application/json' \
   you don't have to re-press a link button to switch back.)
 - The DTLS handshake logs a `ServerHello timeout … resending` retry almost every
   time and takes ~3–9 s — **normal**, not a failure. `/start` returns *before* it
-  (`_run_effect` does the handshake), so poll `/health` `running` for real state.
-- `_run_effect` runs the effect for `duration` s at exactly `fps` (absolute-clock
-  pacing) — verify with the `Effekt beendet (N Frames)` log line: `N ≈ duration*fps`.
+  (`_run_single_bridge` does the handshake, one per bridge), so poll `/health`
+  `running` for real state.
+- `_run_single_bridge` runs its bridge's effect for `duration` s at exactly `fps`
+  (absolute-clock pacing) — verify with the `Effekt beendet (<host>, N Frames)`
+  log line: `N ≈ duration*fps`.
 - See the **`smoke-test`** skill for the full loop (start server, run, wait, report, stop).
 
 ## Architecture
@@ -166,7 +170,11 @@ Three layers under `redalert/rootfs/app/`:
   mehr als einer konfigurierten Bridge — → merged into `/data/credentials.json`),
   `/areas` (query `bridge_host` — Pflicht bei mehr als einer gepaarten Bridge),
   `/start`, `/stop`, `/identify`. All mutable runtime state is one module-level
-  `state` dict; `state["bridges"]` is a list (≤ `MAX_BRIDGES` = 3) parsed by
+  `state` dict; `state["tasks"]` is a `dict[bridge_host, asyncio.Task]` — since
+  1.15.0 every bridge runs its effect (or an `/identify` run) in its **own**
+  task, independently start-/stoppable via an optional `bridge_host` in the
+  `/start`/`/stop` body (see below), replacing the old single global
+  `state["task"]`. `state["bridges"]` is a list (≤ `MAX_BRIDGES` = 3) parsed by
   `_parse_bridges_option` from the `bridges` option — each entry always has
   `bridge_host`, `area_id`, `channel_order`, and *optionally* (sparse — key
   present only if this bridge overrides it) `effect`, `color`, `sweep_seconds`,
@@ -191,15 +199,24 @@ Three layers under `redalert/rootfs/app/`:
   `asyncio.gather`; a bridge that fails resolution is skipped (best-effort,
   reported back as `failed_bridges`) without blocking the others — `/start`
   only 502s if **no** bridge resolved.
+  An optional `bridge_host` in the `/start`/`/stop` body targets a single
+  bridge, independent of any others' state — `already_running` then only
+  checks that one bridge; not combinable with `preset` (400 — a preset is a
+  multi-bridge concept) and never touches `state["current_preset"]`. Without
+  `bridge_host` (the default "start everyone" call), bridges that are
+  already running are **skipped, not rejected** — reported back as
+  `skipped_bridges`, alongside `failed_bridges`/`neutral_bridges` — so the
+  same button can be used to top up whichever bridges aren't running yet.
   `/identify` (body `bridge_host` — Pflicht bei mehr als einer konfigurierten
   Bridge —, `area_id?` defaulting to that bridge's configured entry,
   `channel_id?`, `seconds?`, `color?`, `restore_state?`) lights one channel of
   one bridge — or, with `channel_id` omitted, every channel in turn
   (~`seconds`+0.4 s gap each) — over a single DTLS handshake, to map channel_id
-  → physical lamp. Shares the `state["task"]` slot with `/start`
-  (`already_running` guard, `/stop` cancels it).
+  → physical lamp. Shares that bridge's `state["tasks"][host]` slot with
+  `/start` (`already_running` guard for that bridge only; `/stop` with that
+  `bridge_host`, or no `bridge_host` at all, cancels it).
 - **`chase.py`** — two generators, pure math, no I/O. Both emit a **0..1 shape**;
-  `_run_effect` maps it onto `[glow_low, glow_high]` (options / `/start` body,
+  `_run_single_bridge` maps it onto `[glow_low, glow_high]` (options / `/start` body,
   clamped, `glow_high` forced ≥ `glow_low`) — so "0" is the resting glow, not
   necessarily black.
   - `RedAlertComet.brightness_for(t)` → per-light `[0,1]` list. Per lamp, a pure
@@ -219,41 +236,45 @@ Three layers under `redalert/rootfs/app/`:
     `release_s` (keep release < attack). `RedAlertPulse.periodic(t, period)`
     feeds the gate a cosine 0..1 pulse with period `sweep_seconds`.
 
-**Effect loop (`_run_effect`):** `handle_start` resolves all bridges (area
-lookup, no DTLS — 404/502-equivalent failures per bridge collected into
-`failed_bridges` synchronously), then hands the whole list of resolved
-bridge contexts (`{bridge_host, area_id, channel_ids, session, app_key,
-effect, color, sweep_seconds, chase_pause, attack_s, release_s, glow_low,
-glow_high}` — each bridge's own resolved effect config) to a **single**
-`asyncio` task and returns immediately. The task, before any handshake,
-snapshots every bridge's lights via Hue CLIP v2 concurrently
-(`capture_light_state`, unless `restore_state` is false); starts **all**
-DTLS handshakes concurrently via `asyncio.gather(..., return_exceptions=True)`
-so a slow or failing bridge doesn't delay/block the others, and so every
-surviving bridge gets the **same** `start = loop.time()` epoch — this is what
-keeps bridges starting simultaneously, even though each can run a completely
-different effect/colour/timing. A bridge whose handshake raises is dropped
-from `active` and logged; if none survive, the loop returns early. Each
-bridge gets its **own** `RedAlertComet`/`RedAlertPulse` instance (built once
-before the loop, sized to that bridge's own channel count and timing); every
-frame, each active bridge independently computes its 0..1 shape from the
-**same shared** `elapsed`/`dt` (so e.g. two bridges both running `comet` with
-the same `sweep_seconds` stay phase-identical, and a `pulse` bridge's beat
-timing is anchored to the same clock as a `comet` bridge next to it) — there
-is no longer a single shared level reused across bridges verbatim, since
-bridges can now differ. Levels are mapped to `glow_low + (glow_high-glow_low)*lvl`
-per bridge (so between pulses lamps rest at that bridge's `glow_low`, not 0) →
-per-channel `LightColorCommand` scaled by that bridge's colour
-(`value_8bit * 257 * level`), sent via `ctx["session"].send(...)`. Frames are
-paced against a single **absolute** clock (`start + n/fps`, `fps` shared across
-all bridges), not `sleep(1/fps)`, so the light timeline doesn't drift; the loop
-breaks once `elapsed >= duration` (also shared). `finally` `aclose()`s every
-session and `restore_light_state`s every snapshot (via `asyncio.gather`,
-best-effort) — including bridges whose handshake failed, since their snapshot
-was still captured beforehand.
-Concurrency is guarded by `state["task"]` still running (`/start` →
-`already_running`); `/stop` cancels and awaits it (cancelling the gathers
-inside cancels every bridge's in-flight work too).
+**Effect loop (`_run_single_bridge`):** `handle_start` resolves all requested
+bridges (area lookup, no DTLS — 404/502-equivalent failures per bridge
+collected into `failed_bridges` synchronously; bridges already running are
+filtered out first into `skipped_bridges`, see above), then creates **one
+independent `asyncio.Task` per resolved bridge** (`_run_single_bridge`,
+stored as `state["tasks"][bridge_host]`) and returns immediately — this is
+what lets a per-bridge `/stop` cancel just one bridge without touching
+others, even ones started in the same `/start` call. Each bridge's own task,
+before its handshake, snapshots that bridge's lights via Hue CLIP v2
+(`capture_light_state`, unless `restore_state` is false) and starts its own
+DTLS handshake. To keep **multiple** bridges from one `/start` call lighting
+up at the same instant despite now being separate tasks, `handle_start`
+hands them all a shared `asyncio.Barrier(len(ctxs))` (only when `len(ctxs) >
+1`; a solo start gets `None`) — each task `await`s the barrier right after
+its own successful handshake, before recording its `start = loop.time()`
+epoch, so every task's epoch is set only once all of that batch's handshakes
+are done. If one bridge's handshake fails, its task calls `barrier.abort()`
+so the others get `asyncio.BrokenBarrierError` from `.wait()` and proceed
+immediately instead of hanging — same best-effort spirit as before ("a
+failing bridge doesn't block the others"), now implemented via the barrier
+rather than a shared `asyncio.gather`. Each bridge's task builds its **own**
+`RedAlertComet`/`RedAlertPulse`/etc. instances (sized to its own channel
+count and timing) and runs its own per-frame `while True` loop against its
+own `elapsed`/`dt` clock — two bridges both running `comet` with the same
+`sweep_seconds` only stay phase-identical if they were part of the same
+barrier-synchronized batch start (their `start` epochs coincide), not
+inherently across independent solo starts. Levels are mapped to
+`glow_low + (glow_high-glow_low)*lvl` (so between pulses lamps rest at that
+bridge's `glow_low`, not 0) → per-channel `LightColorCommand` scaled by that
+bridge's colour (`value_8bit * 257 * level`), sent via `ctx["session"].send(...)`.
+Frames are paced against that task's own **absolute** clock (`start +
+n/fps`), not `sleep(1/fps)`, so the light timeline doesn't drift; the loop
+breaks once `elapsed >= duration`. `finally` `aclose()`s the session and
+`restore_light_state`s the snapshot — even if the handshake failed, since
+the snapshot was still captured beforehand.
+Concurrency is guarded per bridge by `state["tasks"][host]` still running
+(`/start` with that `bridge_host` → `already_running` for just that bridge);
+`/stop` with a `bridge_host` cancels only that task, `/stop` without one
+cancels every currently-running task.
 
 **Web UI (`panel.html`):** vanilla JS, bilingual since 1.13.0 — an `I18N` object
 (`{de:{...}, en:{...}}`, flat `"key": "value"` maps, both kept in lockstep;
@@ -275,15 +296,37 @@ requests go through `api()`, which wraps `fetch` in an `AbortController` timeout
 up to 30 s for the link-button press) — since 1.9.1, after a bug where a hung
 fetch (no timeout) plus the naive 5 s poll piled up requests against the
 browser's per-origin connection limit until the whole panel stopped responding
-until reload. `refresh()` now also guards against overlapping polls
-(`refreshBusy`) and a `visibilitychange` listener forces an immediate refresh
-when the tab regains focus (browsers throttle `setInterval` in hidden tabs).
+until reload. `refresh()` guards against overlapping polls with a
+`refreshBusy`/`refreshQueued` pair (since 1.15.0, was `refreshBusy`-only
+through 1.14.0) — a call arriving while one is in flight no longer just
+returns and gets silently dropped, it sets `refreshQueued` and is re-run
+once the in-flight call finishes; without this, a button handler's own
+trailing `refresh()` could collide with the periodic 5 s poll and get
+dropped, leaving the UI looking unresponsive for up to 5 s after a click. A
+`visibilitychange` listener also forces an immediate refresh when the tab
+regains focus (browsers throttle `setInterval` in hidden tabs).
 Polls `/config` every 5 s. Section "1 · Bridges" renders `BRIDGE_COUNT` = 3 identical
-cards (`bridgeCardHTML(i)`, ids `b${i}-*`) — pairing, area list/pick, own
-`channel_order` field, a nested `<details>` "Effekt für diese Bridge anpassen"
-(`b${i}-effect` with a blank "wie Konfiguration" option + `b${i}-color/sweep/
-chpause/attack/release/glowlow/glowhigh/…`, all optional — empty means
-inherit the app configuration), and its own nested "Lampen zuordnen"
+cards (`bridgeCardHTML(i)`, ids `b${i}-*`) — pairing (`b${i}-pill`), a
+per-bridge **Start**/**Stop** button pair (`b${i}-start`/`b${i}-stop`, since
+1.15.0) that POSTs `/start`/`/stop` with `bridge_host` set to just this
+card's host — the Start handler reuses the same `collectBody()` the global
+button uses (so this card's own overrides apply identically), `bridge_host`
+just tells the server to filter to one bridge — plus a running-status pill
+(`b${i}-run-pill`, synced from `/config`'s per-bridge `running` field the
+same way `b${i}-pill` mirrors `paired`), area list/pick, own `channel_order`
+field, a nested `<details>` "Effekt für diese Bridge anpassen" (`b${i}-effect`
+with a blank "wie Konfiguration" option, then the per-bridge parameter
+fields grouped under heading rows — `.field-group-heading` divs with
+`flex-basis: 100%` to break the flex `.row` — in three tiers: universal
+`glow_low`/`glow_high`, then params shared by 2+ effects (`color`
+immediately followed by `color2`, then `sweep_seconds`/`chase_pause`/
+`attack_ms`/`release_ms`/`glitter_*` — the latter four are shared because
+`chase`'s optional `gc_background_pulse`/`gc_chase_glitter` overlays reuse
+the same `RedAlertPulse`/`RedAlertGlitter` instances), then one heading per
+single-effect group alphabetically (Chase/Firework/Flicker/Lightning/
+Meteor/Ripple/Wave — the other effects have no exclusively-own params so
+get no heading; all fields optional, empty means inherit the app
+configuration), and its own nested "Lampen zuordnen"
 (`AREAS[i]`, `renderIdentify(i)`, each POSTs `/identify` with that card's
 `bridge_host` and, if set, its own `b${i}-color` override). Colour parameters
 (`color`, `gc_background_color`, `glitter_colors`) are `<input type=color>`
@@ -296,8 +339,11 @@ listener); the periodic `/config` sync in `refresh()` (`syncIfUntouched` /
 deliberate choice (including explicitly picking "wie Konfiguration") survives
 later polls. Section "2 · Steuerung" has **no input fields** — effect
 parameters, `duration` and `fps` all come from the app configuration (or a
-bridge's own override); the section renders **Start**/**Stop** first, then the
-parameter descriptions below them. On Start, `collectBody()` assembles `body.bridges`
+bridge's own override); the section renders **Start**/**Stop** first (these
+still start/stop **every** configured bridge simultaneously — a synchronized
+batch via the barrier described below — the per-bridge buttons on each card
+are for controlling just one), then the parameter descriptions below them.
+On Start, `collectBody()` assembles `body.bridges`
 from whichever of the 3 cards have both `bridge_host` and `area_id` filled in
 (each entry including only the per-bridge fields actually overridden; empty
 cards are skipped, and if none are filled `bridges` is omitted so the server
@@ -322,7 +368,7 @@ cert). See `_clip` / `capture_light_state` / `restore_light_state`.
   `chase`). All are per-bridge overridable (`bridges[].effect`) — different
   bridges can run different effects at the same time.
 - `restore_state` (default true) snapshots + restores every area lamp via CLIP v2;
-  runs in `_run_effect` before the handshake / in `finally` after `aclose()`.
+  runs in `_run_single_bridge` before the handshake / in `finally` after `aclose()`.
 - Channel order = `channel_order` option if set, else the area's native order
   (only meaningful for `comet`); it's per-bridge, like `area_id`.
 - Each Bridge allows only **one** active Entertainment stream at a time (this is
@@ -345,13 +391,20 @@ cert). See `_clip` / `capture_light_state` / `restore_light_state`.
    description (missing one is a lint failure).
 3. `redalert/rootfs/app/main.py` — `state[...]` default from `options.get(...)`;
    the startup config `log.info(...)` line; `handle_start` body parse
-   (`body.get(..., state[...])`); the `/config` JSON; the `state["last_start"]` dict.
+   (`body.get(..., state[...])`); the `/config` JSON (both the top-level
+   default and each per-bridge entry); the per-bridge `entry`/`state["last_start"][host]`
+   dict built in `handle_start`'s success path.
 4. `redalert/rootfs/app/panel.html` — since 1.9.0, section "2 · Steuerung" has
    no input fields (only descriptions + Start/Stop): a **shared** option (not
    per-bridge) only needs its read-only line added to the `fields` object in
    `refresh()` (Status). A **per-bridge** option (like `area_id`/
    `channel_order`, or any of the effect parameters) needs a field in
-   `bridgeCardHTML(i)`, wired in `wireBridgeCard(i)` (the generic
+   `bridgeCardHTML(i)`'s "Effekt für diese Bridge anpassen" `<details>` —
+   since 1.15.0 that block is grouped under heading rows (universal → shared
+   by 2+ effects → one heading per single-effect group, alphabetical; see
+   the Web UI paragraph above), place a new field under whichever tier
+   actually reads it in `_run_single_bridge`'s dispatch, not just its
+   "primary" effect — wired in `wireBridgeCard(i)` (the generic
    `input`/`select` loop already attaches `dataset.touched` tracking — a
    colour value instead needs an `<input type=color>` + "eigene Farbe
    verwenden" checkbox pair like `b${i}-color`/`b${i}-color-en`, synced via

@@ -10,13 +10,14 @@ for the variant without any extra installation).
 
 | Entity | Domain | Shows / does |
 |---|---|---|
-| **Operating state** | `binary_sensor` | `on` while the app is currently running an effect (`running` from `/config`). |
-| **Animation** | `switch` | On = `POST /start` (with the currently loaded effect set, if one is selected, otherwise the app default). Off = `POST /stop`. |
+| **Operating state** | `binary_sensor` | `on` while the app is running an effect on **any** bridge (`running` from `/config`). |
+| **Animation** | `switch` | On = `POST /start` (with the currently loaded effect set, if one is selected, otherwise the app default) – starts **all** configured bridges together. Off = `POST /stop` (stops every running bridge). |
+| **Animation (\<bridge IP\>)** | `switch` | One more switch entity per paired bridge (created dynamically from `/config`'s `bridges` list) – starts/stops **only that one** bridge (`bridge_host` in the `/start`/`/stop` body), regardless of the others' state. If a bridge disappears from the app configuration, its switch isn't deleted, just goes `unavailable`. |
 | **Effect set** | `select` | Dropdown with all saved effect sets (`GET /presets` names); picking one loads **and starts** the set immediately (`POST /start {"preset": …}`). |
-| **Loaded effect set** | `sensor` | Name of the most recently loaded set (empty on an ad-hoc start without `preset`, e.g. via the app's web UI or a direct `/start` call without `preset`). |
+| **Loaded effect set** | `sensor` | Name of the most recently loaded set (empty on an ad-hoc start without `preset`, e.g. via the app's web UI or a direct `/start` call without `preset`; a solo start of one bridge via its own switch never changes this). |
 
-All four attach to one shared device ("Red Alert (<Host>)"); one config
-entry = one app instance.
+Four plus one entity per paired bridge attach to one shared device
+("Red Alert (<Host>)"); one config entry = one app instance.
 
 ## Installation
 

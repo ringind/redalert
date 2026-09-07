@@ -1,4 +1,4 @@
-"""Binary-Sensor: läuft der Effekt gerade (state["task"] aktiv)?"""
+"""Binary-Sensor: läuft der Effekt gerade auf irgendeiner Bridge?"""
 
 from __future__ import annotations
 

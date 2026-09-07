@@ -10,13 +10,14 @@ für die Variante ganz ohne Zusatzinstallation).
 
 | Entity | Domain | Zeigt / tut |
 |---|---|---|
-| **Betriebszustand** | `binary_sensor` | `on`, solange die App gerade einen Effekt fährt (`running` aus `/config`). |
-| **Animation** | `switch` | Ein = `POST /start` (mit dem aktuell geladenen Effektset, falls eines gewählt ist, sonst App-Standard). Aus = `POST /stop`. |
+| **Betriebszustand** | `binary_sensor` | `on`, solange die App auf **irgendeiner** Bridge gerade einen Effekt fährt (`running` aus `/config`). |
+| **Animation** | `switch` | Ein = `POST /start` (mit dem aktuell geladenen Effektset, falls eines gewählt ist, sonst App-Standard) – startet **alle** konfigurierten Bridges gemeinsam. Aus = `POST /stop` (stoppt alle laufenden Bridges). |
+| **Animation (\<Bridge-IP\>)** | `switch` | Je eine weitere Switch-Entity pro gepaarter Bridge (dynamisch aus `/config`'s `bridges`-Liste angelegt) – startet/stoppt **nur diese eine** Bridge (`bridge_host` im `/start`/`/stop`-Body), unabhängig vom Zustand der anderen. Verschwindet eine Bridge aus der App-Konfiguration, wird ihr Switch nicht gelöscht, sondern nur `unavailable`. |
 | **Effektset** | `select` | Dropdown mit allen gespeicherten Effektsets (`GET /presets`-Namen); Auswahl lädt **und startet** das Set sofort (`POST /start {"preset": …}`). |
-| **Geladenes Effektset** | `sensor` | Name des zuletzt geladenen Sets (leer bei einem Ad-hoc-Start ohne `preset`, z. B. über die App-Web-UI oder direkten `/start`-Aufruf ohne `preset`). |
+| **Geladenes Effektset** | `sensor` | Name des zuletzt geladenen Sets (leer bei einem Ad-hoc-Start ohne `preset`, z. B. über die App-Web-UI oder direkten `/start`-Aufruf ohne `preset`; ein Solo-Start einer einzelnen Bridge über ihren eigenen Switch ändert diese Anzeige nie). |
 
-Alle vier hängen an einem gemeinsamen Gerät ("Red Alert (<Host>)"); ein
-Config-Entry = eine App-Instanz.
+Vier plus eine Entity je gepaarter Bridge hängen an einem gemeinsamen Gerät
+("Red Alert (<Host>)"); ein Config-Entry = eine App-Instanz.
 
 ## Installation
 
