@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.15.1
+
+- **Web-UI: Parameter in „Mehrere Effekte“ jetzt mit Effektliste.** Farbe,
+  sweep_seconds, chase-Pause, Attack/Release und die glitter-Parameter
+  zeigen jetzt direkt in der Beschriftung, von welchen Effekten sie genutzt
+  werden (inkl. der bedingten Nutzung durch `chase` über „Chases funkeln“/
+  „Background pulsiert“) statt nur des technischen Namens.
+
 ## 1.15.0
 
 - **Jede Bridge einzeln start-/stoppbar.** Neuer optionaler `bridge_host` in

@@ -312,12 +312,17 @@
       "group.lightning": "Lightning", "group.meteor": "Meteor", "group.ripple": "Ripple",
       "group.wave": "Wave",
       "card.effect": "Effekt",
-      "card.color": "Farbe (diese Bridge)", "title.useOwnColor": "eigene Farbe verwenden",
-      "card.sweep": "sweep_seconds", "card.chasePause": "chase-Pause (s)",
-      "card.attack": "Attack (ms)", "card.release": "Release (ms)",
+      "card.color": "Farbe (diese Bridge) – alle Effekte außer glitter, aurora, rainbow",
+      "title.useOwnColor": "eigene Farbe verwenden",
+      "card.sweep": "sweep_seconds – für pulse, comet, police, heartbeat, aurora, rainbow, wipe, wave, strobe, duel, chase (wenn „Background pulsiert“ aktiv)",
+      "card.chasePause": "chase-Pause (s) – für comet, wipe",
+      "card.attack": "Attack (ms) – für pulse, heartbeat, chase (wenn „Background pulsiert“ aktiv)",
+      "card.release": "Release (ms) – für pulse, heartbeat, chase (wenn „Background pulsiert“ aktiv)",
       "card.glowLow": "glow_low (0–1)", "card.glowHigh": "glow_high (0–1)",
-      "card.glitterInterval": "glitter: Intervall (ms)", "card.glitterFlash": "glitter: Blitzdauer (ms)",
-      "card.glitterColors": "glitter: Farben (diese Bridge)", "title.useOwnColors": "eigene Farben verwenden",
+      "card.glitterInterval": "glitter: Intervall (ms) – für glitter, chase (wenn „Chases funkeln“ aktiv)",
+      "card.glitterFlash": "glitter: Blitzdauer (ms) – für glitter, chase (wenn „Chases funkeln“ aktiv)",
+      "card.glitterColors": "glitter: Farben (diese Bridge) – für glitter, aurora, chase (wenn „Chases funkeln“ aktiv)",
+      "title.useOwnColors": "eigene Farben verwenden",
       "card.gcDir": "chase: Richtung(en) – forward, backward oder bounce",
       "card.gcDirPh": "wie Konfiguration, z. B. forward",
       "title.gcDir": "forward / backward: umlaufend (wie ein Förderband); bounce: prallt an beiden Enden ab (Larson-Scanner). Bei mehreren Strips (siehe Strip-Längen) durch Komma getrennt, eine Richtung je Strip, z. B. forward,backward.",
@@ -503,12 +508,17 @@
       "group.lightning": "Lightning", "group.meteor": "Meteor", "group.ripple": "Ripple",
       "group.wave": "Wave",
       "card.effect": "Effect",
-      "card.color": "Colour (this bridge)", "title.useOwnColor": "use custom colour",
-      "card.sweep": "sweep_seconds", "card.chasePause": "chase pause (s)",
-      "card.attack": "Attack (ms)", "card.release": "Release (ms)",
+      "card.color": "Colour (this bridge) – all effects except glitter, aurora, rainbow",
+      "title.useOwnColor": "use custom colour",
+      "card.sweep": "sweep_seconds – for pulse, comet, police, heartbeat, aurora, rainbow, wipe, wave, strobe, duel, chase (when \"Background pulses\" is on)",
+      "card.chasePause": "chase pause (s) – for comet, wipe",
+      "card.attack": "Attack (ms) – for pulse, heartbeat, chase (when \"Background pulses\" is on)",
+      "card.release": "Release (ms) – for pulse, heartbeat, chase (when \"Background pulses\" is on)",
       "card.glowLow": "glow_low (0–1)", "card.glowHigh": "glow_high (0–1)",
-      "card.glitterInterval": "glitter: interval (ms)", "card.glitterFlash": "glitter: flash duration (ms)",
-      "card.glitterColors": "glitter: colours (this bridge)", "title.useOwnColors": "use custom colours",
+      "card.glitterInterval": "glitter: interval (ms) – for glitter, chase (when \"Bands sparkle\" is on)",
+      "card.glitterFlash": "glitter: flash duration (ms) – for glitter, chase (when \"Bands sparkle\" is on)",
+      "card.glitterColors": "glitter: colours (this bridge) – for glitter, aurora, chase (when \"Bands sparkle\" is on)",
+      "title.useOwnColors": "use custom colours",
       "card.gcDir": "chase: direction(s) – forward, backward or bounce",
       "card.gcDirPh": "same as configuration, e.g. forward",
       "title.gcDir": "forward / backward: loops endlessly (like a conveyor belt); bounce: reflects off both ends (Larson scanner). With several strips (see strip lengths), comma-separated, one direction per strip, e.g. forward,backward.",
@@ -700,7 +710,7 @@
               <input type="number" id="b${i}-glowhigh" min="0" max="1" step="0.01" data-i18n-ph="opt.sameAsConfig"></div>
 
             <div class="field-group-heading" data-i18n="group.shared">Farbe &amp; Timing (mehrere Effekte)</div>
-            <div><label for="b${i}-color" data-i18n="card.color">Farbe (diese Bridge)</label>
+            <div><label for="b${i}-color" data-i18n="card.color">Farbe (diese Bridge) – alle Effekte außer glitter, aurora, rainbow</label>
               <div class="color-row">
                 <input type="checkbox" id="b${i}-color-en" data-i18n-title="title.useOwnColor">
                 <input type="color" id="b${i}-color" value="#ff0000" disabled>
@@ -710,19 +720,19 @@
                 <input type="checkbox" id="b${i}-color2-en" data-i18n-title="title.useOwnColor2">
                 <input type="color" id="b${i}-color2" value="#0000ff" disabled>
               </div></div>
-            <div><label for="b${i}-sweep" data-i18n="card.sweep">sweep_seconds</label>
+            <div><label for="b${i}-sweep" data-i18n="card.sweep">sweep_seconds – für pulse, comet, police, heartbeat, aurora, rainbow, wipe, wave, strobe, duel, chase (wenn „Background pulsiert“ aktiv)</label>
               <input type="number" id="b${i}-sweep" min="0.3" max="5" step="0.1" data-i18n-ph="opt.sameAsConfig"></div>
-            <div><label for="b${i}-chpause" data-i18n="card.chasePause">chase-Pause (s)</label>
+            <div><label for="b${i}-chpause" data-i18n="card.chasePause">chase-Pause (s) – für comet, wipe</label>
               <input type="number" id="b${i}-chpause" min="0" max="60" step="0.5" data-i18n-ph="opt.sameAsConfig"></div>
-            <div><label for="b${i}-attack" data-i18n="card.attack">Attack (ms)</label>
+            <div><label for="b${i}-attack" data-i18n="card.attack">Attack (ms) – für pulse, heartbeat, chase (wenn „Background pulsiert“ aktiv)</label>
               <input type="number" id="b${i}-attack" min="0" max="2000" step="10" data-i18n-ph="opt.sameAsConfig"></div>
-            <div><label for="b${i}-release" data-i18n="card.release">Release (ms)</label>
+            <div><label for="b${i}-release" data-i18n="card.release">Release (ms) – für pulse, heartbeat, chase (wenn „Background pulsiert“ aktiv)</label>
               <input type="number" id="b${i}-release" min="0" max="5000" step="10" data-i18n-ph="opt.sameAsConfig"></div>
-            <div><label for="b${i}-ginterval" data-i18n="card.glitterInterval">glitter: Intervall (ms)</label>
+            <div><label for="b${i}-ginterval" data-i18n="card.glitterInterval">glitter: Intervall (ms) – für glitter, chase (wenn „Chases funkeln“ aktiv)</label>
               <input type="number" id="b${i}-ginterval" min="5" max="5000" step="5" data-i18n-ph="opt.sameAsConfig"></div>
-            <div><label for="b${i}-gflash" data-i18n="card.glitterFlash">glitter: Blitzdauer (ms)</label>
+            <div><label for="b${i}-gflash" data-i18n="card.glitterFlash">glitter: Blitzdauer (ms) – für glitter, chase (wenn „Chases funkeln“ aktiv)</label>
               <input type="number" id="b${i}-gflash" min="20" max="5000" step="10" data-i18n-ph="opt.sameAsConfig"></div>
-            <div><label for="b${i}-gcolor0" data-i18n="card.glitterColors">glitter: Farben (diese Bridge)</label>
+            <div><label for="b${i}-gcolor0" data-i18n="card.glitterColors">glitter: Farben (diese Bridge) – für glitter, aurora, chase (wenn „Chases funkeln“ aktiv)</label>
               <div class="color-row">
                 <input type="checkbox" id="b${i}-gcolors-en" data-i18n-title="title.useOwnColors">
                 <input type="color" id="b${i}-gcolor0" value="#ffffff" disabled>
