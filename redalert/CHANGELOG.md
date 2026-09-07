@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.15.2
+
+- **Fix: `chase` flackerte teils beim An-/Ausgehen der Lampen.** Bei höherer
+  `gc_speed` (bzw. niedrigerer `fps`) konnte der weiche Rand eines Chase-
+  Bands schmaler sein als die pro Frame zurückgelegte Strecke, wodurch eine
+  Lampe statt weich zu blenden abrupt zwischen an und aus sprang – dieselbe
+  Ursache, die früher schon beim `comet`-Effekt behoben wurde (dort über
+  `peak_frac`). Betrifft nur nicht-Standard-`gc_speed`/`fps`-Kombinationen;
+  bei Standardwerten unverändert.
+
 ## 1.15.1
 
 - **Web-UI: Parameter in „Mehrere Effekte“ jetzt mit Effektliste.** Farbe,

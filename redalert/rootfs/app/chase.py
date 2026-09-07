@@ -372,7 +372,10 @@ class RedAlertChase:
 
     ``length_segments`` is the width of the flat ``1.0`` core of a band, in
     segments; ``speed_segments_per_s`` is how many segments a band's head
-    crosses per second.
+    crosses per second. ``fps`` (the app's configured frame rate) only
+    widens the soft edge's minimum width so it can't become narrower than a
+    couple of frames' worth of travel at the given speed – see the
+    ``smooth`` calculation in ``__init__`` – it plays no other role.
     """
 
     def __init__(
@@ -382,14 +385,30 @@ class RedAlertChase:
         count: int = 1,
         length_segments: float = 2.0,
         speed_segments_per_s: float = 4.0,
+        fps: float = 25.0,
     ) -> None:
         self.num_lights = max(1, num_lights)
         self.direction = direction if direction in ("forward", "backward", "bounce") else "forward"
         self.count = max(1, int(count))
         self.half_width = min(max(length_segments, 0.2), float(self.num_lights)) / 2.0
-        # Edge softness in segments: about one segment, never wider than the band itself.
-        self.smooth = min(max(self.half_width, 0.3), 1.0)
         self.speed = max(0.01, speed_segments_per_s)
+        # Edge softness in segments: about one segment (never narrower than a
+        # third of the band, nor wider than it), *and* – like RedAlertComet's
+        # peak_frac – never narrower than a couple of frames' worth of travel
+        # at this speed/fps. blend_for() is sampled once per frame with no
+        # knowledge of dt, so a soft edge fixed only in segments can become
+        # narrower in time than one frame interval at high speed_segments_per_s
+        # or low fps: the head then jumps clean across it between two frames
+        # and a lamp appears to snap on/off instead of fading (same aliasing
+        # bug fixed for the comet's head via a minimum *time* width, not just
+        # a minimum segment width).
+        base_smooth = min(max(self.half_width, 0.3), 1.0)
+        # 6.25 is calibrated so the default speed_segments_per_s=4.0 at 25 fps
+        # reproduces exactly the old fixed smooth=1.0 (the previously-accepted
+        # look) rather than widening it – only faster-than-default or
+        # lower-than-default fps combinations get a wider edge.
+        min_smooth = 6.25 * self.speed / max(1.0, float(fps))
+        self.smooth = min(max(base_smooth, min_smooth), max(1.0, self.num_lights / 2.0))
 
     def _band(self, dist: float) -> float:
         """0..1 falloff: flat 1.0 within ``half_width``, 0.0 beyond the soft edge."""

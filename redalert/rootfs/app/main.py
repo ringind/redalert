@@ -858,6 +858,7 @@ async def _run_single_bridge(
             count=ctx["gc_count"],
             length_segments=ctx["gc_length"],
             speed_segments_per_s=ctx["gc_speed"],
+            fps=fps,
         )
         for strip in ctx["gc_strips"]
     ]

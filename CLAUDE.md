@@ -109,7 +109,7 @@ redalert/                  the app
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.15.1**.
+No build system, linter, or test suite. Current version: **1.15.2**.
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
   after every code change — the only static check available.
@@ -215,10 +215,13 @@ Three layers under `redalert/rootfs/app/`:
   → physical lamp. Shares that bridge's `state["tasks"][host]` slot with
   `/start` (`already_running` guard for that bridge only; `/stop` with that
   `bridge_host`, or no `bridge_host` at all, cancels it).
-- **`chase.py`** — two generators, pure math, no I/O. Both emit a **0..1 shape**;
-  `_run_single_bridge` maps it onto `[glow_low, glow_high]` (options / `/start` body,
-  clamped, `glow_high` forced ≥ `glow_low`) — so "0" is the resting glow, not
-  necessarily black.
+- **`chase.py`** — one class per effect (17 total), pure math, no I/O, each
+  emitting a **0..1 shape**/blend; `_run_single_bridge` maps brightness shapes
+  onto `[glow_low, glow_high]` (options / `/start` body, clamped, `glow_high`
+  forced ≥ `glow_low`) — so "0" is the resting glow, not necessarily black.
+  Two classes are worth understanding in detail as templates for the rest —
+  both had to be hardened against the same **frame-rate aliasing** failure
+  mode, once found in each:
   - `RedAlertComet.brightness_for(t)` → per-light `[0,1]` list. Per lamp, a pure
     function of `phase` (fraction of `sweep_seconds` since the head passed it):
     a flat `1.0` head of width `self.top` (= `max(peak_frac, 1/n + overlap_frac)`
@@ -235,6 +238,33 @@ Three layers under `redalert/rootfs/app/`:
     stable 0/1, then a **linear** slew hits exactly 1.0 in `attack_s` / 0.0 in
     `release_s` (keep release < attack). `RedAlertPulse.periodic(t, period)`
     feeds the gate a cosine 0..1 pulse with period `sweep_seconds`.
+  - `RedAlertChase.blend_for(t)` → per-segment `[0,1]` band blend (Gradient
+    Lightstrips). `_band(dist)` is a flat `1.0` core (`half_width`, from
+    `gc_length`) with a raised-cosine soft edge (`smooth`) trailing off to
+    `0.0`. **Bug found & fixed in 1.15.2** (reported: lamps flicker/snap when
+    entering or leaving a band, at higher `gc_speed` — the same symptom the
+    comet's `peak_frac` floor already prevents for its head): `blend_for(t)`
+    is sampled once per frame with no `dt`, so a `smooth` width fixed only in
+    *segments* can become narrower in *time* than one frame interval once
+    `speed_segments_per_s` is high enough (or `fps` low enough) — the head
+    then crosses it between two consecutive frames and a lamp's blend jumps
+    most of the way from 0 to 1 (or back) in a single frame instead of
+    fading, i.e. aliasing, not a hardware/network issue. Fixed the same way
+    as the comet: floor `smooth` by a **time**-based minimum, not just a
+    segment-count one — `self.smooth = max(base_smooth, 6.25 * speed / fps)`
+    (capped at `max(1.0, num_lights/2)` so extreme `speed`+low-`fps`
+    combinations degrade to "softer than ideal" rather than eating the whole
+    strip). The `6.25` constant is calibrated so the *previous* default
+    (`gc_speed=4.0`, `fps=25`) reproduces the old fixed `smooth=1.0` exactly
+    — i.e. default-settings behaviour is unchanged, only non-default
+    speed/fps combinations get a wider (smoother) edge than before. `fps`
+    therefore had to be threaded into `RedAlertChase.__init__` (from
+    `_run_single_bridge`'s own `fps` parameter) — the first `chase.py` class
+    that needs to know the frame rate at construction time, not just at
+    `main.py`'s pacing loop; keep this in mind if another effect ever shows
+    the same "fine by default, aliases at extreme settings" symptom — the
+    fix pattern (verify with a small blend-jump simulation across a range of
+    speed/fps values, not just eyeballing the default) transfers directly.
 
 **Effect loop (`_run_single_bridge`):** `handle_start` resolves all requested
 bridges (area lookup, no DTLS — 404/502-equivalent failures per bridge
@@ -290,7 +320,25 @@ explicitly in `setLang()` instead — a bridge card the server doesn't know
 about yet is otherwise never touched by the periodic `/config`-driven
 `refresh()`, so its pill would stay in the old language after a toggle.
 `PANEL_HTML` is read once at import in `main.py`, so any edit to `panel.html`
-needs a server restart to show up when testing locally. All
+needs a server restart to show up when testing locally.
+**Script-ordering hazard (found & fixed in 1.15.0):** the whole `<script>`
+block is one top-level scope, so a top-level call that runs immediately
+(not inside a later event handler/timer) must not reference a `let`/`const`
+declared *further down* in the same file — it'll throw `ReferenceError:
+Cannot access '<name>' before initialization` (temporal dead zone), and
+because the offending call sat inside an unawaited `async function`, the
+throw became a *silently swallowed promise rejection* instead of a visible
+crash — the page still rendered, just without that call's effect, so it
+only surfaced via the browser console, not a screenshot. Concretely:
+`setLang(LANG)` — called synchronously right after `wireBridgeCard()` — must
+run *after* every `let`/`const` its call chain touches has executed,
+notably `refreshBusy`/`refreshQueued` (`refresh()`) and `PRESETS`
+(`loadPresets()`, called from `doRefresh()`); it's placed right before
+`setInterval(refresh, 5000)` at the very end of the script for exactly this
+reason — don't move it earlier without moving those declarations too.
+**Lesson: after any web UI change, check the browser console
+(`read_console_messages`), not just a screenshot** — an unhandled rejection
+like this one doesn't visibly break anything at first glance. All
 requests go through `api()`, which wraps `fetch` in an `AbortController` timeout
 (`DEFAULT_TIMEOUT_MS` = 15 s; `/pair` passes 35 s since the server itself awaits
 up to 30 s for the link-button press) — since 1.9.1, after a bug where a hung
@@ -322,7 +370,14 @@ fields grouped under heading rows — `.field-group-heading` divs with
 immediately followed by `color2`, then `sweep_seconds`/`chase_pause`/
 `attack_ms`/`release_ms`/`glitter_*` — the latter four are shared because
 `chase`'s optional `gc_background_pulse`/`gc_chase_glitter` overlays reuse
-the same `RedAlertPulse`/`RedAlertGlitter` instances), then one heading per
+the same `RedAlertPulse`/`RedAlertGlitter` instances — **since 1.15.1 this
+tier's labels spell out every effect that actually reads the parameter**,
+e.g. `card.sweep` = `"sweep_seconds – für pulse, comet, police, heartbeat,
+aurora, rainbow, wipe, wave, strobe, duel, chase (wenn „Background
+pulsiert“ aktiv)"`, not just the bare option name — determine the list from
+`_run_single_bridge`'s dispatch code (`main.py`), not from what an effect's
+name/description implies, since a conditional reuse like `chase`'s is easy
+to miss by inspection alone), then one heading per
 single-effect group alphabetically (Chase/Firework/Flicker/Lightning/
 Meteor/Ripple/Wave — the other effects have no exclusively-own params so
 get no heading; all fields optional, empty means inherit the app
@@ -404,7 +459,10 @@ cert). See `_clip` / `capture_light_state` / `restore_light_state`.
    by 2+ effects → one heading per single-effect group, alphabetical; see
    the Web UI paragraph above), place a new field under whichever tier
    actually reads it in `_run_single_bridge`'s dispatch, not just its
-   "primary" effect — wired in `wireBridgeCard(i)` (the generic
+   "primary" effect — if it lands in the "shared by 2+ effects" tier, its
+   `data-i18n` label text (since 1.15.1) must list every effect that reads
+   it, e.g. `"… – für pulse, heartbeat, chase (wenn „Background pulsiert“
+   aktiv)"`, in **both** `I18N.de`/`I18N.en` — wired in `wireBridgeCard(i)` (the generic
    `input`/`select` loop already attaches `dataset.touched` tracking — a
    colour value instead needs an `<input type=color>` + "eigene Farbe
    verwenden" checkbox pair like `b${i}-color`/`b${i}-color-en`, synced via
