@@ -179,10 +179,9 @@ Returns e.g.:
 ```
 
 Enter `bridge_host` + the `id` as a row in the `bridges` app option
-(the app's Configuration tab; one row per bridge) **or** fill in the bridge
-cards in the web UI and click **"Save bridge configuration"** (persisted to
-`/data/bridges.json`, effective immediately without a restart; wins per bridge
-over the option). If the `channels` order
+(the app's Configuration tab; one row per bridge). An effect set **loaded** in
+the web UI replaces these `area_id`s at runtime (see "Effect Sets"). If the
+`channels` order
 doesn't match your physical arrangement, you can explicitly set the desired
 order in the same row as `channel_order` – as a comma-separated list (e.g.
 `2,3,1,0,5,4`), either as an app option or directly in the web UI in the
@@ -240,14 +239,13 @@ Restart the app after changing options.
 | `/config` | GET     | Effective configuration incl. `bridges` (each entry also has `running: bool` and `armed: bool`), `armed`/`armed_bridges` (global), `presets` (effect set names) and `current_preset` – for the web UI and the Home Assistant integration |
 | `/pair`   | POST    | One-time pairing with a bridge. Body: `{"bridge_host": "..."}` (required when more than one bridge is configured) |
 | `/areas`  | GET     | List Entertainment areas + channels of a bridge. Query `?bridge_host=...` (required when more than one bridge is paired) |
-| `/start`  | POST    | Start the effect on all configured (or body-supplied) bridges simultaneously (returns immediately; DTLS handshakes run in the background, in parallel) – or, with `bridge_host` in the body, on only a single bridge, regardless of the others' state. Body optional: `duration` (s, default from the `duration` option, `0` = unlimited), `fps`, `restore_state` (shared across all bridges); `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors`, `gc_direction`, `gc_count`, `gc_length`, `gc_speed`, `gc_background_color`, `gc_chase_glitter`, `gc_background_pulse`, `color2`, `lightning_interval_ms`, `lightning_flash_ms`, `meteor_count`, `meteor_speed`, `firework_interval_ms`, `firework_speed`, `ripple_interval_ms`, `ripple_speed`, `wave_length`, `flicker_interval_ms`, `flicker_dip_ms` are the defaults for bridges without their own setting. `bridges` (list of `{bridge_host, area_id, channel_order, effect?, color?, sweep_seconds?, chase_pause?, attack_ms?, release_ms?, glow_low?, glow_high?, glitter_interval_ms?, glitter_flash_ms?, glitter_colors?, gc_direction?, gc_strip_lengths?, gc_count?, gc_length?, gc_speed?, gc_background_color?, gc_chase_glitter?, gc_background_pulse?, color2?, lightning_interval_ms?, lightning_flash_ms?, meteor_count?, meteor_speed?, firework_interval_ms?, firework_speed?, ripple_interval_ms?, ripple_speed?, wave_length?, flicker_interval_ms?, flicker_dip_ms?}`, `channel_order` as `[2,3,1,0,5,4]` or `"2,3,1,0,5,4"`) overrides the `bridges` option for this one call; `gc_strip_lengths` (`chase` only, per bridge, e.g. `[7,5]`) splits this bridge's channels into several Gradient Lightstrips, `gc_direction` may then be a list (one direction per strip). `preset` = name of a saved effect set as a base (further body fields override it) – not combinable with `bridge_host`. `bridge_host` (optional) filters to exactly this one bridge; `already_running` then only applies to it. Without `bridge_host`, already-running bridges are skipped (`skipped_bridges`) rather than rejecting the call. The response contains `bridges` (newly started, each with resolved parameters) + `failed_bridges`/`neutral_bridges`/`skipped_bridges`; `502` only if no bridge starts and at least one failed. |
+| `/start`  | POST    | Start the effect on all configured (or body-supplied) bridges simultaneously (returns immediately; DTLS handshakes run in the background, in parallel) – or, with `bridge_host` in the body, on only a single bridge, regardless of the others' state. Body optional: `duration` (s, default from the `duration` option, `0` = unlimited), `fps`, `restore_state` (shared across all bridges); `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors`, `gc_direction`, `gc_count`, `gc_length`, `gc_speed`, `gc_background_color`, `gc_chase_glitter`, `gc_background_pulse`, `color2`, `lightning_interval_ms`, `lightning_flash_ms`, `meteor_count`, `meteor_speed`, `firework_interval_ms`, `firework_speed`, `ripple_interval_ms`, `ripple_speed`, `wave_length`, `flicker_interval_ms`, `flicker_dip_ms` are the defaults for bridges without their own setting. `bridges` (list of `{bridge_host, area_id, channel_order, effect?, color?, sweep_seconds?, chase_pause?, attack_ms?, release_ms?, glow_low?, glow_high?, glitter_interval_ms?, glitter_flash_ms?, glitter_colors?, gc_direction?, gc_strip_lengths?, gc_count?, gc_length?, gc_speed?, gc_background_color?, gc_chase_glitter?, gc_background_pulse?, color2?, lightning_interval_ms?, lightning_flash_ms?, meteor_count?, meteor_speed?, firework_interval_ms?, firework_speed?, ripple_interval_ms?, ripple_speed?, wave_length?, flicker_interval_ms?, flicker_dip_ms?}`, `channel_order` as `[2,3,1,0,5,4]` or `"2,3,1,0,5,4"`) overrides the `bridges` option for this one call; `gc_strip_lengths` (`chase` only, per bridge, e.g. `[7,5]`) splits this bridge's channels into several Gradient Lightstrips, `gc_direction` may then be a list (one direction per strip). `preset` = name of a saved effect set as a base (further body fields override it) – not combinable with `bridge_host`; adopts the set's `bridges` (incl. `area_id`) as the new effective configuration. With an armed/running bridge only allowed if the set has the same `area_id` per active bridge (running effects are then hot-swapped live, `hotswapped_bridges`), otherwise `409`. `bridge_host` (optional) filters to exactly this one bridge; `already_running` then only applies to it. Without `bridge_host`, already-running bridges are skipped (`skipped_bridges`) rather than rejecting the call. The response contains `bridges` (newly started, each with resolved parameters) + `failed_bridges`/`neutral_bridges`/`skipped_bridges`; `502` only if no bridge starts and at least one failed. |
 | `/stop`   | POST    | Stop the effect on all running bridges immediately – or, with `bridge_host` in the body, on only a single bridge                                       |
 | `/arm`    | POST    | **Arm**: keep the DTLS stream to one/all bridge(s) permanently open so a later `/start` skips the ~3–9 s handshake. Body optional `bridge_host` (otherwise all configured, non-`neutral` bridges). While armed the bridge holds its single Entertainment slot; its lamps show an approximated still of the previous state. Running bridge → stop it first. |
 | `/disarm` | POST    | Undo arming: close the stream(s), restore the light state via CLIP v2. Body optional `bridge_host`. A running effect is stopped first. |
-| `/select` | POST    | Remember an effect set as *loaded* (`current_preset`), **without** starting it. Body `{"preset": "<name>"}` (`404` if unknown) or `{"preset": null}` to clear. For the HA integration (select entity + sensor). |
+| `/select` | POST    | **Load** an effect set: remember it as `current_preset` **and** adopt its per-bridge `area_id`s as the new effective configuration (also used for `/arm`, the HA integration, `rest_command`). Body `{"preset": "<name>"}` (`404` if unknown) or `{"preset": null}` to clear. Loading always works while nothing is armed and no animation is running; with an armed/running bridge only if the set has the same `area_id` per active bridge – running effects are then hot-swapped live (no restart/handshake), otherwise **`409`**. |
 | `/identify` | POST  | Cycle through a bridge's lamps individually (`channel_id` → lamp). Body: `bridge_host` (required when more than one bridge is configured), `area_id` (optional, otherwise from the bridges configuration), `channel_id` (omitted = all in sequence), `seconds`, `color`, `restore_state`. One DTLS handshake for the whole run; occupies the same slot as an effect on this one bridge (blocked while the bridge is armed – disarm first). |
-| `/presets` | GET / PUT / POST / DELETE | Manage effect sets (`/data/presets.json`). `GET` = all (`{presets, names}`) or `?name=…` one. `PUT`/`POST` `{"name","config"}` = save/overwrite (also the upload target). `DELETE ?name=…` = delete. |
-| `/bridges` | GET / PUT / POST / DELETE | Persist the web UI's bridge configuration (`/data/bridges.json`). `PUT`/`POST` `{"bridges":[…]}` (same fields as the `bridges` option) – wins per host over the app option and takes effect **immediately** for `/start`, `/arm`, the HA integration and `rest_command` (no restart). `DELETE` = discard, back to the option. **`409`** if an affected bridge is currently running or armed. `GET` = `{saved, option, effective}`. |
+| `/presets` | GET / PUT / POST / DELETE | Manage effect sets (`/data/presets.json`). `GET` = all (`{presets, names}`) or `?name=…` one. `PUT`/`POST` `{"name","config"}` = save/overwrite (also the upload target). `DELETE ?name=…` = delete. Each set stores the per-bridge `area_id`. |
 
 Omit `duration` → the effect runs with the default from the `duration` app
 option (default `0` = **unlimited**, runs until `/stop`); with a positive
@@ -267,7 +265,8 @@ state.
 **Ready-made integration:** [`custom_components/redalert/`](custom_components/redalert)
 in this repo creates six entities (`binary_sensor` "Operating state",
 `binary_sensor` "Armed", `switch` "Animation", `switch` "Armed", `select`
-"Effect set" – loads only, starts only if an animation is running –, `sensor`
+"Effect set" – loads the set (`area_id`s included); with a running/armed bridge
+only if the areas stay the same, then live hot-swap –, `sensor`
 "Loaded effect set").
 Install via **HACS** (repo category *Integration*, add as a custom
 repository – `hacs.json` at the repo root) or manually (copy the folder to
@@ -531,11 +530,16 @@ entirely; a `neutral` bridge doesn't need an `area_id`. If all bridges are
 
 ### Effect Sets
 
-Under "3 · Effect Sets" in the web UI, the complete form state (all bridge
+Under "2 · Control" in the web UI, the complete form state (all bridge
 cards + controls) can be saved under a name (`/data/presets.json`), **Loaded**
-again, **Started** directly, **Downloaded**/**Uploaded** as a JSON file, and
-**Deleted**. Via REST: `GET/PUT/DELETE /presets` and
-`POST /start {"preset": "<name>"}`.
+again, **Downloaded**/**Uploaded** as a JSON file, and **Deleted**. Each set
+stores the per-bridge `area_id`; **Load** adopts it as the new effective
+configuration (also for arming, the HA integration and `rest_command`). Loading
+always works while nothing is armed and no animation is running; with an
+armed/running bridge only if the set has the same `area_id` per bridge – the
+animation then continues immediately with the new set (no restart), otherwise an
+error. Via REST: `GET/PUT/DELETE /presets`, `POST /select {"preset": "<name>"}`
+and `POST /start {"preset": "<name>"}`.
 
 ## 9. Troubleshooting
 

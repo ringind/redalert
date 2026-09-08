@@ -59,20 +59,14 @@ first is enough, cards left empty are ignored.
    currently active.
 
 For the bridge config to apply **beyond the web UI's Start button** (arming,
-the Home Assistant integration, `rest_command`), it has to be persistent.
-Two ways:
+the Home Assistant integration, `rest_command`), enter the bridge IP, `area_id`
+(and optionally `channel_order` plus the effect overrides) as a row of the
+**`bridges`** app option ("Configuration" tab) and restart the app.
 
-- **In the web UI:** fill in the cards under "1 · Bridges" (IP, "Load areas"
-  → pick one, optional overrides) and click **"Save bridge configuration"** –
-  stored in `/data/bridges.json`, effective immediately without a restart.
-  Saving/resetting only works when no effect is running and no affected bridge
-  is armed (otherwise an error is shown).
-- **In the "Configuration" tab:** enter the bridge IP, `area_id` (and
-  optionally `channel_order` plus the effect overrides) as a row of the
-  **`bridges`** app option and restart the app.
-
-Both together: the saved web-UI config wins per bridge, the option fills the
-rest.
+In addition, every **effect set** stores the `area_id` (and all other
+parameters) per bridge. An effect set **loaded** in the web UI under
+"2 · Control" – or `POST /select` / `POST /start {"preset": …}` – adopts these
+`area_id`s at runtime as the new effective configuration (see "Effect Sets").
 
 Alternatively via REST: `POST /pair` (body `{"bridge_host": "192.168.1.50"}`),
 `GET /areas?bridge_host=192.168.1.50`.
@@ -84,14 +78,16 @@ channels, just in a different order.
 
 ### 2 · Control
 
-In the web UI under **"2 · Control"** there's only **Start** / **Stop** –
-all parameters (effect, colour, timing, duration, `fps`, …) come from the
-app configuration or from the overrides on the respective bridge card (see
+In the web UI, **"2 · Control"** groups **Start** / **Stop**, **Arm** and the
+**effect-set controls** (select, load, download, upload, delete, save)
+together. All parameters (effect, colour, timing, duration, `fps`, …) come from
+the app configuration or from the overrides on the respective bridge card (see
 "1 · Bridges"); the "Status" section above shows the currently effective
-values. **Start** / **Stop** start/stop all configured bridges at once;
-both buttons show a pressed state to indicate whether the effect is
-currently running. For individual bridges, see the Start/Stop buttons on
-that bridge's card under "1 · Bridges".
+values, and the parameter explanations are under **"3 · Parameters"** at the
+very bottom. **Start** / **Stop** start/stop all configured bridges at once;
+both buttons show a pressed state to indicate whether the effect is currently
+running. For individual bridges, see the Start/Stop buttons on that bridge's
+card under "1 · Bridges". For the effect-set controls see "Effect Sets" below.
 
 ## Effects
 
@@ -197,18 +193,15 @@ panel path).
 | `/config` | GET     | Effective configuration incl. `bridges` (each entry also has `running: bool` and `armed: bool`), `armed` (global) + `armed_bridges` (list), `presets` (names of the saved effect sets) and `current_preset` – for the web UI and the Home Assistant integration. |
 | `/pair`   | POST    | One-time pairing. Body: `{"bridge_host": "..."}` – required once more than one bridge is configured (optional with exactly one, still-unpaired, configured bridge). |
 | `/areas`  | GET     | List a bridge's Entertainment areas + channels. Query `?bridge_host=...` – required once more than one bridge is paired. |
-| `/start`  | POST    | Start the effect on all configured (or body-supplied) bridges simultaneously (returns immediately; DTLS handshakes run in the background, in parallel) – or, with `bridge_host` in the body, on only a single bridge, regardless of the others' state. Body optional: `duration`, `fps`, `restore_state` apply to all bridges together; `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors`, `gc_direction`, `gc_count`, `gc_length`, `gc_speed`, `gc_background_color`, `gc_chase_glitter`, `gc_background_pulse`, `color2`, `lightning_interval_ms`, `lightning_flash_ms`, `meteor_count`, `meteor_speed`, `firework_interval_ms`, `firework_speed`, `ripple_interval_ms`, `ripple_speed`, `wave_length`, `flicker_interval_ms`, `flicker_dip_ms` are the **default values** for bridges without their own setting. `bridges` (list of `{bridge_host, area_id, channel_order, effect?, color?, sweep_seconds?, chase_pause?, attack_ms?, release_ms?, glow_low?, glow_high?, glitter_interval_ms?, glitter_flash_ms?, glitter_colors?, gc_direction?, gc_strip_lengths?, gc_count?, gc_length?, gc_speed?, gc_background_color?, gc_chase_glitter?, gc_background_pulse?, color2?, lightning_interval_ms?, lightning_flash_ms?, meteor_count?, meteor_speed?, firework_interval_ms?, firework_speed?, ripple_interval_ms?, ripple_speed?, wave_length?, flicker_interval_ms?, flicker_dip_ms?}`) overrides the `bridges` option for this one call – each bridge can set its own effect parameters; `channel_order` as a list (`[2,3,1,0,5,4]`) or string (`"2,3,1,0,5,4"`), must contain exactly the respective area's channels, otherwise that one bridge is skipped. `gc_strip_lengths` (`chase` only, per bridge, e.g. `[7, 5]` or `"7,5"`) splits this bridge's channels into consecutive Gradient Lightstrips; `gc_direction` may then also be a list (one direction per strip). `preset` (name of a saved effect set) loads its body as a base; further body fields override it – not combinable with `bridge_host` (`400`). `bridge_host` (optional): filters to exactly this one bridge (must be present in `bridges`, option or body); `already_running` then only applies to it, and a solo start never touches `current_preset`. Without `bridge_host`, already-running bridges are skipped rather than rejecting the whole call (`skipped_bridges` in the response). The response contains `bridges` (actually newly started, each with resolved effect parameters), `failed_bridges` (skipped, with a reason), `neutral_bridges` and `skipped_bridges` (already active); `/start` responds `no_active_bridges` only if **no** bridge starts anew and none failed; if at least one failed and none are left, it responds `502`. |
+| `/start`  | POST    | Start the effect on all configured (or body-supplied) bridges simultaneously (returns immediately; DTLS handshakes run in the background, in parallel) – or, with `bridge_host` in the body, on only a single bridge, regardless of the others' state. Body optional: `duration`, `fps`, `restore_state` apply to all bridges together; `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors`, `gc_direction`, `gc_count`, `gc_length`, `gc_speed`, `gc_background_color`, `gc_chase_glitter`, `gc_background_pulse`, `color2`, `lightning_interval_ms`, `lightning_flash_ms`, `meteor_count`, `meteor_speed`, `firework_interval_ms`, `firework_speed`, `ripple_interval_ms`, `ripple_speed`, `wave_length`, `flicker_interval_ms`, `flicker_dip_ms` are the **default values** for bridges without their own setting. `bridges` (list of `{bridge_host, area_id, channel_order, effect?, color?, sweep_seconds?, chase_pause?, attack_ms?, release_ms?, glow_low?, glow_high?, glitter_interval_ms?, glitter_flash_ms?, glitter_colors?, gc_direction?, gc_strip_lengths?, gc_count?, gc_length?, gc_speed?, gc_background_color?, gc_chase_glitter?, gc_background_pulse?, color2?, lightning_interval_ms?, lightning_flash_ms?, meteor_count?, meteor_speed?, firework_interval_ms?, firework_speed?, ripple_interval_ms?, ripple_speed?, wave_length?, flicker_interval_ms?, flicker_dip_ms?}`) overrides the `bridges` option for this one call – each bridge can set its own effect parameters; `channel_order` as a list (`[2,3,1,0,5,4]`) or string (`"2,3,1,0,5,4"`), must contain exactly the respective area's channels, otherwise that one bridge is skipped. `gc_strip_lengths` (`chase` only, per bridge, e.g. `[7, 5]` or `"7,5"`) splits this bridge's channels into consecutive Gradient Lightstrips; `gc_direction` may then also be a list (one direction per strip). `preset` (name of a saved effect set) loads its body as a base; further body fields override it – not combinable with `bridge_host` (`400`). A preset start adopts the set's `bridges` (incl. `area_id`) as the new effective configuration; while a bridge is armed or an animation is running it is only allowed if the set has the same `area_id` per active bridge – running effects are then hot-swapped live (`hotswapped_bridges` in the response, no restart/handshake), otherwise `409`. `bridge_host` (optional): filters to exactly this one bridge (must be present in `bridges`, option or body); `already_running` then only applies to it, and a solo start never touches `current_preset`. Without `bridge_host`, already-running bridges are skipped rather than rejecting the whole call (`skipped_bridges` in the response). The response contains `bridges` (actually newly started, each with resolved effect parameters), `failed_bridges` (skipped, with a reason), `neutral_bridges` and `skipped_bridges` (already active); `/start` responds `no_active_bridges` only if **no** bridge starts anew and none failed; if at least one failed and none are left, it responds `502`. |
 | `/stop`   | POST    | Stop the effect on all running bridges immediately – or, with `bridge_host` in the body, on only a single bridge, regardless of the others' state. |
 | `/arm`    | POST    | **Arm**: keep the DTLS stream to one/all bridge(s) permanently open so a later `/start` skips the ~3–9 s handshake and the effect begins almost instantly. Body optional `bridge_host` (otherwise all configured, non-`neutral` bridges). While armed, the bridge holds its single Entertainment slot and its lamps show an approximated still of the previous state. A bridge that is currently running cannot be armed (stop it first); response: `{status, armed:[...], already_armed:[...], busy:[...], failed:[...]}`. |
 | `/disarm` | POST    | Undo arming: close the stream(s) and restore the light state captured at arm time via CLIP v2. Body optional `bridge_host` (otherwise all armed bridges). A still-running effect is stopped first. |
-| `/select` | POST    | Remember an effect set as *loaded* **without** starting it – sets only `current_preset` (for the HA integration: select entity + "loaded effect set" sensor). Body `{"preset": "<name>"}` (`404` if unknown) or `{"preset": null}` / empty to clear. No streaming. |
+| `/select` | POST    | **Load** an effect set: remember it as `current_preset` **and** adopt its per-bridge `area_id`s as the new effective configuration (also for `/arm`, the HA integration, `rest_command`). Body `{"preset": "<name>"}` (`404` if unknown) or `{"preset": null}` / empty to clear. Loading always works while nothing is armed and no animation is running; with an armed/running bridge only if the set has the same `area_id` per active bridge – running effects are then hot-swapped to the new set without a restart/handshake (`hotswapped_bridges`), otherwise `409`. |
 | `/identify` | POST  | Cycle through a bridge's lamps individually (`channel_id` → lamp mapping). Body: `bridge_host` (required once more than one bridge is configured), `area_id` (optional, otherwise from the bridges configuration), `channel_id` (omitted = all channels in sequence), `seconds` (default 3 individually / 2 for "all"), `color`, `restore_state`. One DTLS handshake for the whole run. Occupies the same slot as an effect on this one bridge (`already_running`, `/stop` with the matching `bridge_host` cancels it) – other bridges are unaffected. |
 | `/presets` | GET    | All saved effect sets: `{"presets": {name: body, …}, "names": [...]}`. With `?name=…` just that one (`{"name", "config"}`, `404` if unknown). |
-| `/presets` | PUT / POST | Save/overwrite an effect set (also the upload target). Body `{"name": "...", "config": { <start body> }}` – `config` is the complete set of `/start` fields incl. `bridges`; stored under `/data/presets.json`. |
+| `/presets` | PUT / POST | Save/overwrite an effect set (also the upload target). Body `{"name": "...", "config": { <start body> }}` – `config` is the complete set of `/start` fields incl. `bridges` (with `area_id` per bridge); stored under `/data/presets.json`. |
 | `/presets` | DELETE | Delete an effect set. Query `?name=…` (or body `{"name": …}`). `404` if unknown. |
-| `/bridges` | GET    | `{"saved": [...], "option": [...], "effective": [...]}` – the bridge config saved from the web UI, the `bridges` app option, and the two merged (per host, "saved" wins). |
-| `/bridges` | PUT / POST | Persist the web UI's bridge cards (`/data/bridges.json`). Body `{"bridges": [ {bridge_host, area_id, channel_order?, effect?, …}, … ]}` – the same fields as the `bridges` app option. Wins per host over the option and takes effect **immediately** (no add-on restart) for `/start`, `/arm`, the HA integration and `rest_command`. **`409`** if a bridge whose entry would change is currently running or armed – stop/disarm it first (`blocked` in the response names them). |
-| `/bridges` | DELETE | Discard the web-UI-saved config, back to the plain app option. Same `409` guard. |
 
 - `duration` (seconds, default from the like-named app option, **`0` =
   unlimited**) – how long the effect runs before ending on its own; can be
@@ -238,21 +231,30 @@ While a bridge is armed:
 ## Effect Sets
 
 The complete set of start parameters (all bridge cards from "1 · Bridges"
-**and** the controls from "2 · Control") can be saved under a name (e.g.
-*Star Trek – Red Alert*) under "3 · Effect Sets" in the web UI. A saved set
-can be
+**and** the controls) can be saved under a name (e.g. *Star Trek – Red Alert*)
+under "2 · Control" in the web UI. Every set stores the `area_id` (and all
+other parameters) per bridge. A saved set can be
 
-- **Loaded** – fills the whole form back in with the set's values,
-- **Started** – starts it directly (without the detour via "Load" + "Start"),
+- **Loaded** – fills the form back in with the set's values **and** adopts its
+  `area_id`s as the new effective configuration (also for arming, the HA
+  integration and `rest_command`),
 - **Downloaded** – saved as a JSON file (`{"name": …, "config": {…}}`),
 - **Uploaded** – re-imported from such a JSON file and stored as a set,
 - **Deleted**.
 
+**Loading always works** while nothing is armed and no animation is running. If
+a bridge is armed or an effect is running, loading only works when the set has
+the same `area_id` per active bridge – the animation then **continues
+immediately with the new set** (the effect parameters are swapped in the
+running task, no restart, no fresh handshake). Otherwise you get an error
+(`409`).
+
 Sets live as `/data/presets.json` in the app's data folder and survive
 restarts. Via REST: `GET /presets` (all), `PUT /presets`
-(`{"name", "config"}` – save/upload), `DELETE /presets?name=…` (delete) and
-`POST /start {"preset": "<name>"}` (start; further body fields override the
-set for this one call).
+(`{"name", "config"}` – save/upload), `DELETE /presets?name=…` (delete),
+`POST /select {"preset": "<name>"}` (load, see above) and
+`POST /start {"preset": "<name>"}` (load **and** start; further body fields
+override the set for this one call).
 
 ## Integrate with Home Assistant
 
@@ -303,7 +305,7 @@ rest_command:
     content_type: "application/json"
     payload: '{}'   # duration omitted: default from the duration app option
 
-  # Starts a saved effect set (web UI "3 · Effect Sets" or PUT /presets).
+  # Starts a saved effect set (web UI "2 · Control" or PUT /presets).
   # Call e.g. with data: {preset: "Star Trek – Red Alert"}
   # optionally add data: {duration: 30} to override the duration for this one call.
   redalert_start_preset:
@@ -326,7 +328,7 @@ After saving, **Developer Tools → YAML → Reload All YAML Configurations**
 ### Starting an effect set from Home Assistant
 
 The exact name of the set (case and spaces matter) is shown either in the
-dropdown under "3 · Effect Sets" in the web UI, or via `GET /presets` (field
+dropdown under "2 · Control" in the web UI, or via `GET /presets` (field
 `names`).
 
 **Test directly** – Developer Tools → Actions →
@@ -463,7 +465,7 @@ browser console.)
 | `/pair` fails | Link button not pressed in time (~30 s) or wrong IP. |
 | `/start` → `already_running` | This bridge (or, for a call without `bridge_host`, all requested ones) is already running. Call `/stop` first, or – without `bridge_host` – just call `/start` again: already-running bridges are skipped (`skipped_bridges`), only the rest are newly started. |
 | `/start` → 404 `area_id not found` | Check `/areas` – the area may have been renamed/deleted. |
-| `/start` → 404 `effect set '…' not found` | The `preset` name doesn't exactly match (case, spaces) a saved set – check `GET /presets` or the "3 · Effect Sets" web UI dropdown. |
+| `/start` → 404 `effect set '…' not found` | The `preset` name doesn't exactly match (case, spaces) a saved set – check `GET /presets` or the "2 · Control" web UI dropdown. |
 | `rest_command` call with `preset`/`duration`/… changes nothing | After changing `configuration.yaml`, **Developer Tools → YAML → Reload All YAML Configurations** (or restart HA); the request under Developer Tools → Actions shows the `payload` that was actually sent. |
 | `/start` → 502 `no bridge reachable` | Did the bridge IP change? Network/VLAN between the HA host and the bridge (UDP 2100). With multiple bridges, `502` only means **none** of them were reachable – individual failures are in the `/start` response's `failed_bridges`, the other bridges still run. |
 | The light only starts after a few seconds | Normal DTLS handshake; on Wi-Fi bridges sometimes a `ServerHello timeout` retry appears in the log. `/start` itself still responds immediately regardless. |

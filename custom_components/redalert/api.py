@@ -85,8 +85,10 @@ class RedAlertApiClient:
         return await self._request("POST", "/stop", json=payload)
 
     async def async_select_preset(self, name: str | None = None) -> dict[str, Any]:
-        """POST /select – ein Effektset als *geladen* merken (``current_preset``),
-        ohne es zu starten. ``None`` setzt die Auswahl zurück."""
+        """POST /select – ein Effektset laden: als ``current_preset`` merken und
+        seine Bridge-``area_id``s übernehmen. Läuft/scharf: der Server schaltet
+        laufende Effekte live um, sofern die Bereiche gleich bleiben, sonst
+        HTTP 409. ``None`` setzt die Auswahl zurück."""
         return await self._request("POST", "/select", json={"preset": name})
 
     async def async_arm(self, bridge_host: str | None = None) -> dict[str, Any]:

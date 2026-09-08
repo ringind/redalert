@@ -104,16 +104,6 @@
       Standard aus der App-Konfiguration.
     </p>
     <div id="bridges"></div>
-    <div class="row" style="margin-top:.9rem">
-      <button id="btn-bridges-save" data-i18n="btn.saveBridges">Bridge-Konfiguration speichern</button>
-      <button class="secondary" id="btn-bridges-reset" data-i18n="btn.resetBridges">Auf Add-on-Konfiguration zurücksetzen</button>
-      <span id="bridges-save-msg" class="muted" style="align-self:center"></span>
-    </div>
-    <p class="muted" style="margin:.4rem 0 0" data-i18n="section1.saveHint">
-      Gespeicherte Werte gelten auch für Scharfschalten, die Home-Assistant-Integration und rest_command –
-      nicht nur für den Start-Knopf hier. Speichern/Zurücksetzen geht nur, wenn kein Effekt läuft und
-      keine betroffene Bridge scharfgeschaltet ist.
-    </p>
   </section>
 
   <section class="card">
@@ -124,20 +114,14 @@
       <button class="secondary" id="btn-arm">⚡ Scharfschalten</button>
       <span class="pill" id="btn-arm-pill"><span class="led"></span> <span>—</span></span>
     </div>
-    <p class="muted" style="margin-top:0" data-i18n-html="section2.intro"></p>
-    <p class="muted" style="margin:.5rem 0 0" data-i18n-html="section2.effects"></p>
-  </section>
-
-  <section class="card">
-    <h2 data-i18n="section3.title">3 · Effektsets</h2>
-    <p class="muted" style="margin-top:0" data-i18n-html="section3.intro"></p>
+    <p class="muted" style="margin:0 0 .6rem" data-i18n-html="section2.presetIntro"></p>
     <div class="row">
       <div><label for="preset-select" data-i18n="preset.saved">Gespeichertes Set</label>
         <select id="preset-select"><option value="" data-i18n="preset.none">– keins –</option></select></div>
       <button class="secondary" id="btn-preset-load" data-i18n="btn.load">Laden</button>
-      <button id="btn-preset-start" data-i18n="btn.presetStart">▶ Starten</button>
       <button class="secondary" id="btn-preset-download" data-i18n="btn.download">Herunterladen</button>
       <button class="secondary" id="btn-preset-delete" data-i18n="btn.delete">Löschen</button>
+      <span id="preset-msg" class="muted" style="align-self:center"></span>
     </div>
     <div class="row" style="margin-top:.6rem">
       <div style="flex:1 1 18rem"><label for="preset-name" data-i18n="preset.saveAs">Aktuelle Einstellungen speichern als</label>
@@ -146,6 +130,12 @@
       <button class="secondary" id="btn-preset-upload" data-i18n="btn.upload">Hochladen…</button>
       <input type="file" id="preset-file" accept="application/json,.json" style="display:none">
     </div>
+  </section>
+
+  <section class="card">
+    <h2 data-i18n="section3.title">3 · Parameter</h2>
+    <p class="muted" style="margin-top:0" data-i18n-html="section2.intro"></p>
+    <p class="muted" style="margin:.5rem 0 0" data-i18n-html="section2.effects"></p>
   </section>
 
 </main>
@@ -173,17 +163,17 @@
       Bridge anpassen“ kann jede Bridge ihren eigenen Effekt/Farbe/Timing
       bekommen – „wie Konfiguration“ bzw. leer gelassene Felder übernehmen den
       Standard aus der App-Konfiguration.`,
-      "btn.saveBridges": "Bridge-Konfiguration speichern",
-      "btn.resetBridges": "Auf Add-on-Konfiguration zurücksetzen",
-      "section1.saveHint": `Gespeicherte Werte gelten auch für Scharfschalten, die
-      Home-Assistant-Integration und rest_command – nicht nur für den Start-Knopf hier.
-      Speichern/Zurücksetzen geht nur, wenn kein Effekt läuft und keine betroffene Bridge
-      scharfgeschaltet ist.`,
-      "msg.bridgesSaved": "Bridge-Konfiguration gespeichert.",
-      "msg.bridgesReset": "Zurückgesetzt auf die Add-on-Konfiguration.",
-      "msg.bridgesSaveFail": "Speichern fehlgeschlagen.",
       "section2.title": "2 · Steuerung",
       "btn.start": "▶ Start", "btn.stop": "■ Stop",
+      "section2.presetIntro": `Alle Bridge-Karten aus „1 · Bridges“ unter einem Namen speichern
+      und später wieder <strong>laden</strong> – „Laden“ übernimmt die Bereiche (area_id) des Sets
+      in die laufende Konfiguration (gilt auch für Scharfschalten, die
+      Home-Assistant-Integration und rest_command). Laden geht immer, solange nichts
+      scharfgeschaltet ist und keine Animation läuft; bei scharfer/laufender Bridge nur, wenn
+      das Set pro Bridge dieselbe area_id hat – dann läuft die Animation sofort mit dem neuen
+      Set weiter. Sets lassen sich als JSON-Datei herunter- und wieder hochladen.`,
+      "msg.presetLoaded": "Effektset geladen.",
+      "msg.presetLoadFail": "Laden fehlgeschlagen.",
       "section2.intro": `Alle Parameter (Effekt, Farbe, Timing, Dauer, fps, …) kommen aus der
       App-Konfiguration (Tab „Konfiguration“) bzw. aus den Overrides der
       jeweiligen Bridge-Karte oben – siehe „Status“ für die aktuell
@@ -286,15 +276,11 @@
       die Füllrichtung mit jeder Palette um).<br>
       <strong>neutral</strong>: die Bridge wird nicht angefasst – so kann ein Effektset
       z. B. Bridge 1 laufen lassen und Bridge 2 auslassen.`,
-      "section3.title": "3 · Effektsets",
-      "section3.intro": `Alle Bridge-Karten aus „1 · Bridges“ unter einem Namen speichern, später
-      wieder laden oder direkt starten (auch per
-      <code>POST /start {"preset": "…"}</code>). Sets lassen sich als JSON-Datei
-      herunter- und wieder hochladen.`,
+      "section3.title": "3 · Parameter",
       "preset.saved": "Gespeichertes Set", "preset.none": "– keins –",
       "preset.saveAs": "Aktuelle Einstellungen speichern als",
       "preset.namePh": "z. B. Star Trek – Alarmstufe Rot",
-      "btn.load": "Laden", "btn.presetStart": "▶ Starten", "btn.download": "Herunterladen",
+      "btn.load": "Laden", "btn.download": "Herunterladen",
       "btn.delete": "Löschen", "btn.save": "Speichern", "btn.upload": "Hochladen…",
       "log.timeout": "Zeitüberschreitung", "log.netError": "Netzwerkfehler: ",
       "log.noBridgeIp": (i) => `Bridge ${i}: keine Bridge-IP eingetragen.`,
@@ -396,16 +382,17 @@
       and pick the one you want. "Customize effect for this bridge" lets each
       bridge get its own effect/colour/timing – "same as configuration" or a
       field left empty falls back to the app configuration's default.`,
-      "btn.saveBridges": "Save bridge configuration",
-      "btn.resetBridges": "Reset to add-on configuration",
-      "section1.saveHint": `Saved values also apply to arming, the Home Assistant
-      integration and rest_command – not just the Start button here. Saving/resetting
-      only works when no effect is running and no affected bridge is armed.`,
-      "msg.bridgesSaved": "Bridge configuration saved.",
-      "msg.bridgesReset": "Reset to the add-on configuration.",
-      "msg.bridgesSaveFail": "Save failed.",
       "section2.title": "2 · Control",
       "btn.start": "▶ Start", "btn.stop": "■ Stop",
+      "section2.presetIntro": `Save all bridge cards from "1 · Bridges" under a name and
+      <strong>load</strong> them again later – "Load" applies the set's areas (area_id) to the
+      running configuration (also used for arming, the Home Assistant integration and
+      rest_command). Loading always works while nothing is armed and no animation is running;
+      with an armed/running bridge only when the set has the same area_id per bridge – the
+      animation then continues immediately with the new set. Sets can be downloaded and
+      uploaded again as a JSON file.`,
+      "msg.presetLoaded": "Effect set loaded.",
+      "msg.presetLoadFail": "Loading failed.",
       "section2.intro": `All parameters (effect, colour, timing, duration, fps, …) come from the
       app configuration ("Configuration" tab) or from the overrides on a
       bridge card above – see "Status" for the currently effective values.
@@ -505,15 +492,11 @@
       with every palette).<br>
       <strong>neutral</strong>: this bridge is left untouched – handy for an
       effect set that runs bridge 1 while leaving bridge 2 out.`,
-      "section3.title": "3 · Effect Sets",
-      "section3.intro": `Save all bridge cards from "1 · Bridges" under a name, load or start
-      them again later (also via
-      <code>POST /start {"preset": "…"}</code>). Sets can be downloaded and
-      uploaded again as a JSON file.`,
+      "section3.title": "3 · Parameters",
       "preset.saved": "Saved set", "preset.none": "– none –",
       "preset.saveAs": "Save current settings as",
       "preset.namePh": "e.g. Star Trek – Red Alert",
-      "btn.load": "Load", "btn.presetStart": "▶ Start", "btn.download": "Download",
+      "btn.load": "Load", "btn.download": "Download",
       "btn.delete": "Delete", "btn.save": "Save", "btn.upload": "Upload…",
       "log.timeout": "Timed out", "log.netError": "Network error: ",
       "log.noBridgeIp": (i) => `Bridge ${i}: no bridge IP entered.`,
@@ -1154,33 +1137,15 @@
 
   $("btn-refresh").onclick = refresh;
 
-  // Bridge-Karten dauerhaft in /data/bridges.json speichern (PUT /bridges).
-  let bridgesMsgTimer = null;
-  function bridgesSaveMsg(text, ok) {
-    const el = $("bridges-save-msg");
+  // Kurze Statusmeldung neben den Effektset-Knöpfen (Laden-Ergebnis).
+  let presetMsgTimer = null;
+  function presetMsg(text, ok) {
+    const el = $("preset-msg");
     el.textContent = text;
     el.style.color = ok ? "#2e7d32" : "#c62828";
-    clearTimeout(bridgesMsgTimer);
-    bridgesMsgTimer = setTimeout(() => { el.textContent = ""; el.style.color = ""; }, 8000);
+    clearTimeout(presetMsgTimer);
+    presetMsgTimer = setTimeout(() => { el.textContent = ""; el.style.color = ""; }, 8000);
   }
-  function bridgesErrText(data) {
-    if (data && data.blocked && data.blocked.length) return `${data.error} (${data.blocked.join(", ")})`;
-    return (data && data.error) || t("msg.bridgesSaveFail");
-  }
-  $("btn-bridges-save").onclick = async () => {
-    const bridges = collectBody().bridges || [];
-    const { ok, data } = await api("bridges", {
-      method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ bridges }),
-    });
-    bridgesSaveMsg(ok ? t("msg.bridgesSaved") : bridgesErrText(data), ok);
-    if (ok) refresh();
-  };
-  $("btn-bridges-reset").onclick = async () => {
-    const { ok, data } = await api("bridges", { method: "DELETE" });
-    bridgesSaveMsg(ok ? t("msg.bridgesReset") : bridgesErrText(data), ok);
-    if (ok) refresh();
-  };
 
   // Nicht in der Bridge-Karte editierbare Felder eines geladenen Effektsets
   // (z. B. duration/fps, sofern das Set sie enthält) – werden beim erneuten
@@ -1313,18 +1278,19 @@
       + names.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
     if (want && names.includes(want)) sel.value = want;
   }
-  $("btn-preset-load").onclick = () => {
+  $("btn-preset-load").onclick = async () => {
     const name = $("preset-select").value;
-    if (!name || !PRESETS[name]) { logLine(t("log.noPresetSelected")); return; }
+    if (!name || !PRESETS[name]) { presetMsg(t("log.noPresetSelected"), false); return; }
+    // Formular füllen (zum Ansehen/Anpassen) und serverseitig laden: übernimmt
+    // die Bereiche des Sets, schaltet eine laufende Animation live um bzw. 409.
     applyBody(PRESETS[name]);
     $("preset-name").value = name;
-    logLine(t("log.presetLoaded", name));
-  };
-  $("btn-preset-start").onclick = async () => {
-    const name = $("preset-select").value;
-    if (!name) { logLine(t("log.noPresetSelected")); return; }
-    await api("start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preset: name }) });
-    refresh();
+    const { ok, data } = await api("select", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ preset: name }),
+    });
+    presetMsg(ok ? t("msg.presetLoaded") : ((data && data.error) || t("msg.presetLoadFail")), ok);
+    if (ok) fastPollRefresh(4, 500); else refresh();
   };
   $("btn-preset-save").onclick = async () => {
     const name = $("preset-name").value.trim();

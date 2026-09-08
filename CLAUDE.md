@@ -37,8 +37,11 @@ configurable per bridge**
 **simultaneously** (parallel DTLS handshakes, shared start epoch) for a
 configurable `duration` (the `duration` option, shared across all bridges; `0` =
 unlimited, runs until `/stop`). The full `/start` payload (all bridges +
-controls) can be saved as a named **effect set** in `/data/presets.json`
-(`GET/PUT/DELETE /presets`, `POST /start {"preset": "..."}`). It ships an
+controls, incl. each bridge's `area_id`) can be saved as a named **effect
+set** in `/data/presets.json` (`GET/PUT/DELETE /presets`, `POST /select
+{"preset": "..."}` to load, `POST /start {"preset": "..."}` to load+start —
+loading adopts the set's per-bridge `area_id`s and hot-swaps a running effect
+in place when the areas match, else 409). It ships an
 aiohttp REST service **and** an Ingress web UI for control. HA builds the
 image locally from `redalert/Dockerfile` (no `image:` key, no prebuilt registry).
 Primary docs are German: repo overview in `README.md`, in-HA docs in
@@ -82,9 +85,10 @@ custom_components/redalert/  HA integration talking to the app's REST API
   since 1.16.0 — POST /arm|/disarm, is_on = all non-neutral bridges armed; plus
   one per-bridge start/stop switch per paired bridge since 1.15.0 — dynamically
   added from coordinator data via a coordinator-listener, this platform's only
-  dynamic-entity registration) / select.py (since 1.2.0: selecting only *loads*
-  the preset via POST /select — sets current_preset, no start — unless an
-  animation is already running, then it stop+starts with the new preset) /
+  dynamic-entity registration) / select.py (always calls `POST /select` — the
+  server loads the set, adopts its per-bridge `area_id`s, and hot-swaps a
+  running/armed effect in place when the areas match, else returns 409 →
+  `HomeAssistantError`) /
   sensor.py (currently loaded preset) — one DataUpdateCoordinator polling GET
   /config every 10s; README.md/README.en.md document install + entities.
   entity.py: since 1.2.0 each entity's `entity_id` is built explicitly via
@@ -135,7 +139,7 @@ redalert/                  the app
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.19.0**
+No build system, linter, or test suite. Current version: **1.20.0**
 (integration `manifest.json` versioned separately: **1.2.0**).
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
@@ -208,38 +212,31 @@ Three layers under `redalert/rootfs/app/`:
 - **`main.py`** — aiohttp server. Endpoints: `/` (serves `panel.html`),
   `/health` (also the Docker HEALTHCHECK target; `{status, paired, running,
   armed, current_preset}` — `current_preset` is `state["current_preset"]`, the
-  name of the last `preset` started via `/start` **or** set via `POST /select`
-  (since 1.17.0 — sets it without starting), `None` after an ad-hoc start with
-  no `preset`; consumed by `custom_components/redalert`'s select/sensor pair),
+  name of the last `preset` started via `/start` **or** loaded via `POST
+  /select`, `None` after an ad-hoc start with no `preset`; consumed by
+  `custom_components/redalert`'s select/sensor pair),
   `/config` (effective config for the UI, same `current_preset` field),
   `/pair` (one-time Bridge link-button pairing, body `bridge_host` — Pflicht bei
   mehr als einer konfigurierten Bridge — → merged into `/data/credentials.json`),
   `/areas` (query `bridge_host` — Pflicht bei mehr als einer gepaarten Bridge),
-  `/start`, `/stop`, `/arm`, `/disarm`, `/select` (since 1.17.0 — body
-  `{"preset": name|null}`, only sets `state["current_preset"]`, no streaming),
-  `/bridges` (GET/PUT/POST/DELETE, since 1.19.0 — persist the Web UI's bridge
-  cards to `/data/bridges.json`, merged live over the option, see below),
+  `/start`, `/stop`, `/arm`, `/disarm`, `/select` (load an effect set — see the
+  preset-load rules below),
   `/identify`. All mutable runtime state is
   one module-level
   `state` dict; `state["tasks"]` is a `dict[bridge_host, asyncio.Task]` — since
   1.15.0 every bridge runs its effect (or an `/identify` run) in its **own**
   task, independently start-/stoppable via an optional `bridge_host` in the
   `/start`/`/stop` body (see below), replacing the old single global
-  `state["task"]`. `state["bridges"]` is a list (≤ `MAX_BRIDGES` = 3), the
-  **merge** (`_merge_bridges`, since 1.19.0) of the `bridges` app option with
-  whatever the Web UI has persisted to `/data/bridges.json` (`state["saved_bridges"]`,
-  loaded via `_load_saved_bridges`) — per host the saved entry wins, the option
-  fills the rest. `PUT/POST/DELETE /bridges` rewrites `bridges.json` and
-  recomputes `state["bridges"]` **live** (no restart) — so a Web-UI save takes
-  effect immediately for `/start`, `/arm`, the HA integration and `rest_command`,
-  not just the panel's Start button. `_bridges_change_blocked` rejects a
-  `PUT`/`DELETE` with **409** if any bridge whose *effective* entry would change
-  is currently running or armed (blanket-ish; unchanged bridges don't block).
-  `bridges.json` stores the **raw** input shape (hex colours, comma strings),
-  re-parsed through `_parse_bridges_option` on load. `/config` exposes
-  `bridges_saved: bool` + per-bridge `config_source: "saved"|"option"`. Both
-  `_parse_bridges_option` and `_merge_bridges` are also used for the `bridges`
-  key in the `/start` body. Each `state["bridges"]` entry always has
+  `state["task"]`. `state["run_ctx"]` is a `dict[bridge_host, ctx]` holding the
+  live effect-loop context of each running bridge (set at the top of
+  `_run_single_bridge`, popped in its `finally`) so a loaded effect set can
+  hot-swap parameters into the running loop.
+  `state["bridges"]` is a list (≤ `MAX_BRIDGES` = 3), initialised from
+  `_parse_bridges_option(options.get("bridges"))` and **replaced** whenever an
+  effect set is loaded (`/select` or `/start {preset}`) with the set's `bridges`
+  entries — so a loaded set's per-bridge `area_id`s drive `/arm`, the HA
+  integration and `rest_command`. `_parse_bridges_option` is also used for the
+  `bridges` key in the `/start` body. Each `state["bridges"]` entry always has
   `bridge_host`, `area_id`, `channel_order`, and *optionally* (sparse — key
   present only if this bridge overrides it) `effect`, `color`, `sweep_seconds`,
   `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`
@@ -253,20 +250,41 @@ Three layers under `redalert/rootfs/app/`:
   `restore_state` apply to **all** bridges at once (frame rate and run length
   aren't per-bridge concepts); `effect`, `color`, `sweep_seconds`,
   `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high` in the body
-  are the **defaults** dict for bridges that don't override them. `bridges`
+  are the **defaults** dict for bridges that don't override them (built by
+  module-level `_build_defaults(body)`). `bridges`
   (list of entries shaped like the option, i.e. also with the optional
-  per-bridge effect overrides) overrides `state["bridges"]` for that call only.
+  per-bridge effect overrides) overrides `state["bridges"]` for that call; a
+  `preset` start additionally **persists** the set's `bridges` into
+  `state["bridges"]` via `_apply_loaded_preset`.
   Each bridge is resolved by `handle_start._resolve` (paired? reachable?
   `area_id` valid? `channel_order` — list[int] or `"2,3,1,0"` string via
-  `_parse_channel_order` — matches the area's channels? then
-  `cfg.get(key, defaults[key])` per effect param) concurrently via
+  `_parse_channel_order` — matches the area's channels?) then
+  `_resolve_effect_params(cfg, defaults, channel_ids, host)` (module-level,
+  `cfg.get(key, defaults[key])` per effect param + `gc_strips` split), all
+  concurrently via
   `asyncio.gather`; a bridge that fails resolution is skipped (best-effort,
   reported back as `failed_bridges`) without blocking the others — `/start`
   only 502s if **no** bridge resolved.
+
+  **Effect-set load rules** (`/select`, Web-UI "Laden" → `/select`, and
+  `/start {preset}` — all share `_load_blocked_reason` + `_hotswap_running`):
+  loading is allowed whenever nothing is armed **and** nothing is running.
+  While a bridge is armed and/or running an effect, loading is allowed **only**
+  if the target set has the **same `area_id` for every currently-active
+  bridge** (`_active_bridge_areas()` = armed ctx's `area_id` + running bridge's
+  `state["last_start"][host]["area_id"]`); then `_hotswap_running` rebuilds the
+  effect params + effect instances (`_build_effect_instances`) **in place** on
+  each running bridge's `state["run_ctx"][host]` — the loop picks them up on
+  the next frame, no task restart, no re-handshake, no restore-to-original.
+  Otherwise the endpoint returns **409** with a message naming the mismatched
+  bridges. `_run_single_bridge` reads `ctx["effect"]`, `ctx["glow_*"]` and the
+  effect instances fresh each frame, which is what makes the in-place swap
+  safe (single-threaded asyncio; the loop only yields at `asyncio.sleep`).
   An optional `bridge_host` in the `/start`/`/stop` body targets a single
   bridge, independent of any others' state — `already_running` then only
   checks that one bridge; not combinable with `preset` (400 — a preset is a
-  multi-bridge concept) and never touches `state["current_preset"]`. Without
+  multi-bridge concept) and never touches `state["current_preset"]` or
+  `state["bridges"]`. Without
   `bridge_host` (the default "start everyone" call), bridges that are
   already running are **skipped, not rejected** — reported back as
   `skipped_bridges`, alongside `failed_bridges`/`neutral_bridges` — so the
@@ -473,14 +491,15 @@ pickers `b${i}-gcolor0/1/2` behind one checkbox). Every bridge-card field sets
 listener); the periodic `/config` sync in `refresh()` (`syncIfUntouched` /
 `syncColorOverride`) only ever writes a field that isn't touched yet, so a
 deliberate choice (including explicitly picking "wie Konfiguration") survives
-later polls. Section "2 · Steuerung" has **no input fields** — effect
-parameters, `duration` and `fps` all come from the app configuration (or a
-bridge's own override); the section renders **Start**/**Stop** first (these
+later polls. Section "2 · Steuerung" has **no effect-parameter input fields** —
+effect parameters, `duration` and `fps` all come from the app configuration (or
+a bridge's own override); the section renders **Start**/**Stop** first (these
 still start/stop **every** configured bridge simultaneously — a synchronized
 batch via the barrier described below — the per-bridge buttons on each card
-are for controlling just one), plus a global **Arm/Disarm** button
-(`btn-arm`/`btn-arm-pill`, since 1.16.0, no `bridge_host`), then the parameter
-descriptions below them. After a Start/Stop/Arm click the panel calls
+are for controlling just one), a global **Arm/Disarm** button
+(`btn-arm`/`btn-arm-pill`, since 1.16.0, no `bridge_host`), then the effect-set
+controls (since 1.20.0). The parameter explanation paragraphs live in
+section "3 · Parameter" at the bottom. After a Start/Stop/Arm/Laden click the panel calls
 `fastPollRefresh()` (a short burst of ~500 ms polls) instead of a single
 `refresh()`, so the transition shows up without waiting for the 5 s tick.
 On Start, `collectBody()` assembles `body.bridges`
@@ -490,15 +509,17 @@ cards are skipped, and if none are filled `bridges` is omitted so the server
 falls back to the configured `bridges` option), merged over `LOADED_EXTRA` —
 any non-`bridges` fields from a preset loaded via `applyBody()`, preserved
 verbatim on save even though the UI no longer exposes controls for them.
-Since 1.19.0 the card values can be **persisted**: a "Bridge-Konfiguration
-speichern" button after the cards sends `collectBody().bridges` to
-`PUT /bridges` (`btn-bridges-save`; `btn-bridges-reset` → `DELETE /bridges`;
-result shown in `#bridges-save-msg`, green/red, auto-clears). Before this the
-card fields only mattered for the panel's own Start button — `/arm`, the HA
-integration and `rest_command` used the add-on option, which is the trap that
-bit the maintainer (a card's `area_id` "worked" for Start but `/arm` used the
-stale option). The 409 guard means the Save button fails while an affected
-bridge runs/is armed.
+Since 1.20.0 the panel has **three** sections: "1 · Bridges" (the cards only —
+the v1.19.0 "Bridge-Konfiguration speichern" row / `/bridges` endpoint is
+gone), "2 · Steuerung" (Start/Stop, Arm, **and** the effect-set controls that
+used to be in section 3 — select / Laden / Herunterladen / Löschen / Speichern
+/ Hochladen; no separate "▶ Starten" button any more), and "3 · Parameter"
+(the `section2.intro` + `section2.effects` explanation paragraphs, pinned at
+the bottom). "Laden" (`btn-preset-load`) now `applyBody()`s the set into the
+form **and** calls `POST /select`, showing the result (or the 409 error text)
+in `#preset-msg` (`presetMsg()`, green/red, auto-clears). To persist a
+bridge's `area_id` beyond the panel's Start button, save it in an effect set
+and load that (or put it in the add-on `bridges` option).
 
 **Two Hue API surfaces:** the `hue_entertainment` lib (`EntertainmentSession`,
 `HueEntertainmentAPI`) does *only* DTLS streaming + pairing + area listing.
@@ -543,8 +564,9 @@ cert). See `_clip` / `capture_light_state` / `restore_light_state`.
    (`body.get(..., state[...])`); the `/config` JSON (both the top-level
    default and each per-bridge entry); the per-bridge `entry`/`state["last_start"][host]`
    dict built in `handle_start`'s success path.
-4. `redalert/rootfs/app/panel.html` — since 1.9.0, section "2 · Steuerung" has
-   no input fields (only descriptions + Start/Stop): a **shared** option (not
+4. `redalert/rootfs/app/panel.html` — section "2 · Steuerung" has no
+   effect-parameter input fields (Start/Stop/Arm + effect-set controls;
+   explanations in section "3 · Parameter"): a **shared** option (not
    per-bridge) only needs its read-only line added to the `fields` object in
    `refresh()` (Status). A **per-bridge** option (like `area_id`/
    `channel_order`, or any of the effect parameters) needs a field in

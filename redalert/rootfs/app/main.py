@@ -28,13 +28,16 @@ läuft bis ``POST /stop``).
 Der komplette Satz an Start-Parametern (alle Bridges + Steuerung) lässt sich
 als benanntes **Effektset** unter ``/data/presets.json`` ablegen
 (``GET/PUT/DELETE /presets``) und per ``POST /start {"preset": "..."}``
-wieder starten; ``POST /select {"preset": "..."}`` merkt ein Set nur als
-*geladen* (``current_preset``), ohne es zu starten.
+wieder starten; ``POST /select {"preset": "..."}`` lädt ein Set (merkt es als
+``current_preset`` **und** übernimmt seine Bridge-``area_id``s in die
+laufende Konfiguration), ohne den Effekt zwingend zu starten.
 
-Die Bridge-Konfiguration kommt aus der HA-Option ``bridges`` **und** – falls
-im Web-UI gespeichert (``PUT/DELETE /bridges`` → ``/data/bridges.json``) –
-aus dieser Datei, die je Host über die Option gewinnt und sofort ohne
-Add-on-Neustart wirkt (siehe ``_merge_bridges``).
+Ein Effektset zu laden ist möglich, solange keine Bridge scharfgeschaltet ist
+und keine Animation läuft. Bei scharfer/laufender Bridge geht es nur, wenn das
+Set pro aktiver Bridge dieselbe ``area_id`` enthält – dann werden die
+Effekt-Parameter im laufenden Task ohne Neustart/Handshake ausgetauscht
+(``_load_blocked_reason`` / ``_hotswap_running``). Andernfalls antwortet der
+Server mit einem Fehler (409).
 """
 
 import asyncio
@@ -85,7 +88,6 @@ DATA_DIR = Path(os.environ.get("REDALERT_DATA_DIR", "/data"))
 CRED_FILE = DATA_DIR / "credentials.json"
 OPTIONS_FILE = DATA_DIR / "options.json"
 PRESETS_FILE = DATA_DIR / "presets.json"
-BRIDGES_FILE = DATA_DIR / "bridges.json"  # im Web-UI gespeicherte Bridge-Konfig
 
 APP_DIR = Path(__file__).parent
 PANEL_HTML = (APP_DIR / "panel.html").read_text(encoding="utf-8")
@@ -371,39 +373,14 @@ def _save_presets(presets: dict) -> None:
     PRESETS_FILE.write_text(json.dumps(presets, indent=2, ensure_ascii=False))
 
 
-# --- Bridge-Konfiguration: App-Option + optionale, im Web-UI gespeicherte -----
-# Die HA-Option ``bridges`` gehört dem Supervisor und wird nur beim Start
-# gelesen. Zusätzlich kann das Web-UI seine Bridge-Karten dauerhaft in
-# ``/data/bridges.json`` sichern (roh, in Eingabeform mit Hex-Farben usw.);
-# beim Ermitteln der effektiven Liste gewinnt diese Datei je Host, die Option
-# füllt die übrigen Hosts. So wirken Web-UI-Änderungen sofort auch für
-# ``/arm``, die HA-Integration und ``rest_command`` (ohne Add-on-Neustart).
-def _load_saved_bridges() -> list[dict]:
-    data = load_json(BRIDGES_FILE, [])
-    return _parse_bridges_option(data if isinstance(data, list) else [])
-
-
-def _save_saved_bridges(raw_list: list) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    if raw_list:
-        BRIDGES_FILE.write_text(json.dumps(raw_list, indent=2, ensure_ascii=False))
-    elif BRIDGES_FILE.exists():
-        BRIDGES_FILE.unlink()
-
-
-def _merge_bridges(saved: list[dict]) -> list[dict]:
-    """Effektive, normalisierte bridges-Liste (App-Option + gespeicherte Web-UI-Konfig)."""
-    by_host = {b["bridge_host"]: b for b in _parse_bridges_option(options.get("bridges"))}
-    for b in saved:
-        by_host[b["bridge_host"]] = b
-    return list(by_host.values())[:MAX_BRIDGES]
-
-
 state = {
     "credentials": _load_credentials(),
     "presets": _load_presets(),
-    "saved_bridges": _load_saved_bridges(),
-    "bridges": _merge_bridges(_load_saved_bridges()),
+    # Effektive Bridge-Konfiguration. Start aus der HA-Option ``bridges``; ein
+    # geladenes Effektset (``/select`` bzw. ``/start {preset}``) ersetzt sie
+    # durch die im Set gespeicherten Bridge-Einträge (inkl. ``area_id``), damit
+    # ``/arm``, die HA-Integration und ``rest_command`` dieselben Bereiche nutzen.
+    "bridges": _parse_bridges_option(options.get("bridges")),
     "color": hex_to_rgb(options.get("color", "#FF0000")),
     "effect": _effect_name(options.get("effect", "pulse")),
     "attack_ms": int(options.get("attack_ms", 140)),
@@ -451,6 +428,11 @@ state = {
     # pro Bridge (already_running-Guard), sind aber zwischen Bridges völlig
     # unabhängig – eine Bridge starten/stoppen berührt keine andere.
     "tasks": {},
+    # Laufender Effekt-Kontext je Bridge (bridge_host -> das ctx-Dict, das
+    # _run_single_bridge gerade abarbeitet). Erlaubt einem geladenen Effektset,
+    # die Effekt-Parameter im laufenden Task auszutauschen (Hot-Swap), ohne den
+    # Task neu zu starten. Wird im finally von _run_single_bridge geräumt.
+    "run_ctx": {},
     # Scharfgeschaltete Bridges (bridge_host -> ArmContext-Dict mit offenem,
     # dauerhaft gehaltenem DTLS-Stream). Ein /start für eine scharfe Bridge
     # überspringt Handshake + Snapshot; siehe _arm_one / _run_single_bridge.
@@ -866,7 +848,6 @@ def _bridge_field_hex(b: dict, key: str) -> str | None:
 
 async def handle_config(request: web.Request) -> web.Response:
     r, g, b = state["color"]
-    _saved_hosts = {b["bridge_host"] for b in state["saved_bridges"]}
     return web.json_response(
         {
             "bridges": [
@@ -874,7 +855,6 @@ async def handle_config(request: web.Request) -> web.Response:
                     "bridge_host": bg["bridge_host"],
                     "area_id": bg["area_id"],
                     "channel_order": bg["channel_order"],
-                    "config_source": "saved" if bg["bridge_host"] in _saved_hosts else "option",
                     "paired": bg["bridge_host"] in state["credentials"],
                     "running": _is_running(bg["bridge_host"]),
                     "armed": bg["bridge_host"] in state["armed"],
@@ -951,7 +931,6 @@ async def handle_config(request: web.Request) -> web.Response:
             "running": _any_running(),
             "armed": _armed_all(),
             "armed_bridges": sorted(state["armed"]),
-            "bridges_saved": bool(state["saved_bridges"]),
             "last_start": {
                 "duration": state["last_start_meta"].get("duration"),
                 "fps": state["last_start_meta"].get("fps"),
@@ -1083,37 +1062,14 @@ def _chase_chans(
     return chans
 
 
-async def _run_single_bridge(
-    ctx: dict,
-    duration: float,
-    fps: int,
-    restore: bool,
-    start_barrier: asyncio.Barrier | None,
-    arm_ctx: dict | None = None,
-) -> None:
-    """Effekt auf einer einzelnen Bridge fahren – eigener Task, eigene Sitzung.
+def _build_effect_instances(ctx: dict, fps: int) -> None:
+    """Alle Effekt-Objekte (``ctx["pulse"]`` … ``ctx["color_chase"]``) aus den
+    aufgelösten Parametern in ``ctx`` (neu) erzeugen.
 
-    Ist die Bridge scharfgeschaltet (``arm_ctx`` gesetzt), läuft der DTLS-Stream
-    bereits: Handshake und Snapshot entfallen, der Effekt beginnt praktisch
-    sofort. Die scharfe Ruhe-Loop (``arm_ctx["idle_task"]``) wird für die Dauer
-    des Effekts pausiert und im ``finally`` wieder gestartet, sofern die Bridge
-    noch scharf ist – nur eine zwischenzeitlich entschärfte (oder nie scharfe)
-    Bridge schließt ihren Stream und stellt den Lichtzustand wieder her.
-
-    Für einen gemeinsamen Batch-Start (mehrere Bridges im selben ``/start``-
-    Aufruf, siehe ``handle_start``) teilen sich alle beteiligten Tasks eine
-    ``start_barrier``: jeder Task wartet nach seinem eigenen erfolgreichen
-    DTLS-Handshake dort, bis alle anderen ebenfalls so weit sind, bevor die
-    ``start``-Zeit gesetzt wird – so leuchten alle Bridges eines Batches
-    trotz unabhängiger Tasks gleichzeitig los, bleiben aber einzeln über
-    ``state["tasks"]`` kündbar (Stop auf einer Bridge lässt die anderen
-    unberührt). Scheitert der Handshake dieser Bridge, wird die Barriere
-    abgebrochen (``abort()``), damit die übrigen nicht auf eine nie
-    erscheinende Bridge warten, sondern sofort lostarten (best effort – wie
-    zuvor im gemeinsamen Loop). Ein Solo-Start (keine weitere Bridge im
-    selben Aufruf) bekommt ``start_barrier=None`` und startet ohne
-    Wartezeit.
-    """
+    Wird sowohl beim Task-Start (``_run_single_bridge``) als auch beim Hot-Swap
+    eines geladenen Effektsets (``_hotswap_running``) aufgerufen – im zweiten
+    Fall mit bereits aktualisierten ``ctx``-Parametern, sodass der laufende
+    Loop ab dem nächsten Frame die neuen Werte nutzt."""
     n = len(ctx["channel_ids"])
     ctx["pulse"] = RedAlertPulse(num_lights=n, attack_s=ctx["attack_s"], release_s=ctx["release_s"])
     ctx["comet"] = RedAlertComet(
@@ -1180,10 +1136,45 @@ async def _run_single_bridge(
         fps=fps,
     )
 
+
+async def _run_single_bridge(
+    ctx: dict,
+    duration: float,
+    fps: int,
+    restore: bool,
+    start_barrier: asyncio.Barrier | None,
+    arm_ctx: dict | None = None,
+) -> None:
+    """Effekt auf einer einzelnen Bridge fahren – eigener Task, eigene Sitzung.
+
+    Ist die Bridge scharfgeschaltet (``arm_ctx`` gesetzt), läuft der DTLS-Stream
+    bereits: Handshake und Snapshot entfallen, der Effekt beginnt praktisch
+    sofort. Die scharfe Ruhe-Loop (``arm_ctx["idle_task"]``) wird für die Dauer
+    des Effekts pausiert und im ``finally`` wieder gestartet, sofern die Bridge
+    noch scharf ist – nur eine zwischenzeitlich entschärfte (oder nie scharfe)
+    Bridge schließt ihren Stream und stellt den Lichtzustand wieder her.
+
+    Für einen gemeinsamen Batch-Start (mehrere Bridges im selben ``/start``-
+    Aufruf, siehe ``handle_start``) teilen sich alle beteiligten Tasks eine
+    ``start_barrier``: jeder Task wartet nach seinem eigenen erfolgreichen
+    DTLS-Handshake dort, bis alle anderen ebenfalls so weit sind, bevor die
+    ``start``-Zeit gesetzt wird – so leuchten alle Bridges eines Batches
+    trotz unabhängiger Tasks gleichzeitig los, bleiben aber einzeln über
+    ``state["tasks"]`` kündbar (Stop auf einer Bridge lässt die anderen
+    unberührt). Scheitert der Handshake dieser Bridge, wird die Barriere
+    abgebrochen (``abort()``), damit die übrigen nicht auf eine nie
+    erscheinende Bridge warten, sondern sofort lostarten (best effort – wie
+    zuvor im gemeinsamen Loop). Ein Solo-Start (keine weitere Bridge im
+    selben Aufruf) bekommt ``start_barrier=None`` und startet ohne
+    Wartezeit.
+    """
+    _build_effect_instances(ctx, fps)
+
     frames = 0
     snapshot: list[dict] = []
     loop = asyncio.get_event_loop()
     host = ctx["bridge_host"]
+    state["run_ctx"][host] = ctx
     try:
         if arm_ctx is not None:
             # Scharfe Bridge: Stream läuft schon, Snapshot liegt vor. Nur die
@@ -1349,6 +1340,8 @@ async def _run_single_bridge(
         log.exception("Effekt-Loop (%s) abgebrochen (DTLS-Start oder Senden fehlgeschlagen)", host)
     finally:
         log.info("Effekt beendet (%s, %s Frames).", host, frames)
+        if state["run_ctx"].get(host) is ctx:
+            state["run_ctx"].pop(host, None)
         if arm_ctx is not None and host in state["armed"]:
             # Bridge weiterhin scharf: Stream offen lassen, ins Ruhebild
             # zurückgehen und die Ruhe-Loop wieder aufnehmen.
@@ -1505,112 +1498,13 @@ async def handle_identify(request: web.Request) -> web.Response:
     return web.json_response(result)
 
 
-async def handle_start(request: web.Request) -> web.Response:
-    """POST /start – Effekt auf allen konfigurierten (oder im Body übergebenen)
-    Bridges gleichzeitig starten, oder – mit ``bridge_host`` im Body – auf nur
-    einer einzelnen Bridge, unabhängig vom Zustand der anderen (siehe unten).
+def _build_defaults(body: dict) -> dict:
+    """Effekt-Standardwerte für einen ``/start``-Body ableiten (Body-Feld sonst
+    App-Option/``state``). Für Bridges, die einen Parameter nicht selbst setzen.
 
-    Body optional: ``duration``, ``fps``, ``restore_state`` gelten für **alle**
-    Bridges gemeinsam. ``effect``, ``color``, ``sweep_seconds``, ``chase_pause``,
-    ``attack_ms``, ``release_ms``, ``glow_low``, ``glow_high``,
-    ``glitter_interval_ms``, ``glitter_flash_ms``, ``glitter_colors``,
-    ``gc_direction``, ``gc_count``, ``gc_length``, ``gc_speed``,
-    ``gc_background_color``, ``gc_chase_glitter``, ``gc_background_pulse``,
-    ``color2``, ``meteor_count``, ``meteor_speed``,
-    ``firework_interval_ms``, ``firework_speed``, ``lightning_interval_ms``,
-    ``lightning_flash_ms``, ``ripple_interval_ms``, ``ripple_speed``,
-    ``wave_length``, ``flicker_interval_ms``, ``flicker_dip_ms`` im
-    Body sind die **Standardwerte** für Bridges, die diese Parameter nicht
-    selbst setzen. ``bridges`` (Liste von ``{bridge_host, area_id,
-    channel_order, effect?, color?, sweep_seconds?, chase_pause?, attack_ms?,
-    release_ms?, glow_low?, glow_high?, glitter_interval_ms?,
-    glitter_flash_ms?, glitter_colors?, gc_direction?, gc_strip_lengths?,
-    gc_count?, gc_length?, gc_speed?, gc_background_color?, gc_chase_glitter?,
-    gc_background_pulse?, color2?, meteor_count?, meteor_speed?,
-    firework_interval_ms?, firework_speed?, lightning_interval_ms?,
-    lightning_flash_ms?, ripple_interval_ms?, ripple_speed?, wave_length?,
-    flicker_interval_ms?, flicker_dip_ms?}``) übersteuert für diesen Aufruf die Option
-    ``bridges`` – jede Bridge kann ihren eigenen Effekt/Farbe/Timing haben.
-    ``gc_strip_lengths`` (nur ``effect: chase``, je Bridge, z. B.
-    ``[7, 5]``) teilt die Kanäle dieser Bridge in aufeinanderfolgende Gradient-
-    Lightstrips auf; ``gc_direction`` kann dann ebenfalls eine Liste sein
-    (eine Chase-Richtung je Strip statt eines Werts für alle). ``effect:
-    neutral`` (als Standard oder je Bridge) lässt die betreffende(n) Bridge(s)
-    komplett unangetastet – kein Stream, kein Sichern/Wiederherstellen –, sodass
-    in einem Effektset eine Bridge laufen und eine andere aus sein kann. Sind
-    **alle** Bridges neutral, antwortet ``/start`` mit ``no_active_bridges``.
-
-    ``preset``: Name eines gespeicherten Effektsets (siehe ``/presets``); dessen
-    gespeicherter Body dient als Basis, alle weiteren Body-Felder überschreiben
-    ihn für diesen Aufruf. Nicht mit ``bridge_host`` kombinierbar (400) – ein
-    Effektset ist ein Mehr-Bridge-Konzept.
-
-    ``bridge_host``: startet nur diese eine Bridge, unabhängig vom Zustand
-    anderer Bridges – wirkt als Filter auf die oben aufgelöste ``bridges``-
-    Liste (Option oder Body), keine eigene Auswahl. `already_running` gilt
-    dann nur für diese eine Bridge. Ein Solo-Start setzt nie
-    ``current_preset`` (siehe ``/health``/``/config``). Ohne ``bridge_host``
-    (Standard, alle konfigurierten/übergebenen Bridges) werden bereits
-    laufende Bridges übersprungen statt den ganzen Aufruf abzulehnen – die
-    Antwort listet sie unter ``skipped_bridges``; nur wenn **keine** Bridge
-    (weder neu noch bereits laufend) übrig bleibt und keine fehlgeschlagen
-    ist, antwortet ``/start`` mit ``no_active_bridges``.
+    Ausgelagert aus ``handle_start``, damit ``_hotswap_running`` beim Laden
+    eines Effektsets dieselbe Auflösung nutzt.
     """
-    body = await _json_body(request)
-
-    preset_name = body.get("preset")
-    if preset_name:
-        base = state["presets"].get(str(preset_name))
-        if not isinstance(base, dict):
-            return web.json_response(
-                {"error": f"Effektset '{preset_name}' nicht gefunden"}, status=404
-            )
-        merged = dict(base)
-        merged.update({k: v for k, v in body.items() if k != "preset"})
-        body = merged
-
-    bridge_host = body.get("bridge_host")
-    if bridge_host and preset_name:
-        return web.json_response(
-            {
-                "error": "bridge_host und preset zusammen werden nicht unterstützt – "
-                         "preset gilt nur für alle Bridges gemeinsam"
-            },
-            status=400,
-        )
-    if bridge_host and _is_running(bridge_host):
-        return web.json_response({"status": "already_running", "bridge_host": bridge_host})
-
-    if "bridges" in body:
-        req_bridges = _parse_bridges_option(body["bridges"])
-        if not req_bridges:
-            return web.json_response(
-                {"error": "bridges muss eine Liste von {bridge_host, area_id} sein"}, status=400
-            )
-    else:
-        req_bridges = state["bridges"]
-    if not req_bridges:
-        return web.json_response(
-            {"error": "keine Bridge konfiguriert (Option bridges oder /start-Body bridges)"},
-            status=400,
-        )
-    if bridge_host:
-        req_bridges = [c for c in req_bridges if c["bridge_host"] == bridge_host]
-        if not req_bridges:
-            return web.json_response(
-                {"error": f"bridge_host {bridge_host} nicht in bridges (Option oder Body) konfiguriert"},
-                status=400,
-            )
-
-    fps = int(body.get("fps") or options.get("fps", 25))
-    restore = bool(body.get("restore_state", state["restore_state"]))
-    # 0 = unbegrenzt (läuft bis POST /stop).
-    try:
-        duration = max(0.0, float(body.get("duration", state["duration"])))
-    except (TypeError, ValueError):
-        duration = state["duration"]
-
-    # Standardwerte für Bridges, die diese Effekt-Parameter nicht selbst setzen.
     defaults = {"effect": _effect_name(body.get("effect") or state["effect"])}
     defaults["color"] = hex_to_rgb(body["color"]) if body.get("color") else state["color"]
     defaults["sweep_seconds"] = float(body.get("sweep_seconds") or options.get("sweep_seconds", 1.4))
@@ -1729,6 +1623,325 @@ async def handle_start(request: web.Request) -> web.Response:
         )
     except (TypeError, ValueError):
         defaults["flicker_dip_ms"] = state["flicker_dip_ms"]
+    return defaults
+
+
+def _resolve_effect_params(cfg: dict, defaults: dict, channel_ids: list[int], host: str) -> dict:
+    """Aufgelöste Effekt-Parameter für eine Bridge (``cfg`` überschreibt je Feld
+    ``defaults``). Reiner Rechenschritt ohne Netz – geteilt von ``handle_start``
+    (Task-Start) und ``_hotswap_running`` (Effektset live umschalten)."""
+    glow_low = min(max(cfg.get("glow_low", defaults["glow_low"]), 0.0), 1.0)
+    glow_high = min(max(cfg.get("glow_high", defaults["glow_high"]), 0.0), 1.0)
+    glow_high = max(glow_high, glow_low)
+    color = cfg.get("color", defaults["color"])
+    palette = cfg.get("glitter_colors", defaults["glitter_palette"]) or [color]
+
+    # chase: Kanäle dieser Bridge in aufeinanderfolgende Gradient-Lightstrips
+    # aufteilen (gc_strip_lengths), jeder mit eigener Chase-Richtung
+    # (gc_direction darf eine Liste sein, eine je Strip). Passt die Summe nicht
+    # zur Kanalzahl, gilt best-effort ein einzelner Strip über alle Kanäle.
+    gc_strip_lengths = cfg.get("gc_strip_lengths")
+    if gc_strip_lengths and sum(gc_strip_lengths) == len(channel_ids):
+        strip_lengths = list(gc_strip_lengths)
+    else:
+        if gc_strip_lengths:
+            log.warning(
+                "Bridge %s: gc_strip_lengths %s ergibt nicht %d Kanäle – "
+                "ein einzelner Strip wird verwendet",
+                host, gc_strip_lengths, len(channel_ids),
+            )
+        strip_lengths = [len(channel_ids)]
+    gc_direction_cfg = cfg.get("gc_direction", defaults["gc_direction"])
+    directions = list(gc_direction_cfg) if isinstance(gc_direction_cfg, list) else [gc_direction_cfg]
+    if len(directions) < len(strip_lengths):
+        directions += [directions[-1]] * (len(strip_lengths) - len(directions))
+    elif len(directions) > len(strip_lengths):
+        directions = directions[: len(strip_lengths)]
+    gc_strips = [
+        {"length": length, "direction": direction}
+        for length, direction in zip(strip_lengths, directions)
+    ]
+
+    return {
+        "effect": cfg.get("effect", defaults["effect"]),
+        "color": color,
+        "sweep_seconds": cfg.get("sweep_seconds", defaults["sweep_seconds"]),
+        "chase_pause": max(0.0, cfg.get("chase_pause", defaults["chase_pause"])),
+        "attack_s": cfg.get("attack_ms", defaults["attack_ms"]) / 1000.0,
+        "release_s": cfg.get("release_ms", defaults["release_ms"]) / 1000.0,
+        "glow_low": glow_low,
+        "glow_high": glow_high,
+        "glitter_interval_ms": max(1.0, cfg.get("glitter_interval_ms", defaults["glitter_interval_ms"])),
+        "glitter_flash_ms": max(1.0, cfg.get("glitter_flash_ms", defaults["glitter_flash_ms"])),
+        "glitter_palette": palette,
+        "gc_strips": gc_strips,
+        "gc_count": max(1, cfg.get("gc_count", defaults["gc_count"])),
+        "gc_length": min(max(cfg.get("gc_length", defaults["gc_length"]), 0.2), 200.0),
+        "gc_speed": max(0.01, cfg.get("gc_speed", defaults["gc_speed"])),
+        "gc_background_color": cfg.get("gc_background_color", defaults["gc_background_color"]),
+        "gc_chase_glitter": cfg.get("gc_chase_glitter", defaults["gc_chase_glitter"]),
+        "gc_background_pulse": cfg.get("gc_background_pulse", defaults["gc_background_pulse"]),
+        "color2": cfg.get("color2", defaults["color2"]),
+        "meteor_count": max(1, cfg.get("meteor_count", defaults["meteor_count"])),
+        "meteor_speed": max(0.05, cfg.get("meteor_speed", defaults["meteor_speed"])),
+        "firework_interval_ms": max(
+            1.0, cfg.get("firework_interval_ms", defaults["firework_interval_ms"])
+        ),
+        "firework_speed": max(0.5, cfg.get("firework_speed", defaults["firework_speed"])),
+        "lightning_interval_ms": max(
+            1.0, cfg.get("lightning_interval_ms", defaults["lightning_interval_ms"])
+        ),
+        "lightning_flash_ms": max(
+            1.0, cfg.get("lightning_flash_ms", defaults["lightning_flash_ms"])
+        ),
+        "ripple_interval_ms": max(
+            1.0, cfg.get("ripple_interval_ms", defaults["ripple_interval_ms"])
+        ),
+        "ripple_speed": max(0.5, cfg.get("ripple_speed", defaults["ripple_speed"])),
+        "wave_length": max(0.5, cfg.get("wave_length", defaults["wave_length"])),
+        "flicker_interval_ms": max(
+            1.0, cfg.get("flicker_interval_ms", defaults["flicker_interval_ms"])
+        ),
+        "flicker_dip_ms": max(
+            1.0, cfg.get("flicker_dip_ms", defaults["flicker_dip_ms"])
+        ),
+    }
+
+
+def _active_bridge_areas() -> dict[str, str | None]:
+    """host -> aktuell wirksame ``area_id`` für jede Bridge, die gerade
+    scharfgeschaltet ist oder einen Effekt fährt. ``None`` als Wert bedeutet
+    „aktiv, aber Bereich unbekannt" (z. B. Identify-Lauf) – das erzwingt beim
+    Abgleich einen Mismatch."""
+    out: dict[str, str | None] = {}
+    for host, arm_ctx in state["armed"].items():
+        out[host] = arm_ctx.get("area_id")
+    for host in list(state["tasks"]):
+        if not _is_running(host):
+            continue
+        ent = state["last_start"].get(host)
+        area = ent.get("area_id") if ent else None
+        if host not in out or area is not None:
+            out[host] = area
+    return out
+
+
+def _preset_area_map(merged_body: dict) -> dict[str, str]:
+    """host -> ``area_id`` laut Effektset-Body (bzw. der aktuellen
+    ``state["bridges"]``, falls der Body keine ``bridges`` enthält)."""
+    src = (
+        _parse_bridges_option(merged_body["bridges"])
+        if isinstance(merged_body.get("bridges"), list)
+        else state["bridges"]
+    )
+    return {b["bridge_host"]: b["area_id"] for b in src}
+
+
+def _load_blocked_reason(merged_body: dict) -> str | None:
+    """``None``, wenn ``merged_body`` jetzt geladen werden darf, sonst ein
+    Fehlertext.
+
+    Erlaubt, wenn keine Bridge scharf ist und keine Animation läuft (Regel a);
+    außerdem erlaubt, wenn jede gerade aktive Bridge im Ziel-Set mit
+    unveränderter ``area_id`` vorkommt (Regel b – ermöglicht den Hot-Swap).
+    Sonst blockiert."""
+    active = _active_bridge_areas()
+    if not active:
+        return None
+    target = _preset_area_map(merged_body)
+    diffs = []
+    for host, area in active.items():
+        if host not in target:
+            diffs.append(f"{host} (im Effektset nicht enthalten)")
+        elif area is None or target[host] != area:
+            diffs.append(f"{host} (Bereich {area} → {target.get(host)})")
+    if diffs:
+        return (
+            "Effektset kann bei scharfgeschalteter oder laufender Animation nur "
+            "geladen werden, wenn die Bereiche (area_id) pro Bridge gleich bleiben: "
+            + "; ".join(diffs)
+            + " – zuerst /stop bzw. /disarm."
+        )
+    return None
+
+
+async def _hotswap_running(merged_body: dict, fps: int) -> list[str]:
+    """Für jede laufende Bridge die Effekt-Parameter aus ``merged_body`` live im
+    laufenden Task austauschen – kein Neustart, kein DTLS-Handshake, kein
+    Zurücksetzen auf den Ausgangszustand. Der Loop übernimmt die neuen Werte ab
+    dem nächsten Frame. Gibt die umgeschalteten Hosts zurück.
+
+    Nur nach bestandenem ``_load_blocked_reason`` aufrufen (dann stimmen die
+    Bereiche aller aktiven Bridges bereits überein)."""
+    defaults = _build_defaults(merged_body)
+    src = (
+        _parse_bridges_option(merged_body["bridges"])
+        if isinstance(merged_body.get("bridges"), list)
+        else state["bridges"]
+    )
+    by_host = {b["bridge_host"]: b for b in src}
+    swapped: list[str] = []
+    for host in list(state["tasks"]):
+        if not _is_running(host):
+            continue
+        live = state["run_ctx"].get(host)
+        cfg = by_host.get(host)
+        if live is None or cfg is None:
+            continue
+        params = _resolve_effect_params(cfg, defaults, live["channel_ids"], host)
+        live.update(params)
+        _build_effect_instances(live, fps)
+        # last_start spiegelt die jetzt laufenden Parameter (für /config).
+        if host in state["last_start"]:
+            state["last_start"][host].update({
+                "effect": params["effect"],
+                "color": "#{:02X}{:02X}{:02X}".format(*params["color"]),
+                "sweep_seconds": params["sweep_seconds"],
+                "chase_pause": params["chase_pause"],
+                "glow_low": round(params["glow_low"], 3),
+                "glow_high": round(params["glow_high"], 3),
+            })
+        swapped.append(host)
+    if swapped:
+        log.info("Effektset live umgeschaltet auf laufenden Bridges: %s", swapped)
+    return swapped
+
+
+def _apply_loaded_preset(preset_name: str | None, merged_body: dict, bridge_host: str | None) -> None:
+    """Ein geladenes Effektset in den globalen Zustand übernehmen: Name als
+    ``current_preset`` merken und – wenn das Set ``bridges`` enthält – dessen
+    Bridge-Einträge (inkl. ``area_id``) als neue effektive Konfiguration
+    setzen, damit ``/arm``, die HA-Integration und ``rest_command`` dieselben
+    Bereiche nutzen. Ein Solo-Start (``bridge_host`` gesetzt) ändert nichts."""
+    if bridge_host is not None:
+        return
+    state["current_preset"] = str(preset_name) if preset_name else None
+    if preset_name and isinstance(merged_body.get("bridges"), list):
+        parsed = _parse_bridges_option(merged_body["bridges"])
+        if parsed:
+            state["bridges"] = parsed
+
+
+async def handle_start(request: web.Request) -> web.Response:
+    """POST /start – Effekt auf allen konfigurierten (oder im Body übergebenen)
+    Bridges gleichzeitig starten, oder – mit ``bridge_host`` im Body – auf nur
+    einer einzelnen Bridge, unabhängig vom Zustand der anderen (siehe unten).
+
+    Body optional: ``duration``, ``fps``, ``restore_state`` gelten für **alle**
+    Bridges gemeinsam. ``effect``, ``color``, ``sweep_seconds``, ``chase_pause``,
+    ``attack_ms``, ``release_ms``, ``glow_low``, ``glow_high``,
+    ``glitter_interval_ms``, ``glitter_flash_ms``, ``glitter_colors``,
+    ``gc_direction``, ``gc_count``, ``gc_length``, ``gc_speed``,
+    ``gc_background_color``, ``gc_chase_glitter``, ``gc_background_pulse``,
+    ``color2``, ``meteor_count``, ``meteor_speed``,
+    ``firework_interval_ms``, ``firework_speed``, ``lightning_interval_ms``,
+    ``lightning_flash_ms``, ``ripple_interval_ms``, ``ripple_speed``,
+    ``wave_length``, ``flicker_interval_ms``, ``flicker_dip_ms`` im
+    Body sind die **Standardwerte** für Bridges, die diese Parameter nicht
+    selbst setzen. ``bridges`` (Liste von ``{bridge_host, area_id,
+    channel_order, effect?, color?, sweep_seconds?, chase_pause?, attack_ms?,
+    release_ms?, glow_low?, glow_high?, glitter_interval_ms?,
+    glitter_flash_ms?, glitter_colors?, gc_direction?, gc_strip_lengths?,
+    gc_count?, gc_length?, gc_speed?, gc_background_color?, gc_chase_glitter?,
+    gc_background_pulse?, color2?, meteor_count?, meteor_speed?,
+    firework_interval_ms?, firework_speed?, lightning_interval_ms?,
+    lightning_flash_ms?, ripple_interval_ms?, ripple_speed?, wave_length?,
+    flicker_interval_ms?, flicker_dip_ms?}``) übersteuert für diesen Aufruf die Option
+    ``bridges`` – jede Bridge kann ihren eigenen Effekt/Farbe/Timing haben.
+    ``gc_strip_lengths`` (nur ``effect: chase``, je Bridge, z. B.
+    ``[7, 5]``) teilt die Kanäle dieser Bridge in aufeinanderfolgende Gradient-
+    Lightstrips auf; ``gc_direction`` kann dann ebenfalls eine Liste sein
+    (eine Chase-Richtung je Strip statt eines Werts für alle). ``effect:
+    neutral`` (als Standard oder je Bridge) lässt die betreffende(n) Bridge(s)
+    komplett unangetastet – kein Stream, kein Sichern/Wiederherstellen –, sodass
+    in einem Effektset eine Bridge laufen und eine andere aus sein kann. Sind
+    **alle** Bridges neutral, antwortet ``/start`` mit ``no_active_bridges``.
+
+    ``preset``: Name eines gespeicherten Effektsets (siehe ``/presets``); dessen
+    gespeicherter Body dient als Basis, alle weiteren Body-Felder überschreiben
+    ihn für diesen Aufruf. Nicht mit ``bridge_host`` kombinierbar (400) – ein
+    Effektset ist ein Mehr-Bridge-Konzept. Ein preset-Start übernimmt die
+    ``bridges`` des Sets (inkl. ``area_id``) als neue effektive Konfiguration.
+    Ist eine Bridge scharfgeschaltet oder läuft eine Animation, ist der
+    preset-Start nur erlaubt, wenn das Set pro aktiver Bridge dieselbe
+    ``area_id`` hat (dann werden laufende Tasks live umgeschaltet –
+    ``hotswapped_bridges`` –, kein Neustart/Handshake); sonst 409.
+
+    ``bridge_host``: startet nur diese eine Bridge, unabhängig vom Zustand
+    anderer Bridges – wirkt als Filter auf die oben aufgelöste ``bridges``-
+    Liste (Option oder Body), keine eigene Auswahl. `already_running` gilt
+    dann nur für diese eine Bridge. Ein Solo-Start setzt nie
+    ``current_preset`` (siehe ``/health``/``/config``). Ohne ``bridge_host``
+    (Standard, alle konfigurierten/übergebenen Bridges) werden bereits
+    laufende Bridges übersprungen statt den ganzen Aufruf abzulehnen – die
+    Antwort listet sie unter ``skipped_bridges``; nur wenn **keine** Bridge
+    (weder neu noch bereits laufend) übrig bleibt und keine fehlgeschlagen
+    ist, antwortet ``/start`` mit ``no_active_bridges``.
+    """
+    body = await _json_body(request)
+
+    preset_name = body.get("preset")
+    if preset_name:
+        base = state["presets"].get(str(preset_name))
+        if not isinstance(base, dict):
+            return web.json_response(
+                {"error": f"Effektset '{preset_name}' nicht gefunden"}, status=404
+            )
+        merged = dict(base)
+        merged.update({k: v for k, v in body.items() if k != "preset"})
+        body = merged
+
+    bridge_host = body.get("bridge_host")
+    if bridge_host and preset_name:
+        return web.json_response(
+            {
+                "error": "bridge_host und preset zusammen werden nicht unterstützt – "
+                         "preset gilt nur für alle Bridges gemeinsam"
+            },
+            status=400,
+        )
+    if bridge_host and _is_running(bridge_host):
+        return web.json_response({"status": "already_running", "bridge_host": bridge_host})
+
+    if "bridges" in body:
+        req_bridges = _parse_bridges_option(body["bridges"])
+        if not req_bridges:
+            return web.json_response(
+                {"error": "bridges muss eine Liste von {bridge_host, area_id} sein"}, status=400
+            )
+    else:
+        req_bridges = state["bridges"]
+    if not req_bridges:
+        return web.json_response(
+            {"error": "keine Bridge konfiguriert (Option bridges oder /start-Body bridges)"},
+            status=400,
+        )
+    if bridge_host:
+        req_bridges = [c for c in req_bridges if c["bridge_host"] == bridge_host]
+        if not req_bridges:
+            return web.json_response(
+                {"error": f"bridge_host {bridge_host} nicht in bridges (Option oder Body) konfiguriert"},
+                status=400,
+            )
+
+    fps = int(body.get("fps") or options.get("fps", 25))
+    restore = bool(body.get("restore_state", state["restore_state"]))
+    # 0 = unbegrenzt (läuft bis POST /stop).
+    try:
+        duration = max(0.0, float(body.get("duration", state["duration"])))
+    except (TypeError, ValueError):
+        duration = state["duration"]
+
+    # Standardwerte für Bridges, die diese Effekt-Parameter nicht selbst setzen.
+    defaults = _build_defaults(body)
+
+    # Effektset-Ladeschranke: ein preset-Start bei scharfer/laufender Bridge ist
+    # nur erlaubt, wenn die Bereiche pro aktiver Bridge gleich bleiben (dann
+    # unten Hot-Swap statt Handshake). Sonst 409.
+    if preset_name and bridge_host is None:
+        reason = _load_blocked_reason(body)
+        if reason:
+            return web.json_response({"error": reason}, status=409)
 
     async def _resolve(cfg: dict) -> dict:
         """Eine Bridge auflösen: gepaart? erreichbar? area_id/Kanäle gültig?
@@ -1773,39 +1986,6 @@ async def handle_start(request: web.Request) -> web.Response:
         else:
             channel_ids = native_ids
 
-        glow_low = min(max(cfg.get("glow_low", defaults["glow_low"]), 0.0), 1.0)
-        glow_high = min(max(cfg.get("glow_high", defaults["glow_high"]), 0.0), 1.0)
-        glow_high = max(glow_high, glow_low)
-        color = cfg.get("color", defaults["color"])
-        palette = cfg.get("glitter_colors", defaults["glitter_palette"]) or [color]
-
-        # chase: Kanäle dieser Bridge in aufeinanderfolgende Gradient-
-        # Lightstrips aufteilen (gc_strip_lengths), jeder mit eigener
-        # Chase-Richtung (gc_direction darf eine Liste sein, eine je Strip).
-        # Passt die Summe nicht zur tatsächlichen Kanalzahl, gilt best-effort
-        # ein einzelner Strip über alle Kanäle dieser Bridge.
-        gc_strip_lengths = cfg.get("gc_strip_lengths")
-        if gc_strip_lengths and sum(gc_strip_lengths) == len(channel_ids):
-            strip_lengths = list(gc_strip_lengths)
-        else:
-            if gc_strip_lengths:
-                log.warning(
-                    "Bridge %s: gc_strip_lengths %s ergibt nicht %d Kanäle – "
-                    "ein einzelner Strip wird verwendet",
-                    host, gc_strip_lengths, len(channel_ids),
-                )
-            strip_lengths = [len(channel_ids)]
-        gc_direction_cfg = cfg.get("gc_direction", defaults["gc_direction"])
-        directions = list(gc_direction_cfg) if isinstance(gc_direction_cfg, list) else [gc_direction_cfg]
-        if len(directions) < len(strip_lengths):
-            directions += [directions[-1]] * (len(strip_lengths) - len(directions))
-        elif len(directions) > len(strip_lengths):
-            directions = directions[: len(strip_lengths)]
-        gc_strips = [
-            {"length": length, "direction": direction}
-            for length, direction in zip(strip_lengths, directions)
-        ]
-
         return {
             "bridge_host": host,
             "area_id": cfg["area_id"],
@@ -1813,48 +1993,7 @@ async def handle_start(request: web.Request) -> web.Response:
             "session": session,
             "armed": bool(armed),
             "app_key": creds["username"],
-            "effect": cfg.get("effect", defaults["effect"]),
-            "color": color,
-            "sweep_seconds": cfg.get("sweep_seconds", defaults["sweep_seconds"]),
-            "chase_pause": max(0.0, cfg.get("chase_pause", defaults["chase_pause"])),
-            "attack_s": cfg.get("attack_ms", defaults["attack_ms"]) / 1000.0,
-            "release_s": cfg.get("release_ms", defaults["release_ms"]) / 1000.0,
-            "glow_low": glow_low,
-            "glow_high": glow_high,
-            "glitter_interval_ms": max(1.0, cfg.get("glitter_interval_ms", defaults["glitter_interval_ms"])),
-            "glitter_flash_ms": max(1.0, cfg.get("glitter_flash_ms", defaults["glitter_flash_ms"])),
-            "glitter_palette": palette,
-            "gc_strips": gc_strips,
-            "gc_count": max(1, cfg.get("gc_count", defaults["gc_count"])),
-            "gc_length": min(max(cfg.get("gc_length", defaults["gc_length"]), 0.2), 200.0),
-            "gc_speed": max(0.01, cfg.get("gc_speed", defaults["gc_speed"])),
-            "gc_background_color": cfg.get("gc_background_color", defaults["gc_background_color"]),
-            "gc_chase_glitter": cfg.get("gc_chase_glitter", defaults["gc_chase_glitter"]),
-            "gc_background_pulse": cfg.get("gc_background_pulse", defaults["gc_background_pulse"]),
-            "color2": cfg.get("color2", defaults["color2"]),
-            "meteor_count": max(1, cfg.get("meteor_count", defaults["meteor_count"])),
-            "meteor_speed": max(0.05, cfg.get("meteor_speed", defaults["meteor_speed"])),
-            "firework_interval_ms": max(
-                1.0, cfg.get("firework_interval_ms", defaults["firework_interval_ms"])
-            ),
-            "firework_speed": max(0.5, cfg.get("firework_speed", defaults["firework_speed"])),
-            "lightning_interval_ms": max(
-                1.0, cfg.get("lightning_interval_ms", defaults["lightning_interval_ms"])
-            ),
-            "lightning_flash_ms": max(
-                1.0, cfg.get("lightning_flash_ms", defaults["lightning_flash_ms"])
-            ),
-            "ripple_interval_ms": max(
-                1.0, cfg.get("ripple_interval_ms", defaults["ripple_interval_ms"])
-            ),
-            "ripple_speed": max(0.5, cfg.get("ripple_speed", defaults["ripple_speed"])),
-            "wave_length": max(0.5, cfg.get("wave_length", defaults["wave_length"])),
-            "flicker_interval_ms": max(
-                1.0, cfg.get("flicker_interval_ms", defaults["flicker_interval_ms"])
-            ),
-            "flicker_dip_ms": max(
-                1.0, cfg.get("flicker_dip_ms", defaults["flicker_dip_ms"])
-            ),
+            **_resolve_effect_params(cfg, defaults, channel_ids, host),
         }
 
     # "neutral": diese Bridge wird gar nicht angefasst (kein DTLS, kein
@@ -1873,8 +2012,17 @@ async def handle_start(request: web.Request) -> web.Response:
     # bereits unabhängig laufen.
     already = [c for c in non_neutral if _is_running(c["bridge_host"])]
     to_run = [c for c in non_neutral if not _is_running(c["bridge_host"])]
-    skipped_report = [{"bridge_host": c["bridge_host"], "status": "already_running"} for c in already]
-    for c in already:
+
+    # preset-Start bei bereits laufenden Bridges: die Ladeschranke oben ist
+    # bestanden (gleiche Bereiche), also die laufenden Tasks live auf das neue
+    # Set umschalten statt sie nur zu überspringen.
+    hotswapped: list[str] = []
+    if preset_name and bridge_host is None and (already or state["armed"]):
+        hotswapped = await _hotswap_running(body, fps)
+
+    skipped = [c for c in already if c["bridge_host"] not in hotswapped]
+    skipped_report = [{"bridge_host": c["bridge_host"], "status": "already_running"} for c in skipped]
+    for c in skipped:
         log.info("Start: Bridge %s läuft bereits – übersprungen.", c["bridge_host"])
 
     # area_id/Kanäle für alle zu fahrenden Bridges parallel auflösen (kein DTLS).
@@ -1891,17 +2039,19 @@ async def handle_start(request: web.Request) -> web.Response:
             # (Select/Sensor "geladenes Effektset") gilt ein reiner Batch-
             # Aufruf trotzdem als "geladen"; ein Solo-Start lässt
             # current_preset unangetastet (siehe Docstring oben).
-            if bridge_host is None:
-                state["current_preset"] = str(preset_name) if preset_name else None
+            _apply_loaded_preset(preset_name, body, bridge_host)
             log.info(
-                "Start: keine neue Bridge zu starten (neutral: %s, bereits aktiv: %s).",
-                [c["bridge_host"] for c in neutral], [c["bridge_host"] for c in already],
+                "Start: keine neue Bridge zu starten (neutral: %s, bereits aktiv: %s, "
+                "live umgeschaltet: %s).",
+                [c["bridge_host"] for c in neutral], [c["bridge_host"] for c in skipped],
+                hotswapped,
             )
             return web.json_response({
                 "status": "no_active_bridges",
                 "duration": duration, "fps": fps, "restore_state": restore,
                 "bridges": [], "failed_bridges": [],
                 "neutral_bridges": neutral_report, "skipped_bridges": skipped_report,
+                "hotswapped_bridges": hotswapped,
             })
         return web.json_response(
             {
@@ -1917,9 +2067,8 @@ async def handle_start(request: web.Request) -> web.Response:
     # setzen, nicht schon bei jedem preset-Versuch – ein 400/404/502 vorher
     # soll "geladenes Effektset" nicht auf einen nie gestarteten Namen setzen.
     # Ad-hoc-Start ohne preset räumt die Anzeige wieder auf None. Ein Solo-
-    # Start (bridge_host im Body) lässt current_preset unangetastet.
-    if bridge_host is None:
-        state["current_preset"] = str(preset_name) if preset_name else None
+    # Start (bridge_host im Body) lässt current_preset/bridges unangetastet.
+    _apply_loaded_preset(preset_name, body, bridge_host)
 
     # session.start() (DTLS-Handshake, ~einige Sekunden) passiert je Bridge in
     # einem eigenen Task, damit die HTTP-Antwort nicht blockiert (HA
@@ -1978,6 +2127,7 @@ async def handle_start(request: web.Request) -> web.Response:
         "restore_state": restore,
         "neutral_bridges": neutral_report,
         "skipped_bridges": skipped_report,
+        "hotswapped_bridges": hotswapped,
         "bridges": started_report,
         "failed_bridges": failed,
     }
@@ -2125,15 +2275,23 @@ async def handle_disarm(request: web.Request) -> web.Response:
 
 
 async def handle_select(request: web.Request) -> web.Response:
-    """POST /select – ein Effektset als *geladen* merken, **ohne** es zu starten.
+    """POST /select – ein Effektset **laden**.
 
-    Setzt nur ``state["current_preset"]`` (für die HA-Integration: Select-Entity
-    „Effektset" + Sensor „geladenes Effektset"). Body ``{"preset": "<name>"}``
-    (404, wenn unbekannt) oder ``{"preset": null}`` bzw. leer zum Zurücksetzen.
-    Ein späteres ``POST /start`` (ohne eigenes ``preset``) fährt weiterhin die
-    App-Standardwerte – das Laden hier ändert nur die Anzeige; die Integration
-    ruft bei bereits laufender Animation zusätzlich ``/stop`` + ``/start
-    {preset}`` auf, um sofort umzuschalten.
+    Merkt den Namen als ``state["current_preset"]`` (für die HA-Integration:
+    Select-Entity „Effektset" + Sensor „geladenes Effektset") **und** übernimmt
+    die im Set gespeicherten Bridge-Einträge – insbesondere die ``area_id`` pro
+    Bridge – als neue effektive Konfiguration (``state["bridges"]``), sodass
+    ``/arm``, ``rest_command`` und ein späteres ``/start`` dieselben Bereiche
+    nutzen.
+
+    Body ``{"preset": "<name>"}`` (404, wenn unbekannt) oder ``{"preset":
+    null}`` bzw. leer zum Zurücksetzen der Anzeige.
+
+    Laden ist möglich, solange keine Bridge scharfgeschaltet ist und keine
+    Animation läuft. Ist eine Bridge scharf/aktiv, geht es nur, wenn das Set
+    pro aktiver Bridge dieselbe ``area_id`` enthält – dann werden die
+    Effekt-Parameter im laufenden Task ohne Neustart/Handshake ausgetauscht
+    (die Animation läuft sofort mit dem neuen Set weiter). Andernfalls: 409.
     """
     body = await _json_body(request)
     name = body.get("preset")
@@ -2142,11 +2300,27 @@ async def handle_select(request: web.Request) -> web.Response:
         log.info("Effektset-Auswahl zurückgesetzt.")
         return web.json_response({"status": "cleared", "current_preset": None})
     name = str(name)
-    if name not in state["presets"]:
+    base = state["presets"].get(name)
+    if not isinstance(base, dict):
         return web.json_response({"error": f"Effektset '{name}' nicht gefunden"}, status=404)
-    state["current_preset"] = name
-    log.info("Effektset '%s' geladen (nicht gestartet).", name)
-    return web.json_response({"status": "selected", "current_preset": name})
+
+    reason = _load_blocked_reason(base)
+    if reason:
+        return web.json_response(
+            {"error": reason, "current_preset": state["current_preset"]}, status=409
+        )
+
+    fps = state["last_start_meta"].get("fps") or int(options.get("fps", 25))
+    swapped = await _hotswap_running(base, fps)
+    _apply_loaded_preset(name, base, None)
+    log.info(
+        "Effektset '%s' geladen%s.",
+        name,
+        f" – laufend umgeschaltet: {swapped}" if swapped else " (nicht gestartet)",
+    )
+    return web.json_response(
+        {"status": "selected", "current_preset": name, "hotswapped_bridges": swapped}
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -2205,108 +2379,6 @@ async def handle_presets_delete(request: web.Request) -> web.Response:
     return web.json_response({"status": "not_found", "name": name}, status=404)
 
 
-# --------------------------------------------------------------------------- #
-# Bridge-Konfiguration (Web-UI, /data/bridges.json)
-# --------------------------------------------------------------------------- #
-def _bridges_change_blocked(new_effective: list[dict]) -> list[str]:
-    """Hosts, deren effektiver Eintrag sich ändern/verschwinden würde und die
-    dabei laufen oder scharfgeschaltet sind (dann ist die Änderung verboten)."""
-    cur = {b["bridge_host"]: b for b in state["bridges"]}
-    nxt = {b["bridge_host"]: b for b in new_effective}
-    blocked: list[str] = []
-    for host, entry in cur.items():
-        if nxt.get(host) == entry:
-            continue  # unverändert
-        why = []
-        if _is_running(host):
-            why.append("Effekt läuft")
-        if host in state["armed"]:
-            why.append("scharfgeschaltet")
-        if why:
-            blocked.append(f"{host} ({', '.join(why)})")
-    return blocked
-
-
-async def handle_bridges_get(request: web.Request) -> web.Response:
-    """GET /bridges – gespeicherte / Options- / effektive Bridge-Konfiguration."""
-    return web.json_response(
-        {
-            "saved": state["saved_bridges"],
-            "option": _parse_bridges_option(options.get("bridges")),
-            "effective": state["bridges"],
-        }
-    )
-
-
-async def handle_bridges_put(request: web.Request) -> web.Response:
-    """PUT/POST /bridges – die Bridge-Karten des Web-UI dauerhaft speichern
-    (``/data/bridges.json``). Body ``{"bridges": [ {bridge_host, area_id,
-    channel_order?, effect?, …}, … ]}`` (dieselben Felder wie die App-Option
-    ``bridges``). Gewinnt je Host über die Option, wirkt sofort (ohne
-    Add-on-Neustart) für ``/start``, ``/arm``, die HA-Integration und
-    ``rest_command``.
-
-    **Abgelehnt (409)**, wenn sich der Eintrag einer Bridge ändern würde, die
-    gerade läuft oder scharfgeschaltet ist – erst ``/stop`` bzw. ``/disarm``.
-    """
-    body = await _json_body(request)
-    raw = body.get("bridges")
-    if not isinstance(raw, list):
-        return web.json_response(
-            {"error": "bridges muss eine Liste von {bridge_host, area_id, …} sein"}, status=400
-        )
-    parsed = _parse_bridges_option(raw)
-    valid_hosts = {b["bridge_host"] for b in parsed}
-    new_effective = _merge_bridges(parsed)
-
-    blocked = _bridges_change_blocked(new_effective)
-    if blocked:
-        return web.json_response(
-            {
-                "error": "Bridge-Konfiguration kann nicht geändert werden, solange eine "
-                         "betroffene Bridge läuft oder scharfgeschaltet ist – erst /stop bzw. /disarm.",
-                "blocked": blocked,
-            },
-            status=409,
-        )
-
-    # Nur gültige Einträge roh (in Eingabeform) sichern.
-    to_save = [
-        e for e in raw
-        if isinstance(e, dict) and str(e.get("bridge_host") or "").strip() in valid_hosts
-    ]
-    _save_saved_bridges(to_save)
-    state["saved_bridges"] = parsed
-    state["bridges"] = new_effective
-    log.info(
-        "Bridge-Konfiguration im Web-UI gespeichert (%d Einträge, effektiv %d Bridges).",
-        len(to_save), len(new_effective),
-    )
-    return web.json_response(
-        {"status": "saved", "bridges": [b["bridge_host"] for b in new_effective]}
-    )
-
-
-async def handle_bridges_delete(request: web.Request) -> web.Response:
-    """DELETE /bridges – die im Web-UI gespeicherte Konfig verwerfen, zurück
-    auf die reine App-Option. Gleiche 409-Sperre wie ``PUT``."""
-    option_only = _merge_bridges([])
-    blocked = _bridges_change_blocked(option_only)
-    if blocked:
-        return web.json_response(
-            {"error": "Bridge-Konfiguration kann nicht zurückgesetzt werden, solange eine "
-                      "betroffene Bridge läuft oder scharfgeschaltet ist – erst /stop bzw. /disarm.",
-             "blocked": blocked},
-            status=409,
-        )
-    _save_saved_bridges([])
-    state["saved_bridges"] = []
-    state["bridges"] = option_only
-    log.info("Web-UI-Bridge-Konfiguration verworfen – zurück auf die App-Option (%d Bridges).",
-             len(option_only))
-    return web.json_response({"status": "reset", "bridges": [b["bridge_host"] for b in option_only]})
-
-
 async def _on_shutdown(app: web.Application) -> None:
     """Beim Herunterfahren (SIGTERM durch HA) laufende Effekte stoppen und alle
     scharfen Bridges entschärfen – sonst blieben Streams offen und der
@@ -2338,10 +2410,6 @@ def create_app() -> web.Application:
     app.router.add_put("/presets", handle_presets_put)
     app.router.add_post("/presets", handle_presets_put)
     app.router.add_delete("/presets", handle_presets_delete)
-    app.router.add_get("/bridges", handle_bridges_get)
-    app.router.add_put("/bridges", handle_bridges_put)
-    app.router.add_post("/bridges", handle_bridges_put)
-    app.router.add_delete("/bridges", handle_bridges_delete)
     app.on_shutdown.append(_on_shutdown)
     return app
 

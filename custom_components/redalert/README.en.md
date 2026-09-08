@@ -15,7 +15,7 @@ for the variant without any extra installation).
 | **Animation** | `switch` | On = `POST /start` (with the currently loaded effect set, if one is selected, otherwise the app default) – starts **all** configured bridges together. Off = `POST /stop` (stops every running bridge). |
 | **Animation (\<bridge IP\>)** | `switch` | One more switch entity per paired bridge (created dynamically from `/config`'s `bridges` list) – starts/stops **only that one** bridge (`bridge_host` in the `/start`/`/stop` body), regardless of the others' state. If a bridge disappears from the app configuration, its switch isn't deleted, just goes `unavailable`. |
 | **Armed** | `switch` | On = `POST /arm` (keeps the DTLS stream to **all** non-`neutral` bridges permanently open, so a following animation start skips the ~3–9 s handshake). Off = `POST /disarm` (closes the streams, restores the light state). `on` when all those bridges are armed (`armed` from `/config`). |
-| **Effect set** | `select` | Dropdown with all saved effect sets (`GET /presets` names). Picking one only **loads** the set (`POST /select` → `current_preset`), it does not start it – like "Load" in the web UI. If an animation is already running, it switches over immediately (`POST /stop` + `POST /start {"preset": …}`). |
+| **Effect set** | `select` | Dropdown with all saved effect sets (`GET /presets` names). Picking one calls `POST /select`: the app **loads** the set (`current_preset` + adopts the per-bridge `area_id`s). If an animation is running or a bridge is armed, the app hot-swaps the running effect onto the new set without a restart – provided the set has the same `area_id` per active bridge; otherwise the selection fails with an error. |
 | **Loaded effect set** | `sensor` | Name of the loaded/started set (`current_preset`; empty after an ad-hoc start without `preset` or `POST /select {"preset": null}`; a solo start of one bridge never changes this). |
 
 Six plus one entity per paired bridge attach to one shared device
@@ -76,11 +76,13 @@ web UI at any later time.
   `/health`/`/config`) – so it applies even when a set was set via the web UI,
   a raw `/start` call with `preset`, or `POST /select`, not just via the
   `select` entity.
-- The `select` entity **starts nothing** while no animation is running: it
-  calls `POST /select` and only sets "Loaded effect set". Only
-  `switch.…_animation` (or a `/start {"preset": …}`) actually runs the set. If
-  an animation is already running, picking a set switches over immediately
-  (`/stop` + `/start`).
+- The `select` entity always calls `POST /select`. While nothing runs and
+  nothing is armed, the set is only loaded (`current_preset` + `area_id`s);
+  only `switch.…_animation` (or a `/start {"preset": …}`) actually runs it. If
+  an animation is already running or a bridge is armed, the app hot-swaps the
+  effect onto the new set **without a restart/handshake** – only if the set has
+  the same `area_id` per active bridge; otherwise the selection fails with
+  `HomeAssistantError` (the server responds `409`).
 - An ad-hoc start with no `preset` at all (e.g. the plain "Start" button in
   the web UI without picking an effect set) clears "Loaded effect set" back
   to empty.

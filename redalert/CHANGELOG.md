@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.20.0
+
+- **Die `area_id` jeder Bridge wird jetzt im Effektset gespeichert.** Ein Set
+  enthält ohnehin die komplette `/start`-Konfiguration inkl. `bridges`; neu ist,
+  dass das **Laden** eines Sets (`POST /select`, „Laden" im Web-UI oder
+  `POST /start {"preset": …}`) dessen `area_id`s als neue effektive
+  Konfiguration übernimmt – sie gelten damit auch für Scharfschalten, die
+  Home-Assistant-Integration und `rest_command`.
+- **Die separate Web-UI-Speichermöglichkeit aus 1.19.0 wurde wieder entfernt:**
+  die Knöpfe „Bridge-Konfiguration speichern" / „Auf Add-on-Konfiguration
+  zurücksetzen", die Datei `/data/bridges.json` und die Endpunkte
+  `GET/PUT/POST/DELETE /bridges` gibt es nicht mehr; `/config` zeigt kein
+  `bridges_saved` / `config_source` mehr. Die Bridge-Grundkonfiguration kommt
+  wieder allein aus der Add-on-Option `bridges`; darüber legt sich ein
+  geladenes Effektset.
+- **Effektset laden – neue Regeln:** Laden ist immer möglich, solange keine
+  Bridge scharfgeschaltet ist und keine Animation läuft. Bei scharfer bzw.
+  laufender Bridge geht es nur, wenn das Set pro aktiver Bridge **dieselbe
+  `area_id`** enthält – dann werden die Effekt-Parameter im laufenden Task
+  ausgetauscht und die Animation läuft **sofort mit dem neuen Set weiter**
+  (kein Zurücksetzen auf den Ausgangszustand, kein erneuter DTLS-Handshake).
+  Andernfalls antwortet der Server mit `409` und einer Fehlermeldung. Die
+  Antwort nennt umgeschaltete Bridges unter `hotswapped_bridges`.
+- **Web-UI umgeräumt:** „2 · Steuerung" fasst jetzt Start/Stop, Scharfschalten
+  und die Effektset-Bedienung (Auswählen, Laden, Herunterladen, Hochladen,
+  Löschen, Speichern) zusammen. Der zusätzliche „▶ Starten"-Knopf entfällt.
+  Die Parametererklärungen stehen im neuen Abschnitt „3 · Parameter" ganz
+  unten.
+- Die HA-Integration (`select`-Entity „Effektset") ruft nur noch `POST /select`
+  auf; die Live-Umschaltung bzw. die Fehlermeldung übernimmt der Server.
+
 ## 1.19.0
 
 - **Bridge-Konfiguration im Web-UI dauerhaft speicherbar.** Bisher galten die

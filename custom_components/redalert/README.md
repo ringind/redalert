@@ -15,7 +15,7 @@ für die Variante ganz ohne Zusatzinstallation).
 | **Animation** | `switch` | Ein = `POST /start` (mit dem aktuell geladenen Effektset, falls eines gewählt ist, sonst App-Standard) – startet **alle** konfigurierten Bridges gemeinsam. Aus = `POST /stop` (stoppt alle laufenden Bridges). |
 | **Animation (\<Bridge-IP\>)** | `switch` | Je eine weitere Switch-Entity pro gepaarter Bridge (dynamisch aus `/config`'s `bridges`-Liste angelegt) – startet/stoppt **nur diese eine** Bridge (`bridge_host` im `/start`/`/stop`-Body), unabhängig vom Zustand der anderen. Verschwindet eine Bridge aus der App-Konfiguration, wird ihr Switch nicht gelöscht, sondern nur `unavailable`. |
 | **Scharfgeschaltet** | `switch` | Ein = `POST /arm` (hält den DTLS-Stream **aller** nicht-`neutral` Bridges dauerhaft offen, sodass ein anschließender Animationsstart den ~3–9 s langen Handshake überspringt). Aus = `POST /disarm` (schließt die Streams, stellt den Lichtzustand wieder her). `on`, wenn alle diese Bridges scharf sind (`armed` aus `/config`). |
-| **Effektset** | `select` | Dropdown mit allen gespeicherten Effektsets (`GET /presets`-Namen). Auswahl **lädt** das Set nur (`POST /select` → `current_preset`), ohne zu starten – wie „Laden“ im Web-UI. Läuft gerade eine Animation, wird sofort mit dem neuen Set weitergefahren (`POST /stop` + `POST /start {"preset": …}`). |
+| **Effektset** | `select` | Dropdown mit allen gespeicherten Effektsets (`GET /presets`-Namen). Auswahl ruft `POST /select` auf: die App **lädt** das Set (`current_preset` + Übernahme der Bridge-`area_id`s). Läuft eine Animation bzw. ist eine Bridge scharfgeschaltet, schaltet die App den laufenden Effekt sofort ohne Neustart auf das neue Set um – sofern das Set pro aktiver Bridge dieselbe `area_id` hat; sonst schlägt die Auswahl mit einer Fehlermeldung fehl. |
 | **Geladenes Effektset** | `sensor` | Name des geladenen/gestarteten Sets (`current_preset`; leer nach einem Ad-hoc-Start ohne `preset` oder `POST /select {"preset": null}`; ein Solo-Start einer einzelnen Bridge ändert diese Anzeige nie). |
 
 Sechs plus eine Entity je gepaarter Bridge hängen an einem gemeinsamen Gerät
@@ -79,10 +79,13 @@ jederzeit nachträglich in der App-Web-UI erledigen.
   `/health`/`/config`) – gilt also auch, wenn ein Set über das Web-UI, einen
   rohen `/start`-Aufruf mit `preset` oder `POST /select` gesetzt wurde, nicht
   nur über die `select`-Entity.
-- Die `select`-Entity **startet nichts**, solange keine Animation läuft: sie
-  ruft `POST /select` und setzt nur „Geladenes Effektset“. Erst der
-  `switch.…_animation` (bzw. ein `/start {"preset": …}`) fährt das Set. Läuft
-  bereits eine Animation, schaltet die Auswahl sofort um (`/stop` + `/start`).
+- Die `select`-Entity ruft immer `POST /select` auf. Läuft nichts und ist
+  nichts scharf, wird das Set nur geladen (`current_preset` + `area_id`s); erst
+  `switch.…_animation` (bzw. `/start {"preset": …}`) fährt es. Läuft bereits
+  eine Animation bzw. ist eine Bridge scharf, schaltet die App den Effekt
+  **sofort ohne Neustart/Handshake** auf das neue Set um – nur wenn das Set pro
+  aktiver Bridge dieselbe `area_id` hat; sonst schlägt die Auswahl mit
+  `HomeAssistantError` fehl (der Server antwortet `409`).
 - Ein Ad-hoc-Start ganz ohne `preset` (z. B. der reine „Start“-Button im
   Web-UI ohne Effektset-Auswahl) räumt „Geladenes Effektset“ wieder auf leer.
 - `switch.animation` aus schaltet **die gesamte laufende Animation** ab

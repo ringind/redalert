@@ -19,8 +19,8 @@ its own docs, not here:
 Creates six entities on one device: `binary_sensor` (is the effect
 currently running?), `binary_sensor` (are the bridges armed?), `switch`
 (animation on/off), `switch` (armed – keep the DTLS stream open ahead of time
-for an instant start), `select` (load an effect set – only starts it if an
-animation is running), `sensor` (name of the loaded set).
+for an instant start), `select` (load an effect set – hot-swaps a running/armed bridge when the
+`area_id`s match, else errors), `sensor` (name of the loaded set).
 
 ## Installation
 

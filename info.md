@@ -19,8 +19,8 @@ steht in deren eigener Doku, nicht hier:
 Legt sechs Entities an einem Gerät an: `binary_sensor` (läuft der Effekt
 gerade?), `binary_sensor` (sind die Bridges scharfgeschaltet?), `switch`
 (Animation an/aus), `switch` (Scharfgeschaltet – DTLS-Stream vorab offen halten
-für sofortigen Start), `select` (Effektset laden – startet nur bei laufender
-Animation), `sensor` (Name des geladenen Sets).
+für sofortigen Start), `select` (Effektset laden – schaltet laufende/scharfe Bridges bei gleicher
+`area_id` live um, sonst Fehler), `sensor` (Name des geladenen Sets).
 
 ## Installation
 
