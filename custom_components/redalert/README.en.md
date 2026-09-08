@@ -4,7 +4,7 @@
 
 Standalone `custom_component` for the [`redalert`](../../redalert) app: talks
 to its REST API (see [`redalert/DOCS.en.md`](../../redalert/DOCS.en.md#rest-api))
-and creates four entities – without the `rest_command`/template detour (see
+and creates five entities – without the `rest_command`/template detour (see
 ["Integrate with Home Assistant"](../../redalert/DOCS.en.md#integrate-with-home-assistant)
 for the variant without any extra installation).
 
@@ -13,10 +13,11 @@ for the variant without any extra installation).
 | **Operating state** | `binary_sensor` | `on` while the app is running an effect on **any** bridge (`running` from `/config`). |
 | **Animation** | `switch` | On = `POST /start` (with the currently loaded effect set, if one is selected, otherwise the app default) – starts **all** configured bridges together. Off = `POST /stop` (stops every running bridge). |
 | **Animation (\<bridge IP\>)** | `switch` | One more switch entity per paired bridge (created dynamically from `/config`'s `bridges` list) – starts/stops **only that one** bridge (`bridge_host` in the `/start`/`/stop` body), regardless of the others' state. If a bridge disappears from the app configuration, its switch isn't deleted, just goes `unavailable`. |
+| **Armed** | `switch` | On = `POST /arm` (keeps the DTLS stream to **all** non-`neutral` bridges permanently open, so a following animation start skips the ~3–9 s handshake). Off = `POST /disarm` (closes the streams, restores the light state). `on` when all those bridges are armed (`armed` from `/config`). |
 | **Effect set** | `select` | Dropdown with all saved effect sets (`GET /presets` names); picking one loads **and starts** the set immediately (`POST /start {"preset": …}`). |
 | **Loaded effect set** | `sensor` | Name of the most recently loaded set (empty on an ad-hoc start without `preset`, e.g. via the app's web UI or a direct `/start` call without `preset`; a solo start of one bridge via its own switch never changes this). |
 
-Four plus one entity per paired bridge attach to one shared device
+Five plus one entity per paired bridge attach to one shared device
 ("Red Alert (<Host>)"); one config entry = one app instance.
 
 ## Installation

@@ -233,13 +233,15 @@ Restart the app after changing options.
 | Endpoint  | Method  | Purpose                                                                                 |
 |-----------|---------|-----------------------------------------------------------------------------------------|
 | `/`       | GET     | Web UI (Ingress panel "Red Alert")                                                      |
-| `/health` | GET     | Status: `{status, paired, running, current_preset}` – at least one bridge paired? is the effect currently running on **any** bridge (see `/config` for per-bridge status)? name of the most recently loaded effect set (`null` on an ad-hoc start)? Also the container HEALTHCHECK target |
-| `/config` | GET     | Effective configuration incl. `bridges` (each entry also has `running: bool`), `presets` (effect set names) and `current_preset` – for the web UI and the Home Assistant integration |
+| `/health` | GET     | Status: `{status, paired, running, armed, current_preset}` – at least one bridge paired? is the effect currently running on **any** bridge (see `/config` for per-bridge status)? are all non-`neutral` bridges armed? name of the most recently loaded effect set (`null` on an ad-hoc start)? Also the container HEALTHCHECK target |
+| `/config` | GET     | Effective configuration incl. `bridges` (each entry also has `running: bool` and `armed: bool`), `armed`/`armed_bridges` (global), `presets` (effect set names) and `current_preset` – for the web UI and the Home Assistant integration |
 | `/pair`   | POST    | One-time pairing with a bridge. Body: `{"bridge_host": "..."}` (required when more than one bridge is configured) |
 | `/areas`  | GET     | List Entertainment areas + channels of a bridge. Query `?bridge_host=...` (required when more than one bridge is paired) |
 | `/start`  | POST    | Start the effect on all configured (or body-supplied) bridges simultaneously (returns immediately; DTLS handshakes run in the background, in parallel) – or, with `bridge_host` in the body, on only a single bridge, regardless of the others' state. Body optional: `duration` (s, default from the `duration` option, `0` = unlimited), `fps`, `restore_state` (shared across all bridges); `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors`, `gc_direction`, `gc_count`, `gc_length`, `gc_speed`, `gc_background_color`, `gc_chase_glitter`, `gc_background_pulse`, `color2`, `lightning_interval_ms`, `lightning_flash_ms`, `meteor_count`, `meteor_speed`, `firework_interval_ms`, `firework_speed`, `ripple_interval_ms`, `ripple_speed`, `wave_length`, `flicker_interval_ms`, `flicker_dip_ms` are the defaults for bridges without their own setting. `bridges` (list of `{bridge_host, area_id, channel_order, effect?, color?, sweep_seconds?, chase_pause?, attack_ms?, release_ms?, glow_low?, glow_high?, glitter_interval_ms?, glitter_flash_ms?, glitter_colors?, gc_direction?, gc_strip_lengths?, gc_count?, gc_length?, gc_speed?, gc_background_color?, gc_chase_glitter?, gc_background_pulse?, color2?, lightning_interval_ms?, lightning_flash_ms?, meteor_count?, meteor_speed?, firework_interval_ms?, firework_speed?, ripple_interval_ms?, ripple_speed?, wave_length?, flicker_interval_ms?, flicker_dip_ms?}`, `channel_order` as `[2,3,1,0,5,4]` or `"2,3,1,0,5,4"`) overrides the `bridges` option for this one call; `gc_strip_lengths` (`chase` only, per bridge, e.g. `[7,5]`) splits this bridge's channels into several Gradient Lightstrips, `gc_direction` may then be a list (one direction per strip). `preset` = name of a saved effect set as a base (further body fields override it) – not combinable with `bridge_host`. `bridge_host` (optional) filters to exactly this one bridge; `already_running` then only applies to it. Without `bridge_host`, already-running bridges are skipped (`skipped_bridges`) rather than rejecting the call. The response contains `bridges` (newly started, each with resolved parameters) + `failed_bridges`/`neutral_bridges`/`skipped_bridges`; `502` only if no bridge starts and at least one failed. |
 | `/stop`   | POST    | Stop the effect on all running bridges immediately – or, with `bridge_host` in the body, on only a single bridge                                       |
-| `/identify` | POST  | Cycle through a bridge's lamps individually (`channel_id` → lamp). Body: `bridge_host` (required when more than one bridge is configured), `area_id` (optional, otherwise from the bridges configuration), `channel_id` (omitted = all in sequence), `seconds`, `color`, `restore_state`. One DTLS handshake for the whole run; occupies the same slot as an effect on this one bridge. |
+| `/arm`    | POST    | **Arm**: keep the DTLS stream to one/all bridge(s) permanently open so a later `/start` skips the ~3–9 s handshake. Body optional `bridge_host` (otherwise all configured, non-`neutral` bridges). While armed the bridge holds its single Entertainment slot; its lamps show an approximated still of the previous state. Running bridge → stop it first. |
+| `/disarm` | POST    | Undo arming: close the stream(s), restore the light state via CLIP v2. Body optional `bridge_host`. A running effect is stopped first. |
+| `/identify` | POST  | Cycle through a bridge's lamps individually (`channel_id` → lamp). Body: `bridge_host` (required when more than one bridge is configured), `area_id` (optional, otherwise from the bridges configuration), `channel_id` (omitted = all in sequence), `seconds`, `color`, `restore_state`. One DTLS handshake for the whole run; occupies the same slot as an effect on this one bridge (blocked while the bridge is armed – disarm first). |
 | `/presets` | GET / PUT / POST / DELETE | Manage effect sets (`/data/presets.json`). `GET` = all (`{presets, names}`) or `?name=…` one. `PUT`/`POST` `{"name","config"}` = save/overwrite (also the upload target). `DELETE ?name=…` = delete. |
 
 Omit `duration` → the effect runs with the default from the `duration` app
@@ -247,11 +249,20 @@ option (default `0` = **unlimited**, runs until `/stop`); with a positive
 value it ends by itself after that many seconds. If a bridge is unreachable,
 the others still start (best effort) – see `failed_bridges`.
 
+**Faster start:** otherwise the bridge's DTLS handshake (~1.5–9 s) sits between
+`/start` and the visible effect. `POST /arm` keeps the stream open beforehand
+(web UI: "Arm" button per bridge card or global; Home Assistant: "Armed"
+switch); a following `/start` then begins within a single frame. While armed
+the bridge holds its single Entertainment slot and its lamps show an
+approximated still; `POST /disarm` closes the stream and restores the exact
+state.
+
 ## 7. Integrate with Home Assistant
 
 **Ready-made integration:** [`custom_components/redalert/`](custom_components/redalert)
-in this repo creates four entities (`binary_sensor` "Operating state",
-`switch` "Animation", `select` "Effect set", `sensor` "Loaded effect set").
+in this repo creates five entities (`binary_sensor` "Operating state",
+`switch` "Animation", `switch` "Armed", `select` "Effect set", `sensor`
+"Loaded effect set").
 Install via **HACS** (repo category *Integration*, add as a custom
 repository – `hacs.json` at the repo root) or manually (copy the folder to
 `config/custom_components/`); then restart HA and go to
@@ -400,7 +411,10 @@ the lamps (`RedAlertAurora` in `chase.py`, computes the colour directly
 instead of a brightness curve):
 - `glitter_colors` – palette the wave blends through (empty = just the
   bridge `color`, then with no colour change).
-- `sweep_seconds` – one full wave takes `4 × sweep_seconds`.
+- `sweep_seconds` – one full colour wave takes `4 × sweep_seconds`. The
+  overlaid brightness breath uses the same period but **at most 12 s** –
+  otherwise a high `sweep_seconds` would park the lamps near `glow_low` for
+  minutes, where they render wrong hues.
 
 `rainbow` – a continuous rainbow hue-cycle, phase-offset per lamp, so a
 colour gradient visibly travels across the lamps instead of all of them
@@ -532,7 +546,7 @@ App Store repository: `repository.yaml` at the root, the app itself in the
 │   ├── manifest.json, const.py, api.py, coordinator.py, config_flow.py,
 │   │   entity.py                REST client + config flow + shared base entity
 │   ├── binary_sensor.py / switch.py / select.py / sensor.py
-│   │                             the four entities – only talks to the app's
+│   │                             the five entities – only talks to the app's
 │   │                             REST API, see README.md in there
 │   ├── strings.json (English) / translations/{de,en}.json
 │   │                             entity/config-flow labels

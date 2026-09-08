@@ -111,6 +111,8 @@
     <div class="row" style="margin-bottom:.9rem">
       <button id="btn-start" data-i18n="btn.start">▶ Start</button>
       <button class="secondary" id="btn-stop" data-i18n="btn.stop">■ Stop</button>
+      <button class="secondary" id="btn-arm">⚡ Scharfschalten</button>
+      <span class="pill" id="btn-arm-pill"><span class="led"></span> <span>—</span></span>
     </div>
     <p class="muted" style="margin-top:0" data-i18n-html="section2.intro"></p>
     <p class="muted" style="margin:.5rem 0 0" data-i18n-html="section2.effects"></p>
@@ -179,7 +181,13 @@
       alle eingerichteten Bridges gleichzeitig; die beiden Knöpfe zeigen per
       gedrücktem Zustand an, ob der Effekt gerade läuft. Für einzelne
       Bridges siehe die Start/Stop-Knöpfe auf der jeweiligen Bridge-Karte
-      oben unter „1 · Bridges“.`,
+      oben unter „1 · Bridges“.<br>
+      <strong>Scharfschalten</strong> hält den DTLS-Stream aller Bridges
+      dauerhaft offen: ein anschließender Start beginnt dann praktisch sofort
+      statt nach dem ~3–9 s langen Handshake. Solange scharf, belegt jede
+      Bridge ihren einzigen Entertainment-Slot und ihre Lampen zeigen ein
+      angenähertes Standbild des vorherigen Zustands; <strong>Entschärfen</strong>
+      schließt die Streams und stellt den exakten Zustand wieder her.`,
       "section2.effects": `<strong>Dauer</strong> (App-Option <code>duration</code>): wie lange der
       Effekt läuft, bevor er von selbst endet (oder vorher per „Stop“).
       <code>0</code> = unbegrenzt, läuft bis „Stop“.<br>
@@ -289,6 +297,9 @@
       "areas.apply": "übernehmen", "areas.channel": "Kanal",
       "pill.paired": "gepaart", "pill.notPaired": "nicht gepaart",
       "pill.running": "Effekt läuft", "pill.stopped": "Effekt aus",
+      "pill.connecting": "Verbindung…",
+      "pill.armed": "scharf", "pill.disarmed": "entschärft",
+      "btn.arm": "⚡ Scharfschalten", "btn.disarm": "✕ Entschärfen",
       "pill.pairedCount": (n, total) => `${n}/${total} gepaart`,
       "pill.nonePaired": "keine gepaart",
       "opt.sameAsConfig": "wie Konfiguration",
@@ -376,7 +387,12 @@
       <strong>Start</strong> / <strong>Stop</strong> start/stop all configured
       bridges at once; both buttons show a pressed state to indicate whether
       the effect is currently running. For individual bridges, see the
-      Start/Stop buttons on that bridge's card above under "1 · Bridges".`,
+      Start/Stop buttons on that bridge's card above under "1 · Bridges".<br>
+      <strong>Arm</strong> keeps the DTLS stream to every bridge open, so a
+      following Start begins almost instantly instead of after the ~3–9 s
+      handshake. While armed, each bridge holds its single Entertainment slot
+      and its lamps show an approximated still of their previous state;
+      <strong>Disarm</strong> closes the streams and restores the exact state.`,
       "section2.effects": `<strong>Duration</strong> (app option <code>duration</code>): how long the
       effect runs before ending on its own (or earlier via "Stop").
       <code>0</code> = unlimited, runs until "Stop".<br>
@@ -485,6 +501,9 @@
       "areas.apply": "use", "areas.channel": "Channel",
       "pill.paired": "paired", "pill.notPaired": "not paired",
       "pill.running": "effect running", "pill.stopped": "effect off",
+      "pill.connecting": "connecting…",
+      "pill.armed": "armed", "pill.disarmed": "disarmed",
+      "btn.arm": "⚡ Arm", "btn.disarm": "✕ Disarm",
       "pill.pairedCount": (n, total) => `${n}/${total} paired`,
       "pill.nonePaired": "none paired",
       "opt.sameAsConfig": "same as configuration",
@@ -587,11 +606,17 @@
       setPill(pill, pill.classList.contains("on"), pill.classList.contains("on") ? t("pill.paired") : t("pill.notPaired"));
       const runPill = $(`b${i}-run-pill`);
       setPill(runPill, runPill.classList.contains("on"), runPill.classList.contains("on") ? t("pill.running") : t("pill.stopped"));
+      const armed = $(`b${i}-arm`).dataset.armed === "1";
+      $(`b${i}-arm`).textContent = armed ? t("btn.disarm") : t("btn.arm");
+      setPill($(`b${i}-arm-pill`), armed, armed ? t("pill.armed") : t("pill.disarmed"));
       if (AREAS[i].length === 0) {
         $(`b${i}-arealist`).innerHTML = `<span class="muted">${t("areas.notLoaded")}</span>`;
       }
       renderIdentify(i);
     }
+    const gArmed = $("btn-arm").dataset.armed === "1";
+    $("btn-arm").textContent = gArmed ? t("btn.disarm") : t("btn.arm");
+    setPill($("btn-arm-pill"), gArmed, gArmed ? t("pill.armed") : t("pill.disarmed"));
     refresh();
   }
   $("lang-de").onclick = () => setLang("de");
@@ -669,6 +694,8 @@
           <button id="b${i}-start" data-i18n="btn.start">▶ Start</button>
           <button class="secondary" id="b${i}-stop" data-i18n="btn.stop">■ Stop</button>
           <span class="pill" id="b${i}-run-pill"><span class="led"></span> <span data-i18n="status.effect">Effekt</span></span>
+          <button class="secondary" id="b${i}-arm">${t("btn.arm")}</button>
+          <span class="pill" id="b${i}-arm-pill"><span class="led"></span> <span>—</span></span>
         </div>
         <div class="row" style="margin-top:.6rem">
           <div><label for="b${i}-area" data-i18n="card.areaId">area_id</label><input type="text" id="b${i}-area" placeholder="abcd-1234"></div>
@@ -932,14 +959,22 @@
       // auf genau diese eine Bridge – die anderen Karten dürfen mitgeschickt
       // werden, sie werden dadurch nicht ebenfalls gestartet.
       const body = Object.assign(collectBody(), { bridge_host: host });
+      setPill($(`b${i}-run-pill`), false, t("pill.connecting"));
       await api("start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      refresh();
+      fastPollRefresh();
     };
     $(`b${i}-stop`).onclick = async () => {
       const host = $(`b${i}-host`).value.trim();
       if (!host) { logLine(t("log.noBridgeIp", i + 1)); return; }
       await api("stop", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bridge_host: host }) });
-      refresh();
+      fastPollRefresh();
+    };
+    $(`b${i}-arm`).onclick = async () => {
+      const host = $(`b${i}-host`).value.trim();
+      if (!host) { logLine(t("log.noBridgeIp", i + 1)); return; }
+      const armed = $(`b${i}-arm`).dataset.armed === "1";
+      await api(armed ? "disarm" : "arm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bridge_host: host }) });
+      fastPollRefresh(8, 500);
     };
   }
   for (let i = 0; i < BRIDGE_COUNT; i++) wireBridgeCard(i);
@@ -981,6 +1016,19 @@
       }
     }
   }
+  // Nach einem Start/Stop-Klick eine Weile schnell nachpollen, damit der
+  // Übergang (Handshake bzw. Fast-Path bei scharfer Bridge) sichtbar wird,
+  // ohne bis zu 5s auf den nächsten periodischen Poll zu warten.
+  let fastPollTimer = null;
+  function fastPollRefresh(times = 16, gapMs = 500) {
+    if (fastPollTimer) { clearInterval(fastPollTimer); }
+    let left = times;
+    refresh();
+    fastPollTimer = setInterval(() => {
+      refresh();
+      if (--left <= 0) { clearInterval(fastPollTimer); fastPollTimer = null; }
+    }, gapMs);
+  }
   async function doRefresh() {
     const { ok, data } = await api("config");
     if (!ok) return;
@@ -992,6 +1040,10 @@
     setPill($("pill-run"), data.running, data.running ? t("pill.running") : t("pill.stopped"));
     $("btn-start").classList.toggle("pressed", !!data.running);
     $("btn-stop").classList.toggle("pressed", !data.running);
+    $("btn-arm").dataset.armed = data.armed ? "1" : "";
+    $("btn-arm").textContent = data.armed ? t("btn.disarm") : t("btn.arm");
+    $("btn-arm").classList.toggle("pressed", !!data.armed);
+    setPill($("btn-arm-pill"), data.armed, data.armed ? t("pill.armed") : t("pill.disarmed"));
 
     const s = $("status"); s.innerHTML = "";
     const fields = {
@@ -1070,6 +1122,10 @@
       setPill($(`b${i}-run-pill`), b.running, b.running ? t("pill.running") : t("pill.stopped"));
       $(`b${i}-start`).classList.toggle("pressed", !!b.running);
       $(`b${i}-stop`).classList.toggle("pressed", !b.running);
+      $(`b${i}-arm`).dataset.armed = b.armed ? "1" : "";
+      $(`b${i}-arm`).textContent = b.armed ? t("btn.disarm") : t("btn.arm");
+      $(`b${i}-arm`).classList.toggle("pressed", !!b.armed);
+      setPill($(`b${i}-arm-pill`), b.armed, b.armed ? t("pill.armed") : t("pill.disarmed"));
       renderIdentify(i);
     });
 
@@ -1186,8 +1242,14 @@
   }
 
   $("btn-start").onclick = async () => {
+    setPill($("pill-run"), false, t("pill.connecting"));
     await api("start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(collectBody()) });
-    refresh();
+    fastPollRefresh();
+  };
+  $("btn-arm").onclick = async () => {
+    const armed = $("btn-arm").dataset.armed === "1";
+    await api(armed ? "disarm" : "arm", { method: "POST", headers: { "Content-Type": "application/json" } });
+    fastPollRefresh(8, 500);
   };
 
   // --- Effektsets --------------------------------------------------------------
@@ -1256,7 +1318,7 @@
   };
   $("btn-stop").onclick = async () => {
     await api("stop", { method: "POST" });
-    refresh();
+    fastPollRefresh();
   };
   // setLang() (und damit sein abschließendes refresh()) läuft erst hier, nach
   // allen let/const-Deklarationen des Scripts (u. a. refreshBusy/

@@ -5,6 +5,12 @@ Turn-on startet erneut mit dem zuletzt geladenen Effektset
 den App-eigenen Standardwerten (leerer Body), genau wie ein Aufruf ohne
 ``preset`` im main.py-``/start``.
 
+Zusätzlich gibt es einen ``RedAlertArmSwitch`` (Scharfschalten aller Bridges,
+POST /arm bzw. /disarm): hält den DTLS-Stream jeder Bridge dauerhaft offen,
+sodass ein anschließender Start den Handshake überspringt. Der Animations-
+Switch bleibt davon unberührt – er startet nur schneller, wenn vorher
+scharfgeschaltet wurde.
+
 Daneben legt diese Plattform **pro gepaarter Bridge** einen eigenen Switch
 an (``RedAlertBridgeAnimationSwitch``), der nur diese eine Bridge über
 ``bridge_host`` startet/stoppt (main.py seit dem Task-je-Bridge-Umbau) –
@@ -38,7 +44,10 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     coordinator: RedAlertDataUpdateCoordinator = entry.runtime_data
-    async_add_entities([RedAlertAnimationSwitch(coordinator, entry)])
+    async_add_entities([
+        RedAlertAnimationSwitch(coordinator, entry),
+        RedAlertArmSwitch(coordinator, entry),
+    ])
 
     known_hosts: set[str] = set()
 
@@ -83,6 +92,40 @@ class RedAlertAnimationSwitch(RedAlertEntity, SwitchEntity):
             await self.coordinator.client.async_stop()
         except RedAlertApiError as exc:
             raise HomeAssistantError(f"Red Alert konnte nicht gestoppt werden: {exc}") from exc
+        await self.coordinator.async_request_refresh()
+
+
+class RedAlertArmSwitch(RedAlertEntity, SwitchEntity):
+    """Scharfschalten aller Bridges: hält den DTLS-Stream jeder Bridge dauerhaft
+    offen, sodass ein anschließender Animationsstart den ~3–9 s langen Handshake
+    überspringt und praktisch sofort beginnt. Ist eine Bridge noch nicht scharf,
+    schaltet ``turn_on`` sie scharf; ist bereits alles scharf, hat der
+    Animations-Switch bzw. jeder Start dadurch von selbst den Sofort-Effekt.
+    ``is_on`` = alle nicht-neutralen, gepaarten Bridges sind scharf.
+    """
+
+    _attr_translation_key = "armed"
+    _attr_icon = "mdi:shield-check"
+
+    def __init__(self, coordinator: RedAlertDataUpdateCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry, "armed")
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self.coordinator.data.get("armed"))
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        try:
+            await self.coordinator.client.async_arm()
+        except RedAlertApiError as exc:
+            raise HomeAssistantError(f"Red Alert konnte nicht scharfgeschaltet werden: {exc}") from exc
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        try:
+            await self.coordinator.client.async_disarm()
+        except RedAlertApiError as exc:
+            raise HomeAssistantError(f"Red Alert konnte nicht entschärft werden: {exc}") from exc
         await self.coordinator.async_request_refresh()
 
 

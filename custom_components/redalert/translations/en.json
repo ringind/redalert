@@ -34,6 +34,9 @@
       "animation": {
         "name": "Animation"
       },
+      "armed": {
+        "name": "Armed"
+      },
       "bridge_animation": {
         "name": "Animation ({host})"
       }

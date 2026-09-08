@@ -372,10 +372,12 @@ class RedAlertChase:
 
     ``length_segments`` is the width of the flat ``1.0`` core of a band, in
     segments; ``speed_segments_per_s`` is how many segments a band's head
-    crosses per second. ``fps`` (the app's configured frame rate) only
-    widens the soft edge's minimum width so it can't become narrower than a
-    couple of frames' worth of travel at the given speed – see the
-    ``smooth`` calculation in ``__init__`` – it plays no other role.
+    crosses per second. ``fps`` (the app's configured frame rate) is used two
+    ways, both purely anti-aliasing: it widens the soft edge's minimum width
+    (``smooth`` in ``__init__``) and it sets the per-frame cap of the
+    **temporal slew** in :meth:`blend_for` (see there). Neither changes the
+    band geometry, only how fast a single segment's blend is allowed to move
+    between two frames.
     """
 
     def __init__(
@@ -392,23 +394,27 @@ class RedAlertChase:
         self.count = max(1, int(count))
         self.half_width = min(max(length_segments, 0.2), float(self.num_lights)) / 2.0
         self.speed = max(0.01, speed_segments_per_s)
+        self.fps = max(1.0, float(fps))
         # Edge softness in segments: about one segment (never narrower than a
         # third of the band, nor wider than it), *and* – like RedAlertComet's
         # peak_frac – never narrower than a couple of frames' worth of travel
-        # at this speed/fps. blend_for() is sampled once per frame with no
-        # knowledge of dt, so a soft edge fixed only in segments can become
-        # narrower in time than one frame interval at high speed_segments_per_s
-        # or low fps: the head then jumps clean across it between two frames
-        # and a lamp appears to snap on/off instead of fading (same aliasing
-        # bug fixed for the comet's head via a minimum *time* width, not just
-        # a minimum segment width).
+        # at this speed/fps.
         base_smooth = min(max(self.half_width, 0.3), 1.0)
-        # 6.25 is calibrated so the default speed_segments_per_s=4.0 at 25 fps
-        # reproduces exactly the old fixed smooth=1.0 (the previously-accepted
-        # look) rather than widening it – only faster-than-default or
-        # lower-than-default fps combinations get a wider edge.
-        min_smooth = 6.25 * self.speed / max(1.0, float(fps))
-        self.smooth = min(max(base_smooth, min_smooth), max(1.0, self.num_lights / 2.0))
+        min_smooth = 6.25 * self.speed / self.fps
+        # Cap at the whole strip length (was num_lights/2, which on short
+        # strips at high speed clamped 'smooth' back below the anti-alias
+        # floor and let the flicker return – 1.16.1).
+        self.smooth = min(max(base_smooth, min_smooth), max(2.0, float(self.num_lights)))
+        # Temporal slew: cap how far any single segment's blend may move per
+        # frame. blend_for() is otherwise a pure function of t sampled once
+        # per frame, so a fast-moving raised-cosine edge still steps ~0.25 per
+        # frame at its midpoint even after the smooth widening above – visible
+        # as an occasional flicker "beim Auf-/Abblenden". Clamping the
+        # frame-to-frame change makes the transition read as a fade at any
+        # speed/fps/geometry (same idea as RedAlertPulse's attack/release
+        # slew). 3.0 blend/s ⇒ a full 0→1 takes ≥ ~0.33 s.
+        self._max_blend_rate = 3.0
+        self._prev_blend: list[float] | None = None
 
     def _band(self, dist: float) -> float:
         """0..1 falloff: flat 1.0 within ``half_width``, 0.0 beyond the soft edge."""
@@ -419,8 +425,8 @@ class RedAlertChase:
         x = (dist - self.half_width) / self.smooth
         return 0.5 + 0.5 * math.cos(math.pi * x)  # 1 -> 0, raised cosine
 
-    def blend_for(self, t: float) -> list[float]:
-        """Per-segment 0..1 chase blend at time t (seconds since start)."""
+    def _geom_blend(self, t: float) -> list[float]:
+        """Per-segment 0..1 band geometry at time t – no temporal smoothing."""
         n = self.num_lights
         if self.direction == "bounce":
             span = max(1, n - 1)  # line length in segments
@@ -435,6 +441,32 @@ class RedAlertChase:
         return [
             max(self._band(min(abs(j - h), n - abs(j - h))) for h in heads) for j in range(n)
         ]
+
+    def blend_for(self, t: float, dt: float | None = None) -> list[float]:
+        """Per-segment 0..1 chase blend at time ``t`` (seconds since start).
+
+        ``dt`` (seconds since the previous frame) enables the temporal slew –
+        each segment's blend may move at most ``_max_blend_rate * dt`` toward
+        the current geometry, so no single frame shows a hard jump. The first
+        call, or a call without ``dt``, returns the raw geometry unchanged.
+        """
+        raw = self._geom_blend(t)
+        if dt is None or dt <= 0 or self._prev_blend is None or len(self._prev_blend) != len(raw):
+            self._prev_blend = list(raw)
+            return raw
+        step = self._max_blend_rate * dt
+        out: list[float] = []
+        for r, p in zip(raw, self._prev_blend):
+            d = r - p
+            if d > step:
+                p += step
+            elif d < -step:
+                p -= step
+            else:
+                p = r
+            out.append(p)
+        self._prev_blend = out
+        return out
 
 
 class RedAlertPolice:

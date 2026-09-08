@@ -4,7 +4,7 @@
 
 Eigenständige `custom_component` für die App [`redalert`](../../redalert): spricht
 deren REST-API an (siehe [`redalert/DOCS.md`](../../redalert/DOCS.md#rest-api))
-und legt vier Entities an – ohne `rest_command`/Template-Umweg (siehe
+und legt fünf Entities an – ohne `rest_command`/Template-Umweg (siehe
 [„Home Assistant einbinden“](../../redalert/DOCS.md#home-assistant-einbinden)
 für die Variante ganz ohne Zusatzinstallation).
 
@@ -13,10 +13,11 @@ für die Variante ganz ohne Zusatzinstallation).
 | **Betriebszustand** | `binary_sensor` | `on`, solange die App auf **irgendeiner** Bridge gerade einen Effekt fährt (`running` aus `/config`). |
 | **Animation** | `switch` | Ein = `POST /start` (mit dem aktuell geladenen Effektset, falls eines gewählt ist, sonst App-Standard) – startet **alle** konfigurierten Bridges gemeinsam. Aus = `POST /stop` (stoppt alle laufenden Bridges). |
 | **Animation (\<Bridge-IP\>)** | `switch` | Je eine weitere Switch-Entity pro gepaarter Bridge (dynamisch aus `/config`'s `bridges`-Liste angelegt) – startet/stoppt **nur diese eine** Bridge (`bridge_host` im `/start`/`/stop`-Body), unabhängig vom Zustand der anderen. Verschwindet eine Bridge aus der App-Konfiguration, wird ihr Switch nicht gelöscht, sondern nur `unavailable`. |
+| **Scharfgeschaltet** | `switch` | Ein = `POST /arm` (hält den DTLS-Stream **aller** nicht-`neutral` Bridges dauerhaft offen, sodass ein anschließender Animationsstart den ~3–9 s langen Handshake überspringt). Aus = `POST /disarm` (schließt die Streams, stellt den Lichtzustand wieder her). `on`, wenn alle diese Bridges scharf sind (`armed` aus `/config`). |
 | **Effektset** | `select` | Dropdown mit allen gespeicherten Effektsets (`GET /presets`-Namen); Auswahl lädt **und startet** das Set sofort (`POST /start {"preset": …}`). |
 | **Geladenes Effektset** | `sensor` | Name des zuletzt geladenen Sets (leer bei einem Ad-hoc-Start ohne `preset`, z. B. über die App-Web-UI oder direkten `/start`-Aufruf ohne `preset`; ein Solo-Start einer einzelnen Bridge über ihren eigenen Switch ändert diese Anzeige nie). |
 
-Vier plus eine Entity je gepaarter Bridge hängen an einem gemeinsamen Gerät
+Fünf plus eine Entity je gepaarter Bridge hängen an einem gemeinsamen Gerät
 ("Red Alert (<Host>)"); ein Config-Entry = eine App-Instanz.
 
 ## Installation

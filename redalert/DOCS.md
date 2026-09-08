@@ -93,7 +93,7 @@ der jeweiligen Bridge-Karte unter „1 · Bridges“.
 | `police` | **Alarmlicht:** die Lampen einer Bridge werden in zwei Gruppen aufgeteilt (jede zweite Lampe in Kanalreihenfolge); Gruppe 1 blinkt in der Bridge-`color`, Gruppe 2 in `color2` (Standard Blau) – die beiden blinken abwechselnd, nie gleichzeitig. `sweep_seconds` ist die Dauer eines vollen Wechsels (beide Gruppen einmal). |
 | `lightning` | **Gewitter:** alle Lampen einer Bridge blitzen **gemeinsam** in der Bridge-`color` auf und klingen dann ab – anders als `glitter`, wo jede Lampe für sich funkelt. `lightning_interval_ms` = mittlerer Abstand zwischen zwei Blitzen, `lightning_flash_ms` = Abkling-Zeitkonstante; gelegentlich (nicht konfigurierbar) folgt ein schneller zweiter Blitz, wie bei echtem Blitzschlag. |
 | `heartbeat` | **Herzschlag:** ein Doppelpuls („lub-dub“, ein großer und ein kleinerer Puls) statt eines einzelnen Pulses wie bei `pulse`, im Takt von `sweep_seconds`. Nutzt dasselbe Beat-Gate/Slew wie `pulse` (`attack_ms`/`release_ms`), nur mit anderer Eingangskurve. |
-| `aurora` | **Polarlicht:** langsame, weich überblendete Farbwellen wandern über die Lampen, geblendet aus `glitter_colors` (leer = Bridge-`color`, dann nur ein ruhiges Auf-/Abdimmen ohne Farbwechsel). Eine volle Welle dauert `4 × sweep_seconds`; die Helligkeit atmet dabei sanft zwischen `glow_low` und `glow_high`. |
+| `aurora` | **Polarlicht:** langsame, weich überblendete Farbwellen wandern über die Lampen, geblendet aus `glitter_colors` (leer = Bridge-`color`, dann nur ein ruhiges Auf-/Abdimmen ohne Farbwechsel). Eine volle Farbwelle dauert `4 × sweep_seconds`; die Helligkeit atmet dabei sanft zwischen `glow_low` und `glow_high` – mit einer Periode von `4 × sweep_seconds`, **gedeckelt bei 12 s**, damit die Lampen bei hohem `sweep_seconds` nicht minutenlang nahe `glow_low` stehen (dort gibt die Bridge Farbtöne nur grob wieder). |
 | `rainbow` | **Regenbogen:** ein durchgehender Farbumlauf (voller Hue-Kreis) über alle Lampen, je Lampe phasenversetzt, sodass ein Farbverlauf sichtbar über die Kanäle wandert statt dass alle Lampen synchron die Farbe wechseln. Eine volle Umdrehung dauert `4 × sweep_seconds`; Helligkeit konstant auf `glow_high`. |
 | `meteor` | **Meteorschauer:** mehrere unabhängige Kometen (`meteor_count`, Standard 3) laufen mit zufälliger Geschwindigkeit (um `meteor_speed` Kanäle/Sekunde, auch rückwärts), Startposition und Spitzenhelligkeit in der Bridge-`color` um die Kanäle – eine unregelmäßigere, dichtere Variante von `comet`, das nur einen einzelnen, deterministischen Kometen fährt. |
 | `wipe` | **Auffüll-Balken:** die Kanäle füllen sich nacheinander (in Kanalreihenfolge) mit der Bridge-`color`, wie ein Ladebalken – Dauer `sweep_seconds`. Danach hält der Balken `chase_pause` Sekunden voll gefüllt, bevor er zurückgesetzt wird und von vorn beginnt. |
@@ -183,12 +183,14 @@ Panel-Pfad).
 | Endpoint  | Methode | Zweck |
 |-----------|---------|-------|
 | `/`       | GET     | Web-UI (Ingress-Panel). |
-| `/health` | GET     | `{status, paired, running, current_preset}` – `paired` ist `true`, sobald mindestens eine Bridge gepaart ist; `running` ist `true`, sobald **irgendeine** Bridge gerade läuft (für den je-Bridge-Status siehe `/config`s `bridges[].running`); `current_preset` der Name des zuletzt per `preset` gestarteten Effektsets (`null` bei Ad-hoc-Start ohne `preset`). Auch Ziel des Container-HEALTHCHECK. |
-| `/config` | GET     | Effektive Konfiguration inkl. `bridges` (je Bridge zusätzlich `running: bool` – läuft gerade ein Effekt/Identify auf genau dieser Bridge), `presets` (Namen der gespeicherten Effektsets) und `current_preset` – für das Web-UI und die Home-Assistant-Integration. |
+| `/health` | GET     | `{status, paired, running, armed, current_preset}` – `paired` ist `true`, sobald mindestens eine Bridge gepaart ist; `running` ist `true`, sobald **irgendeine** Bridge gerade läuft (für den je-Bridge-Status siehe `/config`s `bridges[].running`); `armed` ist `true`, wenn **alle** nicht-`neutral` gepaarten Bridges scharfgeschaltet sind; `current_preset` der Name des zuletzt per `preset` gestarteten Effektsets (`null` bei Ad-hoc-Start ohne `preset`). Auch Ziel des Container-HEALTHCHECK. |
+| `/config` | GET     | Effektive Konfiguration inkl. `bridges` (je Bridge zusätzlich `running: bool` und `armed: bool`), `armed` (global) + `armed_bridges` (Liste), `presets` (Namen der gespeicherten Effektsets) und `current_preset` – für das Web-UI und die Home-Assistant-Integration. |
 | `/pair`   | POST    | Einmalige Kopplung. Body: `{"bridge_host": "..."}` – Pflicht, sobald mehr als eine Bridge konfiguriert ist (bei genau einer, noch ungepaarten, konfigurierten Bridge optional). |
 | `/areas`  | GET     | Entertainment-Bereiche + Kanäle einer Bridge auflisten. Query `?bridge_host=...` – Pflicht, sobald mehr als eine Bridge gepaart ist. |
 | `/start`  | POST    | Effekt auf allen konfigurierten (oder im Body übergebenen) Bridges gleichzeitig starten (antwortet sofort; DTLS-Handshakes laufen im Hintergrund, parallel) – oder, mit `bridge_host` im Body, nur auf einer einzelnen Bridge, unabhängig vom Zustand der anderen. Body optional: `duration`, `fps`, `restore_state` gelten für alle Bridges gemeinsam; `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors`, `gc_direction`, `gc_count`, `gc_length`, `gc_speed`, `gc_background_color`, `gc_chase_glitter`, `gc_background_pulse`, `color2`, `lightning_interval_ms`, `lightning_flash_ms`, `meteor_count`, `meteor_speed`, `firework_interval_ms`, `firework_speed`, `ripple_interval_ms`, `ripple_speed`, `wave_length`, `flicker_interval_ms`, `flicker_dip_ms` sind die **Standardwerte** für Bridges ohne eigene Einstellung. `bridges` (Liste von `{bridge_host, area_id, channel_order, effect?, color?, sweep_seconds?, chase_pause?, attack_ms?, release_ms?, glow_low?, glow_high?, glitter_interval_ms?, glitter_flash_ms?, glitter_colors?, gc_direction?, gc_strip_lengths?, gc_count?, gc_length?, gc_speed?, gc_background_color?, gc_chase_glitter?, gc_background_pulse?, color2?, lightning_interval_ms?, lightning_flash_ms?, meteor_count?, meteor_speed?, firework_interval_ms?, firework_speed?, ripple_interval_ms?, ripple_speed?, wave_length?, flicker_interval_ms?, flicker_dip_ms?}`) übersteuert für diesen Aufruf die Option `bridges` – jede Bridge kann ihre eigenen Effekt-Parameter setzen; `channel_order` als Liste (`[2,3,1,0,5,4]`) oder String (`"2,3,1,0,5,4"`), muss genau die Kanäle des jeweiligen Bereichs enthalten, sonst wird diese eine Bridge übersprungen. `gc_strip_lengths` (nur `chase`, je Bridge, z. B. `[7, 5]` oder `"7,5"`) teilt die Kanäle dieser Bridge in aufeinanderfolgende Gradient-Lightstrips auf; `gc_direction` darf dann ebenfalls eine Liste sein (eine Richtung je Strip). `preset` (Name eines gespeicherten Effektsets) lädt dessen Body als Basis; weitere Body-Felder überschreiben ihn – nicht mit `bridge_host` kombinierbar (`400`). `bridge_host` (optional): filtert auf genau diese eine Bridge (muss in `bridges`, Option oder Body, enthalten sein); `already_running` gilt dann nur für sie, und ein Solo-Start ändert nie `current_preset`. Ohne `bridge_host` werden bereits laufende Bridges übersprungen statt den ganzen Aufruf abzulehnen (`skipped_bridges` in der Antwort). Antwort enthält `bridges` (tatsächlich neu gestartet, je mit aufgelösten Effekt-Parametern), `failed_bridges` (übersprungen, mit Fehlergrund), `neutral_bridges` und `skipped_bridges` (bereits aktiv); nur wenn **keine** Bridge neu startet und keine fehlgeschlagen ist, antwortet `/start` mit `no_active_bridges`; schlägt mindestens eine fehl und bleibt keine übrig, antwortet `/start` mit `502`. |
 | `/stop`   | POST    | Effekt auf allen laufenden Bridges sofort stoppen – oder, mit `bridge_host` im Body, nur auf einer einzelnen Bridge, unabhängig vom Zustand der anderen. |
+| `/arm`    | POST    | **Scharfschalten**: DTLS-Stream einer/aller Bridge(s) dauerhaft offen halten, damit ein späteres `/start` den ~3–9 s langen Handshake überspringt und der Effekt praktisch sofort beginnt. Body optional `bridge_host` (sonst alle konfigurierten, nicht-`neutral` Bridges). Solange scharf, belegt die Bridge ihren einzigen Entertainment-Slot und ihre Lampen zeigen ein angenähertes Standbild des vorherigen Zustands. Eine gerade laufende Bridge lässt sich nicht scharfschalten (erst `/stop`); Antwort: `{status, armed:[...], already_armed:[...], busy:[...], failed:[...]}`. |
+| `/disarm` | POST    | Scharfschaltung aufheben: Stream(s) schließen und den beim Scharfschalten gesicherten Lichtzustand per CLIP v2 wiederherstellen. Body optional `bridge_host` (sonst alle scharfen Bridges). Ein noch laufender Effekt wird zuvor gestoppt. |
 | `/identify` | POST  | Lampen einer Bridge einzeln durchtesten (Zuordnung `channel_id` → Lampe). Body: `bridge_host` (Pflicht, sobald mehr als eine Bridge konfiguriert ist), `area_id` (optional, sonst aus der bridges-Konfiguration), `channel_id` (fehlt = alle Kanäle nacheinander), `seconds` (Standard 3 einzeln / 2 bei „alle“), `color`, `restore_state`. Ein DTLS-Handshake für den ganzen Durchlauf. Belegt denselben Slot wie ein Effekt auf dieser einen Bridge (`already_running`, `/stop` mit passendem `bridge_host` bricht ab) – andere Bridges bleiben unberührt. |
 | `/presets` | GET    | Alle gespeicherten Effektsets: `{"presets": {Name: Body, …}, "names": [...]}`. Mit `?name=…` nur dieses eine (`{"name", "config"}`, `404` wenn unbekannt). |
 | `/presets` | PUT / POST | Ein Effektset speichern/überschreiben (auch Upload-Ziel). Body `{"name": "...", "config": { <start-Body> }}` – `config` sind die kompletten `/start`-Felder inkl. `bridges`; abgelegt unter `/data/presets.json`. |
@@ -197,6 +199,30 @@ Panel-Pfad).
 - `duration` (Sekunden, Standard aus der gleichnamigen App-Option, **`0` =
   unbegrenzt**) – wie lange der Effekt läuft, bevor er von selbst endet;
   vorher jederzeit per `/stop` abbrechbar.
+
+## Scharfschalten (schnellerer Start)
+
+Zwischen `/start` und dem sichtbaren Effekt liegt normalerweise der
+DTLS-Handshake der Bridge (~1,5–9 s). Wer diese Verzögerung nicht will,
+schaltet die Bridge vorab **scharf** (`POST /arm`, im Web-UI der Knopf
+„Scharfschalten“ je Bridge-Karte bzw. global unter „2 · Steuerung“, in Home
+Assistant der Schalter „Scharfgeschaltet“): der DTLS-Stream bleibt dann
+dauerhaft offen, und ein anschließendes `/start` beginnt den Effekt innerhalb
+eines einzelnen Frames.
+
+Solange eine Bridge scharf ist:
+
+- belegt sie ihren **einzigen** Entertainment-Slot – andere Entertainment-Apps
+  bzw. `/identify` für diese Bridge sind blockiert, bis `/disarm`;
+- stehen ihre Lampen unter Stream-Kontrolle und zeigen ein **angenähertes
+  Standbild** des Zustands, der beim Scharfschalten geherrscht hat (die exakten
+  Farben werden erst bei `/disarm` per CLIP v2 wiederhergestellt);
+- bleibt sie scharf, bis `/disarm` aufgerufen wird oder die App neu startet
+  (beim Herunterfahren entschärft die App automatisch und stellt den
+  Lichtzustand wieder her).
+
+Ein `/start` funktioniert unverändert auch ohne Scharfschalten – dann eben mit
+dem üblichen Handshake davor.
 
 ## Effektsets
 

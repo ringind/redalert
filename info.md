@@ -16,8 +16,9 @@ steht in deren eigener Doku, nicht hier:
 [App-Dokumentation](https://github.com/ringind/redalert/blob/main/redalert/DOCS.md) ·
 [Haupt-README](https://github.com/ringind/redalert#readme).
 
-Legt vier Entities an einem Gerät an: `binary_sensor` (läuft der Effekt
-gerade?), `switch` (Animation an/aus), `select` (gespeichertes Effektset
+Legt fünf Entities an einem Gerät an: `binary_sensor` (läuft der Effekt
+gerade?), `switch` (Animation an/aus), `switch` (Scharfgeschaltet – DTLS-Stream
+vorab offen halten für sofortigen Start), `select` (gespeichertes Effektset
 wählen & laden), `sensor` (Name des aktuell geladenen Sets).
 
 ## Installation

@@ -74,10 +74,12 @@ info.md / info.en.md       what HACS renders instead of README.md when
                             to the app's own docs rather than duplicating them
 custom_components/redalert/  HA integration talking to the app's REST API
   manifest.json, const.py, api.py, coordinator.py, config_flow.py, entity.py
-  binary_sensor.py (running, any bridge) / switch.py (global start+stop, plus
-  one per-bridge switch per paired bridge since 1.15.0 — dynamically added
-  from coordinator data via a coordinator-listener, this platform's only
-  dynamic-entity registration) / select.py (pick+load a preset) / sensor.py
+  binary_sensor.py (running, any bridge) / switch.py (global start+stop; a
+  global arm/disarm switch `RedAlertArmSwitch` since 1.16.0 — POST /arm|/disarm,
+  is_on = all non-neutral bridges armed; plus one per-bridge start/stop switch
+  per paired bridge since 1.15.0 — dynamically added from coordinator data via a
+  coordinator-listener, this platform's only dynamic-entity registration) /
+  select.py (pick+load a preset) / sensor.py
   (currently loaded preset) — one DataUpdateCoordinator polling GET /config
   every 10s; README.md/README.en.md document install + entities
   brand/icon.png, brand/logo.png — copies of redalert/{icon,logo}.png; HA
@@ -98,7 +100,12 @@ redalert/                  the app
     RedAlertComet (comet+tail) + RedAlertGlitter (per-lamp sparkle) +
     RedAlertChase (Gradient Lightstrip bands) + RedAlertPolice (two-group
     strobe) + RedAlertLightning (shared flash, stateful) + RedAlertAurora /
-    RedAlertRainbow (per-lamp colour, no brightness shape) + RedAlertMeteor
+    RedAlertRainbow (per-lamp colour, no brightness shape — for `aurora` the
+    colour drift period is `sweep_seconds*4` but the brightness "breath" that
+    `main.py` layers on top via `RedAlertPulse.periodic` is capped at 12 s
+    since 1.16.1, so a very high `sweep_seconds` no longer parks the lamps
+    near `glow_low` for minutes where the bridge renders colour poorly) +
+    RedAlertMeteor
     (randomised multi-comet) + RedAlertWipe (fill-and-hold) + RedAlertFirework
     (radiating one-shot bursts) + RedAlertRipple (firework that echoes back) +
     RedAlertWave (scrolling sine) + RedAlertFlicker (per-lamp dips, stateful) +
@@ -109,7 +116,7 @@ redalert/                  the app
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.15.2**.
+No build system, linter, or test suite. Current version: **1.16.1**.
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
   after every code change — the only static check available.
@@ -148,9 +155,24 @@ curl -s -X POST $B/start -H 'Content-Type: application/json' \
   `18aa512d-…`; `devdata/credentials.<ip>.json.bak` files hold prior pairings so
   you don't have to re-press a link button to switch back.)
 - The DTLS handshake logs a `ServerHello timeout … resending` retry almost every
-  time and takes ~3–9 s — **normal**, not a failure. `/start` returns *before* it
-  (`_run_single_bridge` does the handshake, one per bridge), so poll `/health`
-  `running` for real state.
+  time and takes ~1.5–9 s — **normal**, not a failure (since 1.16.0 main.py
+  monkeypatches `hue_entertainment.dtls.HANDSHAKE_TIMEOUT` 5→1.5 s and
+  `_SERVER_HELLO_RESENDS` 2→4, so the typical lost-first-ServerHello case costs
+  ~1.5 s instead of ~5 s). `/start` returns *before* it (`_run_single_bridge`
+  does the handshake, one per bridge), so poll `/health` `running` for real state.
+- **Arming** (`POST /arm`/`/disarm`, since 1.16.0): `state["armed"]` is
+  `dict[bridge_host, ArmContext]` — a persistent `EntertainmentSession`
+  (`idle_timeout=0`) held open with a low-rate `_arm_idle_loop` streaming an
+  approximated still (`_idle_frame_from_snapshot` via `_xy_to_rgb`). A `/start`
+  for an armed bridge reuses that session (`handle_start._resolve` skips creating
+  one, `_run_single_bridge` gets `arm_ctx` and skips handshake + snapshot + the
+  `aclose`/`restore` in `finally` — it re-arms the idle loop instead). `/disarm`
+  pops `state["armed"]` first, then cancels any running effect task so its
+  `finally` does the `aclose` + `restore_light_state`. `_on_shutdown` (aiohttp
+  `on_shutdown`) stops all tasks and disarms all bridges. `/identify` on an armed
+  bridge → 409 (single Entertainment slot). `stop_others=False` on
+  `session.start` (via `_session_start`, one-shot retry with `True`) also shaves
+  the pre-handshake round-trips.
 - `_run_single_bridge` runs its bridge's effect for `duration` s at exactly `fps`
   (absolute-clock pacing) — verify with the `Effekt beendet (<host>, N Frames)`
   log line: `N ≈ duration*fps`.
@@ -169,7 +191,8 @@ Three layers under `redalert/rootfs/app/`:
   `/pair` (one-time Bridge link-button pairing, body `bridge_host` — Pflicht bei
   mehr als einer konfigurierten Bridge — → merged into `/data/credentials.json`),
   `/areas` (query `bridge_host` — Pflicht bei mehr als einer gepaarten Bridge),
-  `/start`, `/stop`, `/identify`. All mutable runtime state is one module-level
+  `/start`, `/stop`, `/arm`, `/disarm`, `/identify`. All mutable runtime state is
+  one module-level
   `state` dict; `state["tasks"]` is a `dict[bridge_host, asyncio.Task]` — since
   1.15.0 every bridge runs its effect (or an `/identify` run) in its **own**
   task, independently start-/stoppable via an optional `bridge_host` in the
@@ -249,22 +272,27 @@ Three layers under `redalert/rootfs/app/`:
     `speed_segments_per_s` is high enough (or `fps` low enough) — the head
     then crosses it between two consecutive frames and a lamp's blend jumps
     most of the way from 0 to 1 (or back) in a single frame instead of
-    fading, i.e. aliasing, not a hardware/network issue. Fixed the same way
-    as the comet: floor `smooth` by a **time**-based minimum, not just a
-    segment-count one — `self.smooth = max(base_smooth, 6.25 * speed / fps)`
-    (capped at `max(1.0, num_lights/2)` so extreme `speed`+low-`fps`
-    combinations degrade to "softer than ideal" rather than eating the whole
-    strip). The `6.25` constant is calibrated so the *previous* default
-    (`gc_speed=4.0`, `fps=25`) reproduces the old fixed `smooth=1.0` exactly
-    — i.e. default-settings behaviour is unchanged, only non-default
-    speed/fps combinations get a wider (smoother) edge than before. `fps`
-    therefore had to be threaded into `RedAlertChase.__init__` (from
-    `_run_single_bridge`'s own `fps` parameter) — the first `chase.py` class
-    that needs to know the frame rate at construction time, not just at
-    `main.py`'s pacing loop; keep this in mind if another effect ever shows
-    the same "fine by default, aliases at extreme settings" symptom — the
-    fix pattern (verify with a small blend-jump simulation across a range of
-    speed/fps values, not just eyeballing the default) transfers directly.
+    fading, i.e. aliasing, not a hardware/network issue. 1.15.2 floored
+    `smooth` by a **time**-based minimum (`6.25 * speed / fps`); **1.16.1**
+    finished the job after the flicker was still reported occasionally:
+    (a) the spatial floor's cap was `max(1.0, num_lights/2)`, which on a
+    short strip at high `gc_speed` clamped `smooth` back *below* the
+    anti-alias threshold — cap is now the full strip length
+    (`max(2.0, num_lights)`); (b) more importantly, a raised-cosine edge
+    sampled once per frame still steps ~0.25 at its midpoint even when wide
+    enough, so `blend_for` now takes `dt` and **temporally slews** each
+    segment's blend — at most `_max_blend_rate * dt` (3.0 blend/s) toward the
+    geometry per frame, so a full 0→1 takes ≥ ~0.33 s and reads as a fade at
+    any `speed`/`fps`/strip-length. `_geom_blend(t)` holds the old pure
+    geometry; `blend_for(t, dt)` wraps it (first call / no `dt` → raw). The
+    steady-state slewed output still repeats exactly once per loop period
+    (seam diff ~1e-13), so the seamless loop is preserved. `fps` is threaded
+    into `RedAlertChase.__init__` (from `_run_single_bridge`'s `fps`) for both
+    the spatial floor and the slew's per-frame fallback; `_chase_chans` passes
+    `dt` to `blend_for`. Pattern for any future "fine by default, flickers at
+    some setting" effect: prefer a **temporal slew keyed on `dt`** over only
+    widening a spatial feature — verify with a per-frame blend-jump simulation
+    across a range of speed/fps, and check the loop seam still closes.
 
 **Effect loop (`_run_single_bridge`):** `handle_start` resolves all requested
 bridges (area lookup, no DTLS — 404/502-equivalent failures per bridge
@@ -361,7 +389,11 @@ card's host — the Start handler reuses the same `collectBody()` the global
 button uses (so this card's own overrides apply identically), `bridge_host`
 just tells the server to filter to one bridge — plus a running-status pill
 (`b${i}-run-pill`, synced from `/config`'s per-bridge `running` field the
-same way `b${i}-pill` mirrors `paired`), area list/pick, own `channel_order`
+same way `b${i}-pill` mirrors `paired`), an **Arm/Disarm** toggle button
+(`b${i}-arm`, since 1.16.0 — text + `dataset.armed` + `b${i}-arm-pill` synced
+from `/config`'s per-bridge `armed`; POSTs `/arm`/`/disarm` with `bridge_host`;
+dynamic label so `setLang()` must re-render it like `b${i}-run-pill`), area
+list/pick, own `channel_order`
 field, a nested `<details>` "Effekt für diese Bridge anpassen" (`b${i}-effect`
 with a blank "wie Konfiguration" option, then the per-bridge parameter
 fields grouped under heading rows — `.field-group-heading` divs with
@@ -397,7 +429,11 @@ parameters, `duration` and `fps` all come from the app configuration (or a
 bridge's own override); the section renders **Start**/**Stop** first (these
 still start/stop **every** configured bridge simultaneously — a synchronized
 batch via the barrier described below — the per-bridge buttons on each card
-are for controlling just one), then the parameter descriptions below them.
+are for controlling just one), plus a global **Arm/Disarm** button
+(`btn-arm`/`btn-arm-pill`, since 1.16.0, no `bridge_host`), then the parameter
+descriptions below them. After a Start/Stop/Arm click the panel calls
+`fastPollRefresh()` (a short burst of ~500 ms polls) instead of a single
+`refresh()`, so the transition shows up without waiting for the 5 s tick.
 On Start, `collectBody()` assembles `body.bridges`
 from whichever of the 3 cards have both `bridge_host` and `area_id` filled in
 (each entry including only the per-bridge fields actually overridden; empty

@@ -91,7 +91,7 @@ that bridge's card under "1 · Bridges".
 | `police` | **Emergency lights:** a bridge's lamps are split into two groups (every other lamp in channel order); group 1 flashes in the bridge `color`, group 2 in `color2` (default blue) – the two flash alternately, never together. `sweep_seconds` is the duration of one full switch (both groups once). |
 | `lightning` | **Storm:** all lamps of a bridge flash **together** in the bridge `color` and then decay – unlike `glitter`, where each lamp sparkles on its own. `lightning_interval_ms` = mean gap between two strikes, `lightning_flash_ms` = decay time constant; occasionally (not configurable) a quick second flash follows, like a real lightning strike. |
 | `heartbeat` | **Heartbeat:** a double pulse ("lub-dub", one big and one smaller pulse) instead of a single pulse like `pulse`, timed by `sweep_seconds`. Uses the same beat gate/slew as `pulse` (`attack_ms`/`release_ms`), just with a different input curve. |
-| `aurora` | **Northern lights:** slow, softly blended colour waves drift across the lamps, blended from `glitter_colors` (empty = bridge `color`, then just a quiet fade up/down with no colour change). One full wave takes `4 × sweep_seconds`; brightness gently breathes between `glow_low` and `glow_high` meanwhile. |
+| `aurora` | **Northern lights:** slow, softly blended colour waves drift across the lamps, blended from `glitter_colors` (empty = bridge `color`, then just a quiet fade up/down with no colour change). One full colour wave takes `4 × sweep_seconds`; brightness gently breathes between `glow_low` and `glow_high` meanwhile – with a period of `4 × sweep_seconds`, **capped at 12 s**, so a high `sweep_seconds` doesn't park the lamps near `glow_low` for minutes (where the bridge renders hues poorly). |
 | `rainbow` | **Rainbow:** a continuous colour cycle (full hue circle) across all lamps, phase-offset per lamp, so a colour gradient visibly travels across the channels instead of all lamps changing colour in sync. One full rotation takes `4 × sweep_seconds`; brightness constant at `glow_high`. |
 | `meteor` | **Meteor shower:** several independent comets (`meteor_count`, default 3) run at randomised speed (around `meteor_speed` channels/second, including backwards), start position and peak brightness in the bridge `color` around the channels – a denser, less orderly variant of `comet`, which drives only a single, deterministic comet. |
 | `wipe` | **Fill bar:** the channels fill up one after another (in channel order) with the bridge `color`, like a loading bar – duration `sweep_seconds`. The bar then holds fully filled for `chase_pause` seconds before it resets and starts over. |
@@ -180,12 +180,14 @@ panel path).
 | Endpoint  | Method  | Purpose |
 |-----------|---------|-------|
 | `/`       | GET     | Web UI (Ingress panel). |
-| `/health` | GET     | `{status, paired, running, current_preset}` – `paired` is `true` once at least one bridge is paired; `running` is `true` once **any** bridge is currently running (for per-bridge status see `/config`'s `bridges[].running`); `current_preset` is the name of the effect set most recently started via `preset` (`null` on an ad-hoc start without `preset`). Also the container HEALTHCHECK target. |
-| `/config` | GET     | Effective configuration incl. `bridges` (each entry also has `running: bool` – is an effect/identify currently running on exactly this bridge), `presets` (names of the saved effect sets) and `current_preset` – for the web UI and the Home Assistant integration. |
+| `/health` | GET     | `{status, paired, running, armed, current_preset}` – `paired` is `true` once at least one bridge is paired; `running` is `true` once **any** bridge is currently running (for per-bridge status see `/config`'s `bridges[].running`); `armed` is `true` when **all** non-`neutral` paired bridges are armed; `current_preset` is the name of the effect set most recently started via `preset` (`null` on an ad-hoc start without `preset`). Also the container HEALTHCHECK target. |
+| `/config` | GET     | Effective configuration incl. `bridges` (each entry also has `running: bool` and `armed: bool`), `armed` (global) + `armed_bridges` (list), `presets` (names of the saved effect sets) and `current_preset` – for the web UI and the Home Assistant integration. |
 | `/pair`   | POST    | One-time pairing. Body: `{"bridge_host": "..."}` – required once more than one bridge is configured (optional with exactly one, still-unpaired, configured bridge). |
 | `/areas`  | GET     | List a bridge's Entertainment areas + channels. Query `?bridge_host=...` – required once more than one bridge is paired. |
 | `/start`  | POST    | Start the effect on all configured (or body-supplied) bridges simultaneously (returns immediately; DTLS handshakes run in the background, in parallel) – or, with `bridge_host` in the body, on only a single bridge, regardless of the others' state. Body optional: `duration`, `fps`, `restore_state` apply to all bridges together; `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors`, `gc_direction`, `gc_count`, `gc_length`, `gc_speed`, `gc_background_color`, `gc_chase_glitter`, `gc_background_pulse`, `color2`, `lightning_interval_ms`, `lightning_flash_ms`, `meteor_count`, `meteor_speed`, `firework_interval_ms`, `firework_speed`, `ripple_interval_ms`, `ripple_speed`, `wave_length`, `flicker_interval_ms`, `flicker_dip_ms` are the **default values** for bridges without their own setting. `bridges` (list of `{bridge_host, area_id, channel_order, effect?, color?, sweep_seconds?, chase_pause?, attack_ms?, release_ms?, glow_low?, glow_high?, glitter_interval_ms?, glitter_flash_ms?, glitter_colors?, gc_direction?, gc_strip_lengths?, gc_count?, gc_length?, gc_speed?, gc_background_color?, gc_chase_glitter?, gc_background_pulse?, color2?, lightning_interval_ms?, lightning_flash_ms?, meteor_count?, meteor_speed?, firework_interval_ms?, firework_speed?, ripple_interval_ms?, ripple_speed?, wave_length?, flicker_interval_ms?, flicker_dip_ms?}`) overrides the `bridges` option for this one call – each bridge can set its own effect parameters; `channel_order` as a list (`[2,3,1,0,5,4]`) or string (`"2,3,1,0,5,4"`), must contain exactly the respective area's channels, otherwise that one bridge is skipped. `gc_strip_lengths` (`chase` only, per bridge, e.g. `[7, 5]` or `"7,5"`) splits this bridge's channels into consecutive Gradient Lightstrips; `gc_direction` may then also be a list (one direction per strip). `preset` (name of a saved effect set) loads its body as a base; further body fields override it – not combinable with `bridge_host` (`400`). `bridge_host` (optional): filters to exactly this one bridge (must be present in `bridges`, option or body); `already_running` then only applies to it, and a solo start never touches `current_preset`. Without `bridge_host`, already-running bridges are skipped rather than rejecting the whole call (`skipped_bridges` in the response). The response contains `bridges` (actually newly started, each with resolved effect parameters), `failed_bridges` (skipped, with a reason), `neutral_bridges` and `skipped_bridges` (already active); `/start` responds `no_active_bridges` only if **no** bridge starts anew and none failed; if at least one failed and none are left, it responds `502`. |
 | `/stop`   | POST    | Stop the effect on all running bridges immediately – or, with `bridge_host` in the body, on only a single bridge, regardless of the others' state. |
+| `/arm`    | POST    | **Arm**: keep the DTLS stream to one/all bridge(s) permanently open so a later `/start` skips the ~3–9 s handshake and the effect begins almost instantly. Body optional `bridge_host` (otherwise all configured, non-`neutral` bridges). While armed, the bridge holds its single Entertainment slot and its lamps show an approximated still of the previous state. A bridge that is currently running cannot be armed (stop it first); response: `{status, armed:[...], already_armed:[...], busy:[...], failed:[...]}`. |
+| `/disarm` | POST    | Undo arming: close the stream(s) and restore the light state captured at arm time via CLIP v2. Body optional `bridge_host` (otherwise all armed bridges). A still-running effect is stopped first. |
 | `/identify` | POST  | Cycle through a bridge's lamps individually (`channel_id` → lamp mapping). Body: `bridge_host` (required once more than one bridge is configured), `area_id` (optional, otherwise from the bridges configuration), `channel_id` (omitted = all channels in sequence), `seconds` (default 3 individually / 2 for "all"), `color`, `restore_state`. One DTLS handshake for the whole run. Occupies the same slot as an effect on this one bridge (`already_running`, `/stop` with the matching `bridge_host` cancels it) – other bridges are unaffected. |
 | `/presets` | GET    | All saved effect sets: `{"presets": {name: body, …}, "names": [...]}`. With `?name=…` just that one (`{"name", "config"}`, `404` if unknown). |
 | `/presets` | PUT / POST | Save/overwrite an effect set (also the upload target). Body `{"name": "...", "config": { <start body> }}` – `config` is the complete set of `/start` fields incl. `bridges`; stored under `/data/presets.json`. |
@@ -194,6 +196,27 @@ panel path).
 - `duration` (seconds, default from the like-named app option, **`0` =
   unlimited**) – how long the effect runs before ending on its own; can be
   cancelled at any time via `/stop`.
+
+## Arming (faster start)
+
+Between `/start` and the visible effect sits the bridge's DTLS handshake
+(~1.5–9 s). To avoid that delay, **arm** the bridge beforehand (`POST /arm`,
+in the web UI the "Arm" button on each bridge card or the global one under
+"2 · Control", in Home Assistant the "Armed" switch): the DTLS stream then
+stays open permanently and a following `/start` begins the effect within a
+single frame.
+
+While a bridge is armed:
+
+- it holds its **single** Entertainment slot – other Entertainment apps and
+  `/identify` for this bridge are blocked until `/disarm`;
+- its lamps are under stream control and show an **approximated still** of the
+  state present at arm time (the exact colours are restored only on `/disarm`
+  via CLIP v2);
+- it stays armed until `/disarm` is called or the app restarts (on shutdown
+  the app disarms automatically and restores the light state).
+
+`/start` still works without arming – just with the usual handshake first.
 
 ## Effect Sets
 

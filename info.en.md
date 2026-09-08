@@ -16,8 +16,9 @@ its own docs, not here:
 [App documentation](https://github.com/ringind/redalert/blob/main/redalert/DOCS.en.md) ·
 [Main README](https://github.com/ringind/redalert#readme).
 
-Creates four entities on one device: `binary_sensor` (is the effect
-currently running?), `switch` (animation on/off), `select` (pick & load a
+Creates five entities on one device: `binary_sensor` (is the effect
+currently running?), `switch` (animation on/off), `switch` (armed – keep the
+DTLS stream open ahead of time for an instant start), `select` (pick & load a
 saved effect set), `sensor` (name of the currently loaded set).
 
 ## Installation

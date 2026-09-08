@@ -236,13 +236,15 @@ App nach einer Options-Änderung neu starten.
 | Endpoint  | Methode | Zweck                                                                                 |
 |-----------|---------|-----------------------------------------------------------------------------------------|
 | `/`       | GET     | Web-UI (Ingress-Panel „Red Alert“)                                                      |
-| `/health` | GET     | Status: `{status, paired, running, current_preset}` – mind. eine Bridge gepaart? läuft der Effekt auf irgendeiner Bridge gerade (je-Bridge-Status siehe `/config`)? Name des zuletzt geladenen Effektsets (`null` bei Ad-hoc-Start)? Auch Ziel des Container-HEALTHCHECK |
-| `/config` | GET     | Effektive Konfiguration inkl. `bridges` (je Bridge zusätzlich `running: bool`), `presets` (Namen der Effektsets) und `current_preset` – für das Web-UI und die Home-Assistant-Integration |
+| `/health` | GET     | Status: `{status, paired, running, armed, current_preset}` – mind. eine Bridge gepaart? läuft der Effekt auf irgendeiner Bridge gerade (je-Bridge-Status siehe `/config`)? sind alle nicht-`neutral` Bridges scharfgeschaltet? Name des zuletzt geladenen Effektsets (`null` bei Ad-hoc-Start)? Auch Ziel des Container-HEALTHCHECK |
+| `/config` | GET     | Effektive Konfiguration inkl. `bridges` (je Bridge zusätzlich `running: bool` und `armed: bool`), `armed`/`armed_bridges` (global), `presets` (Namen der Effektsets) und `current_preset` – für das Web-UI und die Home-Assistant-Integration |
 | `/pair`   | POST    | Einmalige Kopplung mit einer Bridge. Body: `{"bridge_host": "..."}` (Pflicht bei mehr als einer konfigurierten Bridge) |
 | `/areas`  | GET     | Entertainment-Bereiche + Kanäle einer Bridge auflisten. Query `?bridge_host=...` (Pflicht bei mehr als einer gepaarten Bridge) |
 | `/start`  | POST    | Effekt auf allen konfigurierten (oder im Body übergebenen) Bridges gleichzeitig starten (antwortet sofort; DTLS-Handshakes laufen parallel im Hintergrund) – oder, mit `bridge_host` im Body, nur auf einer einzelnen Bridge, unabhängig vom Zustand der anderen. Body optional: `duration` (Sek., Standard aus der Option `duration`, `0` = unbegrenzt), `fps`, `restore_state` (für alle Bridges gemeinsam); `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors`, `gc_direction`, `gc_count`, `gc_length`, `gc_speed`, `gc_background_color`, `gc_chase_glitter`, `gc_background_pulse`, `color2`, `lightning_interval_ms`, `lightning_flash_ms`, `meteor_count`, `meteor_speed`, `firework_interval_ms`, `firework_speed`, `ripple_interval_ms`, `ripple_speed`, `wave_length`, `flicker_interval_ms`, `flicker_dip_ms` sind die Standardwerte für Bridges ohne eigene Einstellung. `bridges` (Liste von `{bridge_host, area_id, channel_order, effect?, color?, sweep_seconds?, chase_pause?, attack_ms?, release_ms?, glow_low?, glow_high?, glitter_interval_ms?, glitter_flash_ms?, glitter_colors?, gc_direction?, gc_strip_lengths?, gc_count?, gc_length?, gc_speed?, gc_background_color?, gc_chase_glitter?, gc_background_pulse?, color2?, lightning_interval_ms?, lightning_flash_ms?, meteor_count?, meteor_speed?, firework_interval_ms?, firework_speed?, ripple_interval_ms?, ripple_speed?, wave_length?, flicker_interval_ms?, flicker_dip_ms?}`, `channel_order` als `[2,3,1,0,5,4]` oder `"2,3,1,0,5,4"`) übersteuert für diesen Aufruf die Option `bridges`; `gc_strip_lengths` (nur `chase`, je Bridge, z. B. `[7,5]`) teilt die Kanäle dieser Bridge in mehrere Gradient-Lightstrips auf, `gc_direction` darf dann eine Liste sein (eine Richtung je Strip). `preset` = Name eines gespeicherten Effektsets als Basis (weitere Body-Felder überschreiben es) – nicht mit `bridge_host` kombinierbar. `bridge_host` (optional) filtert auf genau diese eine Bridge; `already_running` gilt dann nur für sie. Ohne `bridge_host` werden bereits laufende Bridges übersprungen (`skipped_bridges`) statt den Aufruf abzulehnen. Antwort enthält `bridges` (neu gestartet, je mit aufgelösten Parametern) + `failed_bridges`/`neutral_bridges`/`skipped_bridges`; `502` nur wenn keine Bridge startet und mindestens eine fehlschlägt. |
 | `/stop`   | POST    | Effekt auf allen laufenden Bridges sofort stoppen – oder, mit `bridge_host` im Body, nur auf einer einzelnen Bridge                                       |
-| `/identify` | POST  | Lampen einer Bridge einzeln durchtesten (`channel_id` → Lampe). Body: `bridge_host` (Pflicht bei mehr als einer konfigurierten Bridge), `area_id` (optional, sonst aus der bridges-Konfiguration), `channel_id` (fehlt = alle nacheinander), `seconds`, `color`, `restore_state`. Ein DTLS-Handshake für den Durchlauf; belegt denselben Slot wie ein Effekt auf dieser einen Bridge. |
+| `/arm`    | POST    | **Scharfschalten**: DTLS-Stream einer/aller Bridge(s) dauerhaft offen halten, damit ein späteres `/start` den ~3–9 s langen Handshake überspringt. Body optional `bridge_host` (sonst alle konfigurierten, nicht-`neutral` Bridges). Solange scharf belegt die Bridge ihren einzigen Entertainment-Slot; die Lampen zeigen ein angenähertes Standbild des vorherigen Zustands. Laufende Bridge → erst `/stop`. |
+| `/disarm` | POST    | Scharfschaltung aufheben: Stream(s) schließen, Lichtzustand per CLIP v2 wiederherstellen. Body optional `bridge_host`. Ein laufender Effekt wird zuvor gestoppt. |
+| `/identify` | POST  | Lampen einer Bridge einzeln durchtesten (`channel_id` → Lampe). Body: `bridge_host` (Pflicht bei mehr als einer konfigurierten Bridge), `area_id` (optional, sonst aus der bridges-Konfiguration), `channel_id` (fehlt = alle nacheinander), `seconds`, `color`, `restore_state`. Ein DTLS-Handshake für den Durchlauf; belegt denselben Slot wie ein Effekt auf dieser einen Bridge (bei scharfer Bridge blockiert – erst `/disarm`). |
 | `/presets` | GET / PUT / POST / DELETE | Effektsets verwalten (`/data/presets.json`). `GET` = alle (`{presets, names}`) bzw. `?name=…` eines. `PUT`/`POST` `{"name","config"}` = speichern/überschreiben (auch Datei-Upload). `DELETE ?name=…` = löschen. |
 
 `duration` weglassen → Effekt läuft mit dem Standard aus der App-Option
@@ -251,11 +253,20 @@ positiven Wert endet er nach so vielen Sekunden von selbst. Ist eine Bridge
 nicht erreichbar, starten die übrigen trotzdem (best effort) – siehe
 `failed_bridges`.
 
+**Schnellerer Start:** Zwischen `/start` und dem sichtbaren Effekt liegt sonst
+der DTLS-Handshake der Bridge (~1,5–9 s). `POST /arm` hält den Stream vorab
+dauerhaft offen (Web-UI: Knopf „Scharfschalten“ je Bridge-Karte bzw. global;
+Home Assistant: Schalter „Scharfgeschaltet“); ein anschließendes `/start`
+beginnt dann innerhalb eines Frames. Solange scharf belegt die Bridge ihren
+einzigen Entertainment-Slot und ihre Lampen zeigen ein angenähertes Standbild;
+`POST /disarm` schließt den Stream und stellt den exakten Zustand wieder her.
+
 ## 7. Home Assistant einbinden
 
 **Fertige Integration:** [`custom_components/redalert/`](custom_components/redalert)
-in diesem Repo legt vier Entities an (`binary_sensor` „Betriebszustand“, `switch`
-„Animation“, `select` „Effektset“, `sensor` „geladenes Effektset“). Installation
+in diesem Repo legt fünf Entities an (`binary_sensor` „Betriebszustand“, `switch`
+„Animation“, `switch` „Scharfgeschaltet“, `select` „Effektset“, `sensor`
+„geladenes Effektset“). Installation
 über **HACS** (repo-Kategorie *Integration* als benutzerdefiniertes Repository
 hinzufügen – `hacs.json` im Wurzelverzeichnis) oder manuell (Ordner nach
 `config/custom_components/` kopieren); danach HA neu starten und
@@ -404,7 +415,10 @@ die Lampen (`RedAlertAurora` in `chase.py`, berechnet die Farbe direkt statt
 einer Helligkeitskurve):
 - `glitter_colors` – Palette, durch die die Welle blendet (leer = nur die
   Bridge-`color`, dann ohne Farbwechsel).
-- `sweep_seconds` – eine volle Welle dauert `4 × sweep_seconds`.
+- `sweep_seconds` – eine volle Farbwelle dauert `4 × sweep_seconds`. Die
+  überlagerte Helligkeits-Atmung hat dieselbe Periode, aber **höchstens 12 s** –
+  sonst säßen die Lampen bei hohem `sweep_seconds` minutenlang nahe `glow_low`
+  und würden dort falsche Farbtöne zeigen.
 
 `rainbow` – ein durchgehender Regenbogen-Farbumlauf, je Lampe phasenversetzt,
 sodass ein Farbverlauf sichtbar über die Lampen wandert statt dass alle
@@ -544,7 +558,7 @@ in `custom_components/redalert/`.
 │   ├── manifest.json, const.py, api.py, coordinator.py, config_flow.py,
 │   │   entity.py                REST-Client + Config-Flow + gemeinsame Basis-Entity
 │   ├── binary_sensor.py / switch.py / select.py / sensor.py
-│   │                             die vier Entities – spricht nur die REST-API
+│   │                             die fünf Entities – spricht nur die REST-API
 │   │                             der App an, siehe README.md darin
 │   ├── strings.json (Englisch) / translations/{de,en}.json
 │   │                             Entity-/Config-Flow-Beschriftungen

@@ -1,5 +1,54 @@
 # Changelog
 
+## 1.16.1
+
+- **`chase` flackerte weiterhin gelegentlich beim Auf-/Abblenden.** Der
+  1.15.2-Fix hatte den weichen Bandrand nur *räumlich* verbreitert; bei einer
+  Frame-für-Frame-Abtastung ohne `dt` sprang die Helligkeit einer Lampe an
+  der steilsten Stelle der Rand-Kurve trotzdem noch um ~0,25 pro Frame. Neu:
+  `RedAlertChase.blend_for` bekommt `dt` und begrenzt die Blend-Änderung je
+  Segment auf max. `3,0 / s` – ein voller 0→1-Übergang dauert damit ≥ ~0,33 s
+  und liest sich bei jeder `gc_speed`/`fps`/Strip-Länge als Blende statt als
+  Sprung. Zusätzlich war der räumliche Rand fälschlich auf `num_lights / 2`
+  gedeckelt, was ihn auf kurzen Strips bei hoher `gc_speed` wieder unter die
+  Anti-Aliasing-Schwelle drückte – Deckel jetzt bei der vollen Strip-Länge.
+- **`aurora` zeigte bei sehr hohem `sweep_seconds` (> ~15) zeitweise falsche
+  Farbtöne.** Die Helligkeits-„Atmung" hing an `sweep_seconds * 4`, sodass die
+  Lampen bei hohem `sweep_seconds` minutenlang nahe `glow_low` saßen – dort
+  gibt die Bridge Farben nur grob wieder und phasenversetzte Lampen driften
+  sichtbar auseinander. Die Atmung ist jetzt bei 12 s gedeckelt; die
+  Farb­wanderung bleibt so langsam wie eingestellt (`sweep_seconds * 4`).
+
+## 1.16.0
+
+- **Reaktionszeit von `/start` deutlich verkürzt.** Bisher vergingen zwischen
+  Start-Knopf und sichtbarem Effekt einige Sekunden – fast ausschließlich der
+  DTLS-Handshake pro Bridge. Drei Änderungen am Handshake-Pfad:
+  - Der `ServerHello`-Timeout der DTLS-Bibliothek wird von 5 s auf 1,5 s
+    gesenkt (dafür mehr, kürzere Resends). Der verlorene erste `ServerHello`,
+    der bei Hue-Bridges fast immer auftritt, kostet damit ~1,5 s statt ~5 s.
+  - Der Stream-Start stoppt nicht mehr vorab seriell alle anderen
+    Entertainment-Bereiche der Bridge (`stop_others=False`, mit einmaligem
+    Fallback).
+  - Der Lichtzustands-Snapshot läuft jetzt parallel zum Handshake statt davor.
+  Ergebnis: ~5–9 s → ~1,5–2,5 s.
+- **Neu: Scharfschalten (`POST /arm` / `POST /disarm`).** Hält den DTLS-Stream
+  einer Bridge dauerhaft offen; ein anschließendes `/start` überspringt
+  Handshake **und** Snapshot und beginnt den Effekt innerhalb eines Frames.
+  Solange scharf, belegt die Bridge ihren einzigen Entertainment-Slot und ihre
+  Lampen zeigen ein angenähertes Standbild des vorherigen Zustands; `/disarm`
+  schließt den Stream und stellt den exakten Zustand wieder her. Ohne
+  `bridge_host` gelten beide für alle konfigurierten, nicht-`neutral` Bridges.
+  `/config` und `/health` melden `armed` (global) bzw. je Bridge.
+- **Web-UI:** je Bridge-Karte ein Knopf **Scharfschalten/Entschärfen** mit
+  Status-Pille, plus ein globaler Knopf unter „2 · Steuerung". Nach einem
+  Start/Stop pollt das Panel kurz schneller nach, statt bis zu 5 s auf den
+  nächsten Turnus zu warten.
+- **Home-Assistant-Integration:** neuer Schalter **„Scharfgeschaltet"**
+  (`switch`), schaltet alle Bridges scharf bzw. entschärft sie.
+- Beim Herunterfahren der App werden laufende Effekte gestoppt und alle
+  scharfen Bridges entschärft (Lichtzustand wiederhergestellt).
+
 ## 1.15.2
 
 - **Fix: `chase` flackerte teils beim An-/Ausgehen der Lampen.** Bei höherer

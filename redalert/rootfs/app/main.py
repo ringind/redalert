@@ -31,6 +31,7 @@ wieder starten.
 """
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -39,6 +40,8 @@ from pathlib import Path
 import aiohttp
 from aiohttp import web
 from hue_entertainment import EntertainmentSession, HueEntertainmentAPI, LightColorCommand
+
+import hue_entertainment.dtls as _hue_dtls
 
 from chase import (
     RedAlertAurora,
@@ -58,6 +61,17 @@ from chase import (
     RedAlertWave,
     RedAlertWipe,
 )
+
+# DTLS-Handshake beschleunigen: der ServerHello-Timeout der Lib steht auf 5 s und
+# schlägt bei Hue-Bridges fast immer einmal voll zu, bevor der Resend durchkommt –
+# das ist der Löwenanteil der „einige Sekunden" zwischen /start und sichtbarem
+# Effekt. Kürzeres Timeout, dafür mehr (kürzere) Resends. Beide Werte werden in der
+# Lib zur Laufzeit gelesen (_DtlsConnection.__init__ bzw. _await_server_hello), der
+# Patch wirkt also auch für später erzeugte Verbindungen. Das separate, hart
+# kodierte settimeout(3.0) für das optionale Server-Finished (dtls.py) bleibt –
+# es greift nur, wenn die Bridge das Finished gar nicht schickt.
+_hue_dtls.HANDSHAKE_TIMEOUT = 1.5
+_hue_dtls._SERVER_HELLO_RESENDS = 4
 
 DATA_DIR = Path(os.environ.get("REDALERT_DATA_DIR", "/data"))
 CRED_FILE = DATA_DIR / "credentials.json"
@@ -398,6 +412,10 @@ state = {
     # pro Bridge (already_running-Guard), sind aber zwischen Bridges völlig
     # unabhängig – eine Bridge starten/stoppen berührt keine andere.
     "tasks": {},
+    # Scharfgeschaltete Bridges (bridge_host -> ArmContext-Dict mit offenem,
+    # dauerhaft gehaltenem DTLS-Stream). Ein /start für eine scharfe Bridge
+    # überspringt Handshake + Snapshot; siehe _arm_one / _run_single_bridge.
+    "armed": {},
     # Zuletzt aufgelöste Effekt-Parameter je Bridge (bridge_host -> Dict),
     # bleibt über einzelne /start-Aufrufe hinweg bestehen (ein Solo-Start
     # aktualisiert nur den eigenen Eintrag). Für die im Aufruf gemeinsam
@@ -570,6 +588,200 @@ def _any_running() -> bool:
 
 
 # --------------------------------------------------------------------------- #
+# Scharfschalten (Arming): DTLS-Stream dauerhaft offen halten
+# --------------------------------------------------------------------------- #
+# Eine „scharfe" Bridge hält ihren DTLS-Stream offen und streamt im Ruhezustand
+# ein aus dem Lichtzustands-Snapshot abgeleitetes Standbild. Ein anschließendes
+# /start überspringt dann Handshake *und* Snapshot und beginnt den Effekt
+# innerhalb eines Frames statt nach den üblichen ~3–9 s Handshake. Preis:
+# die Bridge belegt dauerhaft ihren einzigen Entertainment-Slot, und die
+# Area-Lampen stehen unter Stream-Kontrolle (angenäherter Vorzustand) bis
+# /disarm den exakten Zustand per CLIP v2 wiederherstellt.
+
+
+async def _session_start(session: EntertainmentSession, area_id: str) -> None:
+    """``session.start`` ohne das serielle Stoppen anderer Areas (spart HTTPS-
+    Roundtrips vor dem Handshake). Schlägt es fehl – etwa weil doch ein
+    verwaister fremder Stream läuft –, einmal mit ``stop_others=True``
+    nachfassen."""
+    try:
+        await session.start(area_id, stop_others=False)
+    except Exception:  # noqa: BLE001
+        await session.start(area_id, stop_others=True)
+
+
+def _xy_to_rgb(x: float, y: float, bri: float) -> tuple[int, int, int]:
+    """CIE-xy + Helligkeit (0–100) → sRGB 0–255 (Näherung, Philips-Wide-Gamut)."""
+    if y <= 0:
+        return (0, 0, 0)
+    yy = max(0.0, min(bri, 100.0)) / 100.0
+    xx = (yy / y) * x
+    zz = (yy / y) * (1.0 - x - y)
+    r = xx * 1.656492 - yy * 0.354851 - zz * 0.255038
+    g = -xx * 0.707196 + yy * 1.655397 + zz * 0.036152
+    b = xx * 0.051713 - yy * 0.121364 + zz * 1.011530
+
+    def _gamma(c: float) -> float:
+        c = max(0.0, c)
+        c = 12.92 * c if c <= 0.0031308 else 1.055 * (c ** (1 / 2.4)) - 0.055
+        return max(0.0, min(c, 1.0))
+
+    return tuple(int(round(_gamma(c) * 255)) for c in (r, g, b))  # type: ignore[return-value]
+
+
+def _mirek_to_rgb(mirek: float, bri: float) -> tuple[int, int, int]:
+    """Farbtemperatur (Mikro-Reziprok-Kelvin) → grobes Warm/Kalt-Weiß, skaliert."""
+    t = max(0.0, min((mirek - 153) / (500 - 153), 1.0))
+    scale = max(0.0, min(bri, 100.0)) / 100.0
+    return (
+        int(round(255 * scale)),
+        int(round((255 - 80 * t) * scale)),
+        int(round((255 - 200 * t) * scale)),
+    )
+
+
+def _snapshot_light_rgb(st: dict) -> tuple[int, int, int]:
+    """RGB einer einzelnen Snapshot-Lampe (aus, mit Farbe oder mit Weißton)."""
+    if not st.get("on"):
+        return (0, 0, 0)
+    bri = st.get("brightness")
+    bri = 100.0 if bri is None else float(bri)
+    xy = st.get("xy")
+    if xy and len(xy) == 2:
+        return _xy_to_rgb(float(xy[0]), float(xy[1]), bri)
+    if st.get("mirek") is not None:
+        return _mirek_to_rgb(float(st["mirek"]), bri)
+    s = bri / 100.0
+    return (int(round(255 * s)), int(round(200 * s)), int(round(150 * s)))
+
+
+def _idle_frame_from_snapshot(
+    snapshot: list[dict], channel_ids: list[int]
+) -> list[LightColorCommand]:
+    """Ruhebild für eine scharfe Bridge: Mittelwert-RGB aller *eingeschalteten*
+    Snapshot-Lampen, gleichförmig auf alle Kanäle. Alles aus → Frame mit 0.
+
+    Bewusst kanal-uniform: Entertainment-Kanäle entsprechen nicht 1:1 der
+    CLIP-Lichtliste; der exakte Zustand wird beim /disarm ohnehin per
+    ``restore_light_state`` zurückgeschrieben."""
+    lit = [_snapshot_light_rgb(st) for st in snapshot if st.get("on")]
+    if lit:
+        r = sum(c[0] for c in lit) / len(lit)
+        g = sum(c[1] for c in lit) / len(lit)
+        b = sum(c[2] for c in lit) / len(lit)
+    else:
+        r = g = b = 0.0
+    return [
+        LightColorCommand(
+            channel_id=cid, red=int(r * 257), green=int(g * 257), blue=int(b * 257)
+        )
+        for cid in channel_ids
+    ]
+
+
+async def _arm_idle_loop(host: str) -> None:
+    """Solange die Bridge scharf ist: alle 2 s das Ruhebild senden. Bricht ab,
+    wenn der Stream stirbt (dann meldet /config die Bridge als nicht mehr
+    scharf)."""
+    try:
+        while host in state["armed"]:
+            ctx = state["armed"].get(host)
+            if not ctx:
+                return
+            session = ctx["session"]
+            if not session.is_streaming:
+                log.warning("Scharfschaltung %s: DTLS-Stream weg – Bridge gilt als entschärft.", host)
+                state["armed"].pop(host, None)
+                with contextlib.suppress(Exception):
+                    await session.aclose()
+                return
+            session.send(ctx["idle_frame"])
+            await asyncio.sleep(2.0)
+    except asyncio.CancelledError:
+        pass
+
+
+async def _arm_one(cfg: dict) -> dict:
+    """Eine Bridge scharfschalten: Area/Kanäle auflösen, Lichtzustand sichern,
+    DTLS-Stream öffnen und offen halten. Rückgabe ``{"bridge_host": ...}`` mit
+    entweder ``"armed": True`` oder ``"error": "..."``."""
+    host = cfg["bridge_host"]
+    creds = state["credentials"].get(host)
+    if not creds:
+        return {"bridge_host": host, "error": "nicht gepaart"}
+    session = EntertainmentSession(host, creds["username"], creds["clientkey"], idle_timeout=0)
+    try:
+        areas = await session.get_entertainment_areas()
+    except Exception as exc:  # noqa: BLE001
+        await session.aclose()
+        return {"bridge_host": host, "error": f"Bridge nicht erreichbar ({exc})"}
+    area = next((a for a in areas if a.id == cfg["area_id"]), None)
+    if area is None:
+        await session.aclose()
+        return {"bridge_host": host, "error": f"area_id {cfg['area_id']} nicht gefunden"}
+    native_ids = [ch.channel_id for ch in area.channels]
+    order = cfg.get("channel_order")
+    if order and sorted(order) != sorted(native_ids):
+        await session.aclose()
+        return {"bridge_host": host, "error": f"channel_order {order} passt nicht zum Bereich"}
+    channel_ids = list(order) if order else native_ids
+
+    # Snapshot immer aufnehmen (unabhängig von restore_state) – er ist die
+    # Grundlage sowohl fürs Ruhebild als auch fürs Wiederherstellen bei /disarm.
+    snapshot = await capture_light_state(host, creds["username"], cfg["area_id"])
+    try:
+        await _session_start(session, cfg["area_id"])
+    except Exception as exc:  # noqa: BLE001
+        await session.aclose()
+        log.exception("Scharfschalten %s fehlgeschlagen (DTLS-Handshake)", host)
+        return {"bridge_host": host, "error": f"DTLS-Handshake fehlgeschlagen ({exc})"}
+
+    idle_frame = _idle_frame_from_snapshot(snapshot, channel_ids)
+    session.send(idle_frame)
+    state["armed"][host] = {
+        "session": session,
+        "app_key": creds["username"],
+        "area_id": cfg["area_id"],
+        "channel_ids": channel_ids,
+        "snapshot": snapshot,
+        "idle_frame": idle_frame,
+        "idle_task": None,
+    }
+    state["armed"][host]["idle_task"] = asyncio.create_task(_arm_idle_loop(host))
+    log.info("Bridge %s scharfgeschaltet (Stream offen, %d Kanäle).", host, len(channel_ids))
+    return {"bridge_host": host, "armed": True}
+
+
+async def _disarm_one(host: str) -> bool:
+    """Eine Bridge entschärfen: Ruhe-Loop stoppen, Stream schließen, exakten
+    Lichtzustand per CLIP v2 wiederherstellen. ``False``, wenn nicht scharf."""
+    ctx = state["armed"].pop(host, None)
+    if not ctx:
+        return False
+    idle_task = ctx.get("idle_task")
+    if idle_task and not idle_task.done():
+        idle_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await idle_task
+    with contextlib.suppress(Exception):
+        await ctx["session"].aclose()
+    await restore_light_state(host, ctx["app_key"], ctx["snapshot"])
+    log.info("Bridge %s entschärft (Stream zu, Lichtzustand wiederhergestellt).", host)
+    return True
+
+
+def _armed_all() -> bool:
+    """Sind alle nicht-neutralen, gepaarten konfigurierten Bridges scharf?
+    (Global-Flag für /health und die HA-Integration.)"""
+    hosts = [
+        b["bridge_host"]
+        for b in state["bridges"]
+        if b["bridge_host"] in state["credentials"] and b.get("effect") != "neutral"
+    ]
+    return bool(hosts) and all(h in state["armed"] for h in hosts)
+
+
+# --------------------------------------------------------------------------- #
 # Web-UI (Ingress) + Status
 # --------------------------------------------------------------------------- #
 async def handle_panel(request: web.Request) -> web.Response:
@@ -582,6 +794,7 @@ async def handle_health(request: web.Request) -> web.Response:
             "status": "ok",
             "paired": bool(state["credentials"]),
             "running": _any_running(),
+            "armed": _armed_all(),
             "current_preset": state["current_preset"],
         }
     )
@@ -612,6 +825,7 @@ async def handle_config(request: web.Request) -> web.Response:
                     "channel_order": bg["channel_order"],
                     "paired": bg["bridge_host"] in state["credentials"],
                     "running": _is_running(bg["bridge_host"]),
+                    "armed": bg["bridge_host"] in state["armed"],
                     "effect": bg.get("effect"),
                     "color": _bridge_color_hex(bg),
                     "sweep_seconds": bg.get("sweep_seconds"),
@@ -683,6 +897,8 @@ async def handle_config(request: web.Request) -> web.Response:
             "presets": sorted(state["presets"].keys()),
             "current_preset": state["current_preset"],
             "running": _any_running(),
+            "armed": _armed_all(),
+            "armed_bridges": sorted(state["armed"]),
             "last_start": {
                 "duration": state["last_start_meta"].get("duration"),
                 "fps": state["last_start_meta"].get("fps"),
@@ -788,7 +1004,7 @@ def _chase_chans(
     """
     blend: list[float] = []
     for gc in ctx["chase"]:
-        blend.extend(gc.blend_for(elapsed))
+        blend.extend(gc.blend_for(elapsed, dt))
     if ctx["gc_background_pulse"]:
         target = RedAlertPulse.periodic(elapsed, ctx["sweep_seconds"])
         bg_level = ctx["pulse"].step(target, dt)[0]
@@ -820,8 +1036,16 @@ async def _run_single_bridge(
     fps: int,
     restore: bool,
     start_barrier: asyncio.Barrier | None,
+    arm_ctx: dict | None = None,
 ) -> None:
     """Effekt auf einer einzelnen Bridge fahren – eigener Task, eigene Sitzung.
+
+    Ist die Bridge scharfgeschaltet (``arm_ctx`` gesetzt), läuft der DTLS-Stream
+    bereits: Handshake und Snapshot entfallen, der Effekt beginnt praktisch
+    sofort. Die scharfe Ruhe-Loop (``arm_ctx["idle_task"]``) wird für die Dauer
+    des Effekts pausiert und im ``finally`` wieder gestartet, sofern die Bridge
+    noch scharf ist – nur eine zwischenzeitlich entschärfte (oder nie scharfe)
+    Bridge schließt ihren Stream und stellt den Lichtzustand wieder her.
 
     Für einen gemeinsamen Batch-Start (mehrere Bridges im selben ``/start``-
     Aufruf, siehe ``handle_start``) teilen sich alle beteiligten Tasks eine
@@ -899,17 +1123,36 @@ async def _run_single_bridge(
     loop = asyncio.get_event_loop()
     host = ctx["bridge_host"]
     try:
-        # Vor dem Streaming den aktuellen Lichtzustand dieser Bridge sichern.
-        if restore:
-            snapshot = await capture_light_state(host, ctx["app_key"], ctx["area_id"])
-
-        try:
-            await ctx["session"].start(ctx["area_id"])
-        except Exception as exc:  # noqa: BLE001
-            log.error("Bridge %s: DTLS-Handshake fehlgeschlagen (%s)", host, exc)
-            if start_barrier is not None:
-                start_barrier.abort()
-            return
+        if arm_ctx is not None:
+            # Scharfe Bridge: Stream läuft schon, Snapshot liegt vor. Nur die
+            # Ruhe-Loop pausieren, damit sie nicht um session.send() konkurriert.
+            snapshot = arm_ctx["snapshot"]
+            idle_task = arm_ctx.get("idle_task")
+            if idle_task and not idle_task.done():
+                idle_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await idle_task
+        else:
+            # Vor dem Streaming den aktuellen Lichtzustand dieser Bridge sichern –
+            # parallel zum Handshake (der dominiert die Zeit, ~1,5–9 s).
+            snap_task = (
+                asyncio.create_task(capture_light_state(host, ctx["app_key"], ctx["area_id"]))
+                if restore
+                else None
+            )
+            try:
+                await _session_start(ctx["session"], ctx["area_id"])
+            except Exception as exc:  # noqa: BLE001
+                log.error("Bridge %s: DTLS-Handshake fehlgeschlagen (%s)", host, exc)
+                if snap_task is not None:
+                    snap_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await snap_task
+                if start_barrier is not None:
+                    start_barrier.abort()
+                return
+            if snap_task is not None:
+                snapshot = await snap_task
 
         if start_barrier is not None:
             try:
@@ -959,8 +1202,12 @@ async def _run_single_bridge(
                 cr, cg, cb = ctx["color"]
                 chans = [(cr, cg, cb, glow_low + glow_span * lvl)] * len(ctx["channel_ids"])
             elif effect == "aurora":
-                # Farbe kommt aus der Palette, Helligkeit atmet langsam mit
-                lvl = RedAlertPulse.periodic(elapsed, ctx["sweep_seconds"] * 4.0)
+                # Farbe driftet mit sweep_seconds*4 (bewusst langsam), aber die
+                # Helligkeits-„Atmung" wird bei 12 s gedeckelt: sonst säßen die
+                # Lampen bei sehr hohem sweep_seconds minutenlang nahe glow_low,
+                # wo die Bridge Farben nur grob wiedergibt und phasenversetzte
+                # Lampen sichtbar unterschiedliche (falsche) Töne zeigen.
+                lvl = RedAlertPulse.periodic(elapsed, min(ctx["sweep_seconds"] * 4.0, 12.0))
                 chans = [
                     (r, g, b, glow_low + glow_span * lvl)
                     for r, g, b in ctx["aurora"].colors_for(elapsed)
@@ -1036,9 +1283,18 @@ async def _run_single_bridge(
         log.exception("Effekt-Loop (%s) abgebrochen (DTLS-Start oder Senden fehlgeschlagen)", host)
     finally:
         log.info("Effekt beendet (%s, %s Frames).", host, frames)
-        await ctx["session"].aclose()
-        # Nach dem Ende des Streams den gesicherten Lichtzustand zurückschreiben.
-        await restore_light_state(host, ctx["app_key"], snapshot)
+        if arm_ctx is not None and host in state["armed"]:
+            # Bridge weiterhin scharf: Stream offen lassen, ins Ruhebild
+            # zurückgehen und die Ruhe-Loop wieder aufnehmen.
+            live = state["armed"][host]
+            with contextlib.suppress(Exception):
+                live["session"].send(live["idle_frame"])
+            if live.get("idle_task") is None or live["idle_task"].done():
+                live["idle_task"] = asyncio.create_task(_arm_idle_loop(host))
+        else:
+            await ctx["session"].aclose()
+            # Nach dem Ende des Streams den gesicherten Lichtzustand zurückschreiben.
+            await restore_light_state(host, ctx["app_key"], snapshot)
 
 
 async def _run_identify(
@@ -1063,7 +1319,7 @@ async def _run_identify(
     try:
         if restore:
             snapshot = await capture_light_state(bridge_host, app_key, area_id)
-        await session.start(area_id)
+        await _session_start(session, area_id)
         loop = asyncio.get_event_loop()
         for cid in targets:
             log.info("Identify (%s): Kanal %s an", bridge_host, cid)
@@ -1113,6 +1369,13 @@ async def handle_identify(request: web.Request) -> web.Response:
         )
     if _is_running(host):
         return web.json_response({"status": "already_running", "bridge_host": host})
+    if host in state["armed"]:
+        # Die scharfe Bridge hält bereits den einzigen Entertainment-Slot.
+        return web.json_response(
+            {"status": "armed", "bridge_host": host,
+             "error": "Bridge ist scharfgeschaltet – zuerst /disarm"},
+            status=409,
+        )
     creds = state["credentials"].get(host)
     if not creds:
         return web.json_response(
@@ -1411,27 +1674,35 @@ async def handle_start(request: web.Request) -> web.Response:
         creds = state["credentials"].get(host)
         if not creds:
             return {"bridge_host": host, "error": "nicht gepaart"}
-        session = EntertainmentSession(host, creds["username"], creds["clientkey"])
+        armed = state["armed"].get(host)
+        # Scharfe Bridge: die vorhandene, dauerhaft offene Sitzung
+        # wiederverwenden (Handshake + Snapshot entfallen später komplett) und
+        # bei Fehlern *nicht* schließen – sie gehört der Scharfschaltung.
+        session = armed["session"] if armed else EntertainmentSession(
+            host, creds["username"], creds["clientkey"]
+        )
+
+        async def _bail(err: str) -> dict:
+            if not armed:
+                await session.aclose()
+            return {"bridge_host": host, "error": err}
+
         try:
             areas = await session.get_entertainment_areas()
         except Exception as exc:  # noqa: BLE001
-            await session.aclose()
-            return {"bridge_host": host, "error": f"Bridge nicht erreichbar ({exc})"}
+            return await _bail(f"Bridge nicht erreichbar ({exc})")
         area = next((a for a in areas if a.id == cfg["area_id"]), None)
         if area is None:
-            await session.aclose()
-            return {"bridge_host": host, "error": f"area_id {cfg['area_id']} nicht gefunden"}
+            return await _bail(f"area_id {cfg['area_id']} nicht gefunden")
         native_ids = [ch.channel_id for ch in area.channels]
         order = cfg.get("channel_order")
         if order:
             if sorted(order) != sorted(native_ids):
-                await session.aclose()
-                return {
-                    "bridge_host": host,
-                    "error": f"channel_order {order} passt nicht zum Bereich – "
-                             f"genau die Kanäle {sorted(native_ids)} in gewünschter "
-                             f"Reihenfolge angeben",
-                }
+                return await _bail(
+                    f"channel_order {order} passt nicht zum Bereich – "
+                    f"genau die Kanäle {sorted(native_ids)} in gewünschter "
+                    f"Reihenfolge angeben"
+                )
             channel_ids = list(order)
         else:
             channel_ids = native_ids
@@ -1474,6 +1745,7 @@ async def handle_start(request: web.Request) -> web.Response:
             "area_id": cfg["area_id"],
             "channel_ids": channel_ids,
             "session": session,
+            "armed": bool(armed),
             "app_key": creds["username"],
             "effect": cfg.get("effect", defaults["effect"]),
             "color": color,
@@ -1590,8 +1862,9 @@ async def handle_start(request: web.Request) -> web.Response:
     # aber einzeln über state["tasks"] unabhängig kündbar.
     barrier = asyncio.Barrier(len(ctxs)) if len(ctxs) > 1 else None
     for c in ctxs:
+        arm_ctx = state["armed"].get(c["bridge_host"]) if c.get("armed") else None
         state["tasks"][c["bridge_host"]] = asyncio.create_task(
-            _run_single_bridge(c, duration, fps, restore, barrier)
+            _run_single_bridge(c, duration, fps, restore, barrier, arm_ctx)
         )
     state["last_start_meta"] = {"duration": duration, "fps": fps, "restore_state": restore}
     started_report = []
@@ -1678,6 +1951,108 @@ async def handle_stop(request: web.Request) -> web.Response:
     return web.json_response({"status": "stopped", "bridge_hosts": sorted(running)})
 
 
+def _arm_targets(bridge_host: str | None) -> tuple[list[dict], web.Response | None]:
+    """Zu (ent)schärfende Bridge-Konfigurationen ermitteln. Ohne ``bridge_host``
+    alle konfigurierten, nicht-``neutral`` Bridges; sonst genau die eine."""
+    cfgs = [b for b in state["bridges"] if b.get("effect") != "neutral"]
+    if bridge_host:
+        cfgs = [b for b in cfgs if b["bridge_host"] == bridge_host]
+        if not cfgs:
+            return [], web.json_response(
+                {"error": f"bridge_host {bridge_host} nicht in bridges konfiguriert "
+                          f"(oder als neutral markiert)"},
+                status=400,
+            )
+    if not cfgs:
+        return [], web.json_response(
+            {"error": "keine (nicht-neutrale) Bridge konfiguriert"}, status=400
+        )
+    return cfgs, None
+
+
+async def handle_arm(request: web.Request) -> web.Response:
+    """POST /arm – DTLS-Stream einer/aller Bridge(s) dauerhaft offen halten
+    („scharfschalten"), damit ein späteres /start den ~3–9 s Handshake
+    überspringt. Body optional ``bridge_host`` (sonst alle konfigurierten,
+    nicht-neutralen Bridges). Bereits laufende Bridges können nicht scharf-
+    geschaltet werden (erst /stop)."""
+    body = await _json_body(request)
+    cfgs, err = _arm_targets(body.get("bridge_host"))
+    if err is not None:
+        return err
+
+    armed_report, already, busy, failed = [], [], [], []
+    to_arm = []
+    for cfg in cfgs:
+        host = cfg["bridge_host"]
+        if host in state["armed"]:
+            already.append(host)
+        elif _is_running(host):
+            busy.append(host)
+        else:
+            to_arm.append(cfg)
+
+    results = await asyncio.gather(*(_arm_one(cfg) for cfg in to_arm))
+    for r in results:
+        if r.get("armed"):
+            armed_report.append(r["bridge_host"])
+        else:
+            failed.append(r)
+            log.warning("Scharfschalten %s fehlgeschlagen: %s", r["bridge_host"], r.get("error"))
+
+    status = "armed" if armed_report else ("no_change" if not failed else "error")
+    code = 502 if (failed and not armed_report and not already) else 200
+    return web.json_response(
+        {
+            "status": status,
+            "armed": armed_report,
+            "already_armed": already,
+            "busy": busy,
+            "failed": failed,
+        },
+        status=code,
+    )
+
+
+async def handle_disarm(request: web.Request) -> web.Response:
+    """POST /disarm – Stream schließen und den beim Scharfschalten gesicherten
+    Lichtzustand per CLIP v2 wiederherstellen. Body optional ``bridge_host``.
+    Ein gerade laufender Effekt auf der Bridge wird zuvor gestoppt."""
+    body = await _json_body(request)
+    bridge_host = body.get("bridge_host")
+    hosts = [bridge_host] if bridge_host else list(state["armed"])
+    if not hosts:
+        return web.json_response({"status": "not_armed"})
+
+    disarmed = []
+    for host in hosts:
+        if host not in state["armed"]:
+            continue
+        # Erst als „nicht mehr scharf" markieren, dann einen evtl. laufenden
+        # Effekt stoppen – dessen finally sieht dadurch „entschärft" und
+        # schließt den Stream selbst + stellt den Lichtzustand wieder her.
+        if _is_running(host):
+            # Aus state["armed"] entfernen, dann den Effekt-Task abbrechen:
+            # dessen finally sieht „nicht mehr scharf" und übernimmt aclose() +
+            # restore_light_state selbst.
+            ctx = state["armed"].pop(host, None)
+            if ctx and ctx.get("idle_task") and not ctx["idle_task"].done():
+                ctx["idle_task"].cancel()
+            task = state["tasks"].get(host)
+            if task and not task.done():
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+            log.info("Bridge %s entschärft (lief noch – Effekt gestoppt).", host)
+            disarmed.append(host)
+        elif await _disarm_one(host):
+            disarmed.append(host)
+
+    return web.json_response(
+        {"status": "disarmed" if disarmed else "not_armed", "bridge_hosts": sorted(disarmed)}
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Effektsets (Presets)
 # --------------------------------------------------------------------------- #
@@ -1734,6 +2109,20 @@ async def handle_presets_delete(request: web.Request) -> web.Response:
     return web.json_response({"status": "not_found", "name": name}, status=404)
 
 
+async def _on_shutdown(app: web.Application) -> None:
+    """Beim Herunterfahren (SIGTERM durch HA) laufende Effekte stoppen und alle
+    scharfen Bridges entschärfen – sonst blieben Streams offen und der
+    Lichtzustand nicht wiederhergestellt."""
+    running = [t for t in state["tasks"].values() if not t.done()]
+    for t in running:
+        t.cancel()
+    if running:
+        await asyncio.gather(*running, return_exceptions=True)
+    for host in list(state["armed"]):
+        with contextlib.suppress(Exception):
+            await _disarm_one(host)
+
+
 def create_app() -> web.Application:
     app = web.Application()
     app.router.add_get("/", handle_panel)
@@ -1743,11 +2132,14 @@ def create_app() -> web.Application:
     app.router.add_get("/areas", handle_areas)
     app.router.add_post("/start", handle_start)
     app.router.add_post("/stop", handle_stop)
+    app.router.add_post("/arm", handle_arm)
+    app.router.add_post("/disarm", handle_disarm)
     app.router.add_post("/identify", handle_identify)
     app.router.add_get("/presets", handle_presets_get)
     app.router.add_put("/presets", handle_presets_put)
     app.router.add_post("/presets", handle_presets_put)
     app.router.add_delete("/presets", handle_presets_delete)
+    app.on_shutdown.append(_on_shutdown)
     return app
 
 

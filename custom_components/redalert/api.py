@@ -1,7 +1,7 @@
 """Dünner HTTP-Client für die Red-Alert-App-REST-API (main.py).
 
 Kein State hier – nur GET/POST-Wrapper um die in main.py dokumentierten
-Endpunkte (/health, /config, /start, /stop). Fehler werden als
+Endpunkte (/health, /config, /start, /stop, /arm, /disarm). Fehler werden als
 RedAlertApiError durchgereicht, damit Coordinator/Entities einheitlich
 reagieren können.
 """
@@ -83,3 +83,14 @@ class RedAlertApiClient:
         """POST /stop – optional auf eine einzelne Bridge beschränkt."""
         payload = {"bridge_host": bridge_host} if bridge_host is not None else None
         return await self._request("POST", "/stop", json=payload)
+
+    async def async_arm(self, bridge_host: str | None = None) -> dict[str, Any]:
+        """POST /arm – DTLS-Stream dauerhaft offen halten (Handshake vorab), damit
+        ein späteres /start sofort startet. Optional auf eine Bridge beschränkt."""
+        payload = {"bridge_host": bridge_host} if bridge_host is not None else None
+        return await self._request("POST", "/arm", json=payload)
+
+    async def async_disarm(self, bridge_host: str | None = None) -> dict[str, Any]:
+        """POST /disarm – Stream schließen, Lichtzustand wiederherstellen."""
+        payload = {"bridge_host": bridge_host} if bridge_host is not None else None
+        return await self._request("POST", "/disarm", json=payload)
