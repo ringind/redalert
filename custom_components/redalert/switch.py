@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.switch import SwitchEntity
+from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN, SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
@@ -73,7 +73,7 @@ class RedAlertAnimationSwitch(RedAlertEntity, SwitchEntity):
     _attr_icon = "mdi:alert-octagram"
 
     def __init__(self, coordinator: RedAlertDataUpdateCoordinator, entry: ConfigEntry) -> None:
-        super().__init__(coordinator, entry, "animation")
+        super().__init__(coordinator, entry, "animation", domain=SWITCH_DOMAIN)
 
     @property
     def is_on(self) -> bool:
@@ -108,7 +108,7 @@ class RedAlertArmSwitch(RedAlertEntity, SwitchEntity):
     _attr_icon = "mdi:shield-check"
 
     def __init__(self, coordinator: RedAlertDataUpdateCoordinator, entry: ConfigEntry) -> None:
-        super().__init__(coordinator, entry, "armed")
+        super().__init__(coordinator, entry, "armed", domain=SWITCH_DOMAIN)
 
     @property
     def is_on(self) -> bool:
@@ -138,7 +138,7 @@ class RedAlertBridgeAnimationSwitch(RedAlertEntity, SwitchEntity):
     def __init__(
         self, coordinator: RedAlertDataUpdateCoordinator, entry: ConfigEntry, bridge_host: str
     ) -> None:
-        super().__init__(coordinator, entry, f"bridge_animation_{bridge_host}")
+        super().__init__(coordinator, entry, f"bridge_animation_{bridge_host}", domain=SWITCH_DOMAIN)
         self._bridge_host = bridge_host
         self._attr_translation_placeholders = {"host": bridge_host}
 

@@ -4,21 +4,28 @@
 
 Eigenständige `custom_component` für die App [`redalert`](../../redalert): spricht
 deren REST-API an (siehe [`redalert/DOCS.md`](../../redalert/DOCS.md#rest-api))
-und legt fünf Entities an – ohne `rest_command`/Template-Umweg (siehe
+und legt sechs Entities an – ohne `rest_command`/Template-Umweg (siehe
 [„Home Assistant einbinden“](../../redalert/DOCS.md#home-assistant-einbinden)
 für die Variante ganz ohne Zusatzinstallation).
 
 | Entity | Domain | Zeigt / tut |
 |---|---|---|
 | **Betriebszustand** | `binary_sensor` | `on`, solange die App auf **irgendeiner** Bridge gerade einen Effekt fährt (`running` aus `/config`). |
+| **Scharfgeschaltet** | `binary_sensor` | `on`, wenn **alle** nicht-`neutral` Bridges scharfgeschaltet sind (`armed` aus `/config`); `armed_bridges` als Attribut. Nur-Lese-Anzeige neben dem gleichnamigen Schalter. |
 | **Animation** | `switch` | Ein = `POST /start` (mit dem aktuell geladenen Effektset, falls eines gewählt ist, sonst App-Standard) – startet **alle** konfigurierten Bridges gemeinsam. Aus = `POST /stop` (stoppt alle laufenden Bridges). |
 | **Animation (\<Bridge-IP\>)** | `switch` | Je eine weitere Switch-Entity pro gepaarter Bridge (dynamisch aus `/config`'s `bridges`-Liste angelegt) – startet/stoppt **nur diese eine** Bridge (`bridge_host` im `/start`/`/stop`-Body), unabhängig vom Zustand der anderen. Verschwindet eine Bridge aus der App-Konfiguration, wird ihr Switch nicht gelöscht, sondern nur `unavailable`. |
 | **Scharfgeschaltet** | `switch` | Ein = `POST /arm` (hält den DTLS-Stream **aller** nicht-`neutral` Bridges dauerhaft offen, sodass ein anschließender Animationsstart den ~3–9 s langen Handshake überspringt). Aus = `POST /disarm` (schließt die Streams, stellt den Lichtzustand wieder her). `on`, wenn alle diese Bridges scharf sind (`armed` aus `/config`). |
-| **Effektset** | `select` | Dropdown mit allen gespeicherten Effektsets (`GET /presets`-Namen); Auswahl lädt **und startet** das Set sofort (`POST /start {"preset": …}`). |
-| **Geladenes Effektset** | `sensor` | Name des zuletzt geladenen Sets (leer bei einem Ad-hoc-Start ohne `preset`, z. B. über die App-Web-UI oder direkten `/start`-Aufruf ohne `preset`; ein Solo-Start einer einzelnen Bridge über ihren eigenen Switch ändert diese Anzeige nie). |
+| **Effektset** | `select` | Dropdown mit allen gespeicherten Effektsets (`GET /presets`-Namen). Auswahl **lädt** das Set nur (`POST /select` → `current_preset`), ohne zu starten – wie „Laden“ im Web-UI. Läuft gerade eine Animation, wird sofort mit dem neuen Set weitergefahren (`POST /stop` + `POST /start {"preset": …}`). |
+| **Geladenes Effektset** | `sensor` | Name des geladenen/gestarteten Sets (`current_preset`; leer nach einem Ad-hoc-Start ohne `preset` oder `POST /select {"preset": null}`; ein Solo-Start einer einzelnen Bridge ändert diese Anzeige nie). |
 
-Fünf plus eine Entity je gepaarter Bridge hängen an einem gemeinsamen Gerät
+Sechs plus eine Entity je gepaarter Bridge hängen an einem gemeinsamen Gerät
 ("Red Alert (<Host>)"); ein Config-Entry = eine App-Instanz.
+
+> **Update auf ≥ 1.2.0:** Die Entitäten bekommen ein sprachunabhängiges,
+> englisches `entity_id`-Schema (`binary_sensor.red_alert_<host>_running` usw.)
+> und werden dafür **neu angelegt** – die alten (auf deutschen HA-Installationen
+> z. B. `…_betriebszustand`) verschwinden. Verweise in Automationen und
+> Dashboards entsprechend anpassen.
 
 ## Installation
 
@@ -67,11 +74,15 @@ jederzeit nachträglich in der App-Web-UI erledigen.
 ## Verhalten im Detail
 
 - Poll-Intervall: alle 10 s `GET /config` (ein Aufruf liefert `running`,
-  `presets` und `current_preset` zusammen).
+  `armed`, `armed_bridges`, `presets` und `current_preset` zusammen).
 - „Geladenes Effektset“ kommt von der App selbst (`current_preset` in
-  `/health`/`/config`) – gilt also auch, wenn ein Set über das Web-UI oder
-  einen rohen `/start`-Aufruf mit `preset` gestartet wurde, nicht nur über
-  diese Integration.
+  `/health`/`/config`) – gilt also auch, wenn ein Set über das Web-UI, einen
+  rohen `/start`-Aufruf mit `preset` oder `POST /select` gesetzt wurde, nicht
+  nur über die `select`-Entity.
+- Die `select`-Entity **startet nichts**, solange keine Animation läuft: sie
+  ruft `POST /select` und setzt nur „Geladenes Effektset“. Erst der
+  `switch.…_animation` (bzw. ein `/start {"preset": …}`) fährt das Set. Läuft
+  bereits eine Animation, schaltet die Auswahl sofort um (`/stop` + `/start`).
 - Ein Ad-hoc-Start ganz ohne `preset` (z. B. der reine „Start“-Button im
   Web-UI ohne Effektset-Auswahl) räumt „Geladenes Effektset“ wieder auf leer.
 - `switch.animation` aus schaltet **die gesamte laufende Animation** ab

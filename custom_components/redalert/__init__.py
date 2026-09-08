@@ -1,8 +1,8 @@
 """Home-Assistant-Integration für die Red Alert Entertainment App.
 
 Spricht ausschließlich die REST-API der App an (main.py: /health, /config,
-/start, /stop – siehe redalert/DOCS.md), keine eigene Logik. Ein Config-Entry
-= eine App-Instanz (Host+Port).
+/start, /stop, /select, /arm, /disarm – siehe redalert/DOCS.md), keine eigene
+Logik. Ein Config-Entry = eine App-Instanz (Host+Port).
 """
 
 from __future__ import annotations

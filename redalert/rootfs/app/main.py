@@ -11,8 +11,9 @@ Sammel-Blitzen (``effect: lightning``), ein Herzschlag-Doppelpuls
 (``effect: aurora``), ein phasenversetzter Regenbogen-Farbumlauf
 (``effect: rainbow``), mehrere unabhängige Meteore (``effect: meteor``), ein
 sequenzieller Auffüll-Balken (``effect: wipe``), wiederkehrende
-Feuerwerk-Ausbrüche (``effect: firework``) oder – für Gradient Lightstrips –
-weich überblendete Farbbänder (``effect: chase``).
+Feuerwerk-Ausbrüche (``effect: firework``), für Gradient Lightstrips
+weich überblendete Farbbänder (``effect: chase``) oder ein lampenweise
+nachgezogener Farbverlauf durch drei Paletten (``effect: color_chase``).
 Effekt, Farbe und Timing sind pro Bridge einzeln einstellbar; jede Bridge
 läuft in ihrem eigenen, unabhängig start-/stoppbaren Task
 (``state["tasks"]``) – ein ``POST /start``/``/stop`` mit ``bridge_host``
@@ -27,7 +28,8 @@ läuft bis ``POST /stop``).
 Der komplette Satz an Start-Parametern (alle Bridges + Steuerung) lässt sich
 als benanntes **Effektset** unter ``/data/presets.json`` ablegen
 (``GET/PUT/DELETE /presets``) und per ``POST /start {"preset": "..."}``
-wieder starten.
+wieder starten; ``POST /select {"preset": "..."}`` merkt ein Set nur als
+*geladen* (``current_preset``), ohne es zu starten.
 """
 
 import asyncio
@@ -46,6 +48,7 @@ import hue_entertainment.dtls as _hue_dtls
 from chase import (
     RedAlertAurora,
     RedAlertChase,
+    RedAlertColorChase,
     RedAlertComet,
     RedAlertDuel,
     RedAlertFirework,
@@ -142,6 +145,7 @@ _EFFECTS = (
     "flicker",
     "strobe",
     "duel",
+    "color_chase",
     "neutral",
 )
 
@@ -1117,6 +1121,14 @@ async def _run_single_bridge(
     )
     ctx["strobe"] = RedAlertStrobe(num_lights=n, period_s=ctx["sweep_seconds"])
     ctx["duel"] = RedAlertDuel(num_lights=n, period_s=ctx["sweep_seconds"])
+    # color_chase teilt sich gc_speed (dann Lampen/Schritte pro Sekunde) und
+    # gc_direction mit chase; keine gc_strips (arbeitet über alle Kanäle als
+    # ein Array), daher die Richtung des ersten Strips.
+    ctx["color_chase"] = RedAlertColorChase(
+        num_lights=n,
+        speed_steps_per_s=ctx["gc_speed"],
+        direction=ctx["gc_strips"][0]["direction"],
+    )
 
     frames = 0
     snapshot: list[dict] = []
@@ -1215,6 +1227,10 @@ async def _run_single_bridge(
             elif effect == "rainbow":
                 # reine Farbrotation, konstant auf glow_high
                 chans = [(r, g, b, glow_high) for r, g, b in ctx["rainbow"].colors_for(elapsed)]
+            elif effect == "color_chase":
+                # Gradient füllt sich lampenweise, 3 Paletten im Wechsel;
+                # absolute Farben, konstant auf glow_high (wie rainbow)
+                chans = [(r, g, b, glow_high) for r, g, b in ctx["color_chase"].colors_for(elapsed)]
             elif effect == "flicker":
                 # 1.0-Ruhezustand (= normales An) mit gelegentlichen Einbrüchen
                 levels = ctx["flicker"].step(dt)
@@ -2053,6 +2069,31 @@ async def handle_disarm(request: web.Request) -> web.Response:
     )
 
 
+async def handle_select(request: web.Request) -> web.Response:
+    """POST /select – ein Effektset als *geladen* merken, **ohne** es zu starten.
+
+    Setzt nur ``state["current_preset"]`` (für die HA-Integration: Select-Entity
+    „Effektset" + Sensor „geladenes Effektset"). Body ``{"preset": "<name>"}``
+    (404, wenn unbekannt) oder ``{"preset": null}`` bzw. leer zum Zurücksetzen.
+    Ein späteres ``POST /start`` (ohne eigenes ``preset``) fährt weiterhin die
+    App-Standardwerte – das Laden hier ändert nur die Anzeige; die Integration
+    ruft bei bereits laufender Animation zusätzlich ``/stop`` + ``/start
+    {preset}`` auf, um sofort umzuschalten.
+    """
+    body = await _json_body(request)
+    name = body.get("preset")
+    if name in (None, ""):
+        state["current_preset"] = None
+        log.info("Effektset-Auswahl zurückgesetzt.")
+        return web.json_response({"status": "cleared", "current_preset": None})
+    name = str(name)
+    if name not in state["presets"]:
+        return web.json_response({"error": f"Effektset '{name}' nicht gefunden"}, status=404)
+    state["current_preset"] = name
+    log.info("Effektset '%s' geladen (nicht gestartet).", name)
+    return web.json_response({"status": "selected", "current_preset": name})
+
+
 # --------------------------------------------------------------------------- #
 # Effektsets (Presets)
 # --------------------------------------------------------------------------- #
@@ -2134,6 +2175,7 @@ def create_app() -> web.Application:
     app.router.add_post("/stop", handle_stop)
     app.router.add_post("/arm", handle_arm)
     app.router.add_post("/disarm", handle_disarm)
+    app.router.add_post("/select", handle_select)
     app.router.add_post("/identify", handle_identify)
     app.router.add_get("/presets", handle_presets_get)
     app.router.add_put("/presets", handle_presets_put)

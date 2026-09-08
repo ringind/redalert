@@ -23,6 +23,9 @@
     "binary_sensor": {
       "running": {
         "name": "Running"
+      },
+      "armed": {
+        "name": "Armed"
       }
     },
     "sensor": {

@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.18.0
+
+- **Neuer Effekt `color_chase`.** Ein Farbverlauf füllt sich Lampe für Lampe
+  auf: jede Lampe blendet beim Vorbeilauf des Kopfs über einen Schritt auf
+  ihre Zielfarbe und hält sie, bis der nächste Durchlauf sie überschreibt.
+  Drei Paletten laufen abwechselnd – Rot→Gelb, Grün→Cyan, Blau→Magenta.
+  Geschwindigkeit über `gc_speed` (Lampen bzw. Schritte pro Sekunde, setzt
+  zugleich die Überblendzeit je Schritt), Richtung über `gc_direction`
+  (`forward`/`backward`/`bounce` – bei `bounce` kehrt die Füllrichtung mit
+  jeder Palette um).
+
+## 1.17.0
+
+- **Neuer Endpunkt `POST /select`.** Merkt ein Effektset als *geladen*
+  (`current_preset`), ohne es zu starten – Body `{"preset": "<name>"}` oder
+  `{"preset": null}` zum Zurücksetzen. Für die Home-Assistant-Integration.
+- **Home-Assistant-Integration (Manifest 1.2.0):**
+  - Die `select`-Entity „Effektset" **startet nichts mehr** beim Auswählen –
+    sie lädt das Set nur (wie „Laden" im Web-UI). Läuft bereits eine Animation,
+    wird sofort mit dem neuen Set weitergefahren.
+  - Neuer `binary_sensor` „Scharfgeschaltet" (`armed` aus `/config`,
+    `armed_bridges` als Attribut) neben dem gleichnamigen Schalter.
+  - Alle Entitäten bekommen sprachunabhängige, **englische `entity_id`s**
+    (`binary_sensor.red_alert_<host>_running` usw.) und werden dafür neu
+    angelegt – vorhandene (z. B. `…_betriebszustand`) verschwinden.
+    **Verweise in Automationen/Dashboards anpassen.**
+
 ## 1.16.1
 
 - **`chase` flackerte weiterhin gelegentlich beim Auf-/Abblenden.** Der

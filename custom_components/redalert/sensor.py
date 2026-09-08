@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN, SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -25,7 +25,7 @@ class RedAlertCurrentPresetSensor(RedAlertEntity, SensorEntity):
     _attr_icon = "mdi:star-four-points-outline"
 
     def __init__(self, coordinator: RedAlertDataUpdateCoordinator, entry: ConfigEntry) -> None:
-        super().__init__(coordinator, entry, "current_preset")
+        super().__init__(coordinator, entry, "current_preset", domain=SENSOR_DOMAIN)
 
     @property
     def native_value(self) -> str | None:

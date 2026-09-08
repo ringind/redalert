@@ -603,6 +603,98 @@ class RedAlertRainbow:
         return out
 
 
+class RedAlertColorChase:
+    """A gradient that repaints itself lamp-by-lamp, cycling three palettes.
+
+    One "chase step" advances a head to the next lamp; the lamp it reaches
+    fades (over exactly one step) from whatever it showed to a target colour
+    taken from the current palette, then holds it until the head comes back
+    round on the next palette. So a full gradient grows across the array and
+    is pushed out by the next one.
+
+    Three palettes run in turn, each a linear ramp from the start colour at
+    chase-index 0 to the fully-mixed colour at the last chase-index:
+
+    - palette 0: ``(255, 0, 0)`` → ``(255, 255, 0)``  (green ramps up)
+    - palette 1: ``(0, 255, 0)`` → ``(0, 255, 255)``  (blue ramps up)
+    - palette 2: ``(0, 0, 255)`` → ``(255, 0, 255)``  (red ramps up)
+
+    ``direction``:
+
+    - ``forward`` / ``backward``: the head always fills from the same end.
+    - ``bounce``: the fill direction flips with every palette (palette 0
+      forward, palette 1 backward, palette 2 forward, …) so the fill point
+      pendulums between the ends.
+
+    ``speed_steps_per_s`` is how many lamps the head paints per second – it
+    also sets the per-step fade time (``1 / speed``); crank it high enough
+    that a step is shorter than one frame and the fade becomes a hard snap.
+
+    Emits per-lamp ``(r, g, b)`` 0..255 directly (no brightness shape);
+    ``main.py`` sends it at a constant ``glow_high`` like ``rainbow``.
+    ``colors_for(t)`` is a pure function of ``t`` (no state, seamless loop).
+    """
+
+    def __init__(
+        self,
+        num_lights: int,
+        speed_steps_per_s: float = 4.0,
+        direction: str = "forward",
+    ) -> None:
+        self.num_lights = max(1, num_lights)
+        self.speed = max(0.01, speed_steps_per_s)
+        self.direction = direction if direction in ("forward", "backward", "bounce") else "forward"
+
+    def _ramp(self, k: int) -> float:
+        """0..255: chase-index ``k`` along the palette ramp (last index → 255)."""
+        n = self.num_lights
+        return 255.0 * (k / (n - 1)) if n > 1 else 0.0
+
+    def _target(self, q: int, k: int) -> tuple[float, float, float]:
+        """Target colour of palette ``q`` (mod 3) at chase-index ``k``."""
+        v = self._ramp(k)
+        p = q % 3
+        if p == 0:
+            return (255.0, v, 0.0)
+        if p == 1:
+            return (0.0, 255.0, v)
+        return (v, 0.0, 255.0)
+
+    def _chase_index(self, i: int, q: int) -> int:
+        """Physical lamp ``i`` → chase-index (order the head visits) for palette ``q``."""
+        if self.direction == "backward":
+            forward = False
+        elif self.direction == "bounce":
+            forward = (q % 2 == 0)
+        else:
+            forward = True
+        return i if forward else (self.num_lights - 1 - i)
+
+    def colors_for(self, t: float) -> list[tuple[float, float, float]]:
+        """Per-lamp ``(r, g, b)`` 0..255 (float) at time ``t`` (seconds)."""
+        n = self.num_lights
+        step_dur = 1.0 / self.speed          # seconds the head dwells per lamp
+        seq_dur = n * step_dur               # one full palette sweep
+        period = 6.0 * seq_dur               # palettes cycle /3, bounce dir /2
+        tm = t % period
+        q = int(tm // seq_dur)               # current palette-sweep index, 0..5
+        t_in = tm - q * seq_dur
+        out: list[tuple[float, float, float]] = []
+        for i in range(n):
+            k = self._chase_index(i, q)
+            frm = self._target(q - 1, self._chase_index(i, q - 1))
+            reached_at = k * step_dur
+            if t_in < reached_at:
+                out.append(frm)                             # not repainted yet this sweep
+            elif t_in < reached_at + step_dur:
+                tgt = self._target(q, k)
+                f = (t_in - reached_at) / step_dur
+                out.append(tuple(frm[c] + (tgt[c] - frm[c]) * f for c in range(3)))
+            else:
+                out.append(self._target(q, k))             # settled on this sweep's target
+        return out
+
+
 class RedAlertMeteor:
     """Several independent comets crossing the channels at randomised speeds,
     directions and peak brightness – a busier, less orderly cousin of

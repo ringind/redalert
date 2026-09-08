@@ -15,7 +15,7 @@ voice, or from an automation, from the namesake red alert to calm ambient
 lighting or a diamond-sparkle party effect. Supports **up to 3 Hue Bridges**
 running simultaneously – each with its own effect, its own colour and its own
 timing – or independently, one after another, via their own Start/Stop, in
-the web UI and in the Home Assistant integration alike. **17 effects** are
+the web UI and in the Home Assistant integration alike. **18 effects** are
 available – from calm (`pulse`, `aurora`)
 through classic (`comet`, `chase`, `wave`) to action-packed
 (`police`, `lightning`, `strobe`, `duel`, `meteor`, `firework`, `ripple`,
@@ -83,7 +83,7 @@ HA automation ──┬──> media_player.play_media (optional: your sound, e.
                          keeps its own DTLS stream open
                          per bridge (up to 3, ~25 Hz),
                          each with its own effect/colour/timing
-                         (17 effects, see §8)
+                         (18 effects, see §8)
                                         │
                               ┌─────────┼─────────┐
                               ▼         ▼         ▼
@@ -241,6 +241,7 @@ Restart the app after changing options.
 | `/stop`   | POST    | Stop the effect on all running bridges immediately – or, with `bridge_host` in the body, on only a single bridge                                       |
 | `/arm`    | POST    | **Arm**: keep the DTLS stream to one/all bridge(s) permanently open so a later `/start` skips the ~3–9 s handshake. Body optional `bridge_host` (otherwise all configured, non-`neutral` bridges). While armed the bridge holds its single Entertainment slot; its lamps show an approximated still of the previous state. Running bridge → stop it first. |
 | `/disarm` | POST    | Undo arming: close the stream(s), restore the light state via CLIP v2. Body optional `bridge_host`. A running effect is stopped first. |
+| `/select` | POST    | Remember an effect set as *loaded* (`current_preset`), **without** starting it. Body `{"preset": "<name>"}` (`404` if unknown) or `{"preset": null}` to clear. For the HA integration (select entity + sensor). |
 | `/identify` | POST  | Cycle through a bridge's lamps individually (`channel_id` → lamp). Body: `bridge_host` (required when more than one bridge is configured), `area_id` (optional, otherwise from the bridges configuration), `channel_id` (omitted = all in sequence), `seconds`, `color`, `restore_state`. One DTLS handshake for the whole run; occupies the same slot as an effect on this one bridge (blocked while the bridge is armed – disarm first). |
 | `/presets` | GET / PUT / POST / DELETE | Manage effect sets (`/data/presets.json`). `GET` = all (`{presets, names}`) or `?name=…` one. `PUT`/`POST` `{"name","config"}` = save/overwrite (also the upload target). `DELETE ?name=…` = delete. |
 
@@ -260,8 +261,9 @@ state.
 ## 7. Integrate with Home Assistant
 
 **Ready-made integration:** [`custom_components/redalert/`](custom_components/redalert)
-in this repo creates five entities (`binary_sensor` "Operating state",
-`switch` "Animation", `switch` "Armed", `select` "Effect set", `sensor`
+in this repo creates six entities (`binary_sensor` "Operating state",
+`binary_sensor` "Armed", `switch` "Animation", `switch` "Armed", `select`
+"Effect set" – loads only, starts only if an animation is running –, `sensor`
 "Loaded effect set").
 Install via **HACS** (repo category *Integration*, add as a custom
 repository – `hacs.json` at the repo root) or manually (copy the folder to
@@ -504,6 +506,19 @@ lightstrips, so `gc_direction` can be set **per strip** (as a list, e.g.
 `["forward", "backward"]`) – e.g. so two opposite strips run towards or away
 from each other.
 
+`color_chase` – **gradient-fill chase** (`RedAlertColorChase` in `chase.py`):
+a colour gradient repaints itself lamp by lamp – as the head passes, each lamp
+fades over exactly one step to its target colour and holds it until the next
+sweep overwrites it. Three palettes run in turn, each a linear ramp from the
+start colour (chase-index 0) to the fully-mixed colour (last chase-index):
+`(255,0,0)→(255,255,0)`, `(0,255,0)→(0,255,255)`, `(0,0,255)→(255,0,255)`.
+- `gc_speed` – lamps (steps) per second; also sets the per-step fade time
+  (`1/gc_speed` s – high enough and the step becomes a hard snap).
+- `gc_direction` – `forward`/`backward` always fill from the same end,
+  `bounce` flips the fill direction with every palette.
+- Absolute colours at a constant `glow_high` (like `rainbow`); uses no
+  `gc_strips`/`gc_count`/`gc_length`/`gc_background_color`.
+
 `neutral` – this bridge's lamps are **not** driven at all: no DTLS stream,
 no save/restore. Only useful per bridge (`bridges[].effect: neutral`), so an
 effect set can run an effect on one bridge and leave another one out
@@ -546,7 +561,7 @@ App Store repository: `repository.yaml` at the root, the app itself in the
 │   ├── manifest.json, const.py, api.py, coordinator.py, config_flow.py,
 │   │   entity.py                REST client + config flow + shared base entity
 │   ├── binary_sensor.py / switch.py / select.py / sensor.py
-│   │                             the five entities – only talks to the app's
+│   │                             the six entities – only talks to the app's
 │   │                             REST API, see README.md in there
 │   ├── strings.json (English) / translations/{de,en}.json
 │   │                             entity/config-flow labels
@@ -566,6 +581,6 @@ App Store repository: `repository.yaml` at the root, the app itself in the
 │       ├── etc/s6-overlay/…      service definition (start, bashio logging)
 │       └── app/
 │           ├── main.py           REST server + streaming loop + Ingress panel
-│           ├── chase.py          effect math (17 effects, see §8)
+│           ├── chase.py          effect math (18 effects, see §8)
 │           └── panel.html        web UI (control)
 ```

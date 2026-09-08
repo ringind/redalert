@@ -16,10 +16,11 @@ ruhigen Ambiente-Beleuchtung oder einem Diamant-Funkeln zur Party. Unterstützt
 **bis zu 3 Hue Bridges**, die gleichzeitig loslegen – jede mit ihrem eigenen
 Effekt, ihrer eigenen Farbe und eigenem Timing – oder unabhängig
 nacheinander per eigenem Start/Stop je Bridge, im Web-UI wie in der
-Home-Assistant-Integration. **17 Effekte** stehen zur
+Home-Assistant-Integration. **18 Effekte** stehen zur
 Wahl – von ruhig (`pulse`, `aurora`) über klassisch (`comet`,
-`chase`, `wave`) bis actionreich (`police`, `lightning`, `strobe`, `duel`,
-`meteor`, `firework`, `ripple`, `glitter`, `flicker`, `heartbeat`, `wipe`) –
+`chase`, `color_chase`, `wave`) bis actionreich (`police`, `lightning`,
+`strobe`, `duel`, `meteor`, `firework`, `ripple`, `glitter`, `flicker`,
+`heartbeat`, `wipe`) –
 siehe [§8 „Effekt anpassen“](#8-effekt-anpassen) für alle im Detail. Farbe(n),
 Timing und Helligkeit sind für jeden Effekt frei einstellbar
 (Web-UI-Farbwähler, App-Option oder REST-Body), nicht nur Rot. Mit
@@ -85,7 +86,7 @@ HA-Automation ──┬──> media_player.play_media (optional: dein Sound, z.
                          hält je Bridge (bis zu 3) einen
                          eigenen DTLS-Stream offen (~25 Hz),
                          jede mit eigenem Effekt/Farbe/Timing
-                         (17 Effekte, siehe §8)
+                         (18 Effekte, siehe §8)
                                         │
                               ┌─────────┼─────────┐
                               ▼         ▼         ▼
@@ -244,6 +245,7 @@ App nach einer Options-Änderung neu starten.
 | `/stop`   | POST    | Effekt auf allen laufenden Bridges sofort stoppen – oder, mit `bridge_host` im Body, nur auf einer einzelnen Bridge                                       |
 | `/arm`    | POST    | **Scharfschalten**: DTLS-Stream einer/aller Bridge(s) dauerhaft offen halten, damit ein späteres `/start` den ~3–9 s langen Handshake überspringt. Body optional `bridge_host` (sonst alle konfigurierten, nicht-`neutral` Bridges). Solange scharf belegt die Bridge ihren einzigen Entertainment-Slot; die Lampen zeigen ein angenähertes Standbild des vorherigen Zustands. Laufende Bridge → erst `/stop`. |
 | `/disarm` | POST    | Scharfschaltung aufheben: Stream(s) schließen, Lichtzustand per CLIP v2 wiederherstellen. Body optional `bridge_host`. Ein laufender Effekt wird zuvor gestoppt. |
+| `/select` | POST    | Ein Effektset als *geladen* merken (`current_preset`), **ohne** es zu starten. Body `{"preset": "<name>"}` (`404` wenn unbekannt) oder `{"preset": null}` zum Zurücksetzen. Für die HA-Integration (Select-Entity + Sensor). |
 | `/identify` | POST  | Lampen einer Bridge einzeln durchtesten (`channel_id` → Lampe). Body: `bridge_host` (Pflicht bei mehr als einer konfigurierten Bridge), `area_id` (optional, sonst aus der bridges-Konfiguration), `channel_id` (fehlt = alle nacheinander), `seconds`, `color`, `restore_state`. Ein DTLS-Handshake für den Durchlauf; belegt denselben Slot wie ein Effekt auf dieser einen Bridge (bei scharfer Bridge blockiert – erst `/disarm`). |
 | `/presets` | GET / PUT / POST / DELETE | Effektsets verwalten (`/data/presets.json`). `GET` = alle (`{presets, names}`) bzw. `?name=…` eines. `PUT`/`POST` `{"name","config"}` = speichern/überschreiben (auch Datei-Upload). `DELETE ?name=…` = löschen. |
 
@@ -264,9 +266,10 @@ einzigen Entertainment-Slot und ihre Lampen zeigen ein angenähertes Standbild;
 ## 7. Home Assistant einbinden
 
 **Fertige Integration:** [`custom_components/redalert/`](custom_components/redalert)
-in diesem Repo legt fünf Entities an (`binary_sensor` „Betriebszustand“, `switch`
-„Animation“, `switch` „Scharfgeschaltet“, `select` „Effektset“, `sensor`
-„geladenes Effektset“). Installation
+in diesem Repo legt sechs Entities an (`binary_sensor` „Betriebszustand“,
+`binary_sensor` „Scharfgeschaltet“, `switch` „Animation“, `switch`
+„Scharfgeschaltet“, `select` „Effektset“ – lädt nur, startet nur bei laufender
+Animation –, `sensor` „geladenes Effektset“). Installation
 über **HACS** (repo-Kategorie *Integration* als benutzerdefiniertes Repository
 hinzufügen – `hacs.json` im Wurzelverzeichnis) oder manuell (Ordner nach
 `config/custom_components/` kopieren); danach HA neu starten und
@@ -515,6 +518,21 @@ die einzelnen physischen Lightstrips auf, sodass sich `gc_direction`
 **je Strip** setzen lässt (als Liste, z. B. `["forward", "backward"]`) – z. B.
 damit zwei gegenüberliegende Strips aufeinander zu oder auseinander laufen.
 
+`color_chase` – **Farbverlauf-Lauflicht** (`RedAlertColorChase` in `chase.py`):
+ein Farbverlauf füllt sich Lampe für Lampe auf – jede Lampe blendet beim
+Vorbeilauf des Kopfs über genau einen Schritt auf ihre Zielfarbe und hält sie,
+bis der nächste Durchlauf sie überschreibt. Drei Paletten laufen abwechselnd,
+je ein linearer Verlauf von der Startfarbe (Chase-Index 0) zur voll gemischten
+Farbe (letzter Chase-Index): `(255,0,0)→(255,255,0)`, `(0,255,0)→(0,255,255)`,
+`(0,0,255)→(255,0,255)`.
+- `gc_speed` – Lampen (Schritte) pro Sekunde; setzt zugleich die Überblendzeit
+  je Schritt (`1/gc_speed` s – hoch genug, und der Übergang wird ein harter
+  Sprung).
+- `gc_direction` – `forward`/`backward` füllen immer vom selben Ende,
+  `bounce` kehrt die Füllrichtung mit jeder Palette um.
+- Absolute Farben, konstant auf `glow_high` (wie `rainbow`); nutzt keine
+  `gc_strips`/`gc_count`/`gc_length`/`gc_background_color`.
+
 `neutral` – die Lampen dieser Bridge werden **nicht** angesteuert: kein
 DTLS-Stream, kein Sichern/Wiederherstellen. Sinnvoll nur je Bridge
 (`bridges[].effect: neutral`), damit ein Effektset auf einer Bridge einen
@@ -558,7 +576,7 @@ in `custom_components/redalert/`.
 │   ├── manifest.json, const.py, api.py, coordinator.py, config_flow.py,
 │   │   entity.py                REST-Client + Config-Flow + gemeinsame Basis-Entity
 │   ├── binary_sensor.py / switch.py / select.py / sensor.py
-│   │                             die fünf Entities – spricht nur die REST-API
+│   │                             die sechs Entities – spricht nur die REST-API
 │   │                             der App an, siehe README.md darin
 │   ├── strings.json (Englisch) / translations/{de,en}.json
 │   │                             Entity-/Config-Flow-Beschriftungen
@@ -578,6 +596,6 @@ in `custom_components/redalert/`.
 │       ├── etc/s6-overlay/…      Service-Definition (Start, bashio-Logging)
 │       └── app/
 │           ├── main.py           REST-Server + Streaming-Loop + Ingress-Panel
-│           ├── chase.py          Effekt-Mathematik (17 Effekte, siehe §8)
+│           ├── chase.py          Effekt-Mathematik (18 Effekte, siehe §8)
 │           └── panel.html        Web-UI (Steuerung)
 ```

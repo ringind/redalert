@@ -4,21 +4,27 @@
 
 Standalone `custom_component` for the [`redalert`](../../redalert) app: talks
 to its REST API (see [`redalert/DOCS.en.md`](../../redalert/DOCS.en.md#rest-api))
-and creates five entities – without the `rest_command`/template detour (see
+and creates six entities – without the `rest_command`/template detour (see
 ["Integrate with Home Assistant"](../../redalert/DOCS.en.md#integrate-with-home-assistant)
 for the variant without any extra installation).
 
 | Entity | Domain | Shows / does |
 |---|---|---|
 | **Operating state** | `binary_sensor` | `on` while the app is running an effect on **any** bridge (`running` from `/config`). |
+| **Armed** | `binary_sensor` | `on` when **all** non-`neutral` bridges are armed (`armed` from `/config`); `armed_bridges` as an attribute. Read-only indicator alongside the switch of the same name. |
 | **Animation** | `switch` | On = `POST /start` (with the currently loaded effect set, if one is selected, otherwise the app default) – starts **all** configured bridges together. Off = `POST /stop` (stops every running bridge). |
 | **Animation (\<bridge IP\>)** | `switch` | One more switch entity per paired bridge (created dynamically from `/config`'s `bridges` list) – starts/stops **only that one** bridge (`bridge_host` in the `/start`/`/stop` body), regardless of the others' state. If a bridge disappears from the app configuration, its switch isn't deleted, just goes `unavailable`. |
 | **Armed** | `switch` | On = `POST /arm` (keeps the DTLS stream to **all** non-`neutral` bridges permanently open, so a following animation start skips the ~3–9 s handshake). Off = `POST /disarm` (closes the streams, restores the light state). `on` when all those bridges are armed (`armed` from `/config`). |
-| **Effect set** | `select` | Dropdown with all saved effect sets (`GET /presets` names); picking one loads **and starts** the set immediately (`POST /start {"preset": …}`). |
-| **Loaded effect set** | `sensor` | Name of the most recently loaded set (empty on an ad-hoc start without `preset`, e.g. via the app's web UI or a direct `/start` call without `preset`; a solo start of one bridge via its own switch never changes this). |
+| **Effect set** | `select` | Dropdown with all saved effect sets (`GET /presets` names). Picking one only **loads** the set (`POST /select` → `current_preset`), it does not start it – like "Load" in the web UI. If an animation is already running, it switches over immediately (`POST /stop` + `POST /start {"preset": …}`). |
+| **Loaded effect set** | `sensor` | Name of the loaded/started set (`current_preset`; empty after an ad-hoc start without `preset` or `POST /select {"preset": null}`; a solo start of one bridge never changes this). |
 
-Five plus one entity per paired bridge attach to one shared device
+Six plus one entity per paired bridge attach to one shared device
 ("Red Alert (<Host>)"); one config entry = one app instance.
+
+> **Upgrading to ≥ 1.2.0:** entities move to a language-independent, English
+> `entity_id` scheme (`binary_sensor.red_alert_<host>_running` etc.) and are
+> **recreated** for it – the old ones (e.g. `…_betriebszustand` on German HA
+> installs) disappear. Update references in automations and dashboards.
 
 ## Installation
 
@@ -65,11 +71,16 @@ web UI at any later time.
 ## Behaviour in detail
 
 - Poll interval: `GET /config` every 10 s (one call returns `running`,
-  `presets` and `current_preset` together).
+  `armed`, `armed_bridges`, `presets` and `current_preset` together).
 - "Loaded effect set" comes from the app itself (`current_preset` in
-  `/health`/`/config`) – so it applies even when a set was started via the
-  web UI or a raw `/start` call with `preset`, not just via this
-  integration.
+  `/health`/`/config`) – so it applies even when a set was set via the web UI,
+  a raw `/start` call with `preset`, or `POST /select`, not just via the
+  `select` entity.
+- The `select` entity **starts nothing** while no animation is running: it
+  calls `POST /select` and only sets "Loaded effect set". Only
+  `switch.…_animation` (or a `/start {"preset": …}`) actually runs the set. If
+  an animation is already running, picking a set switches over immediately
+  (`/stop` + `/start`).
 - An ad-hoc start with no `preset` at all (e.g. the plain "Start" button in
   the web UI without picking an effect set) clears "Loaded effect set" back
   to empty.

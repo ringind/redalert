@@ -310,6 +310,7 @@
       "opt.wipe": "wipe (Auffüllen)", "opt.firework": "firework (Feuerwerk)",
       "opt.ripple": "ripple (Echo)", "opt.wave": "wave (Welle)", "opt.flicker": "flicker (Flackern)",
       "opt.strobe": "strobe (Stroboskop)", "opt.duel": "duel (Duell)", "opt.chase": "chase (Lauflicht)",
+      "opt.colorChase": "color_chase (Farbverlauf)",
       "opt.neutral": "neutral (nicht steuern)",
       "card.bridge": (i) => `Bridge ${i}`,
       "card.bridgeIp": "Bridge-IP", "btn.pair": "Pairen",
@@ -334,12 +335,12 @@
       "card.glitterFlash": "glitter: Blitzdauer (ms) – für glitter, chase (wenn „Chases funkeln“ aktiv)",
       "card.glitterColors": "glitter: Farben (diese Bridge) – für glitter, aurora, chase (wenn „Chases funkeln“ aktiv)",
       "title.useOwnColors": "eigene Farben verwenden",
-      "card.gcDir": "chase: Richtung(en) – forward, backward oder bounce",
+      "card.gcDir": "chase / color_chase: Richtung(en) – forward, backward oder bounce",
       "card.gcDirPh": "wie Konfiguration, z. B. forward",
       "title.gcDir": "forward / backward: umlaufend (wie ein Förderband); bounce: prallt an beiden Enden ab (Larson-Scanner). Bei mehreren Strips (siehe Strip-Längen) durch Komma getrennt, eine Richtung je Strip, z. B. forward,backward.",
       "card.gcStrips": "chase: Strip-Längen", "card.gcStripsPh": "1 Strip, z. B. 7,5",
       "card.gcCount": "chase: Anzahl Chases", "card.gcLength": "chase: Länge (Segmente)",
-      "card.gcSpeed": "chase: Geschwindigkeit (Segm./s)",
+      "card.gcSpeed": "Geschwindigkeit – chase (Segmente/s), color_chase (Lampen/s)",
       "card.gcBg": "chase: Background-Farbe (diese Bridge)", "title.useOwnBg": "eigene Background-Farbe verwenden",
       "card.gcGlitter": "Chases funkeln", "card.gcPulse": "Background pulsiert",
       "card.color2": "zweite Farbe (diese Bridge) – für police, duel",
@@ -514,6 +515,7 @@
       "opt.wipe": "wipe (fill)", "opt.firework": "firework",
       "opt.ripple": "ripple (echo)", "opt.wave": "wave", "opt.flicker": "flicker",
       "opt.strobe": "strobe", "opt.duel": "duel", "opt.chase": "chase (running lights)",
+      "opt.colorChase": "color_chase (gradient fill)",
       "opt.neutral": "neutral (don't control)",
       "card.bridge": (i) => `Bridge ${i}`,
       "card.bridgeIp": "Bridge IP", "btn.pair": "Pair",
@@ -538,12 +540,12 @@
       "card.glitterFlash": "glitter: flash duration (ms) – for glitter, chase (when \"Bands sparkle\" is on)",
       "card.glitterColors": "glitter: colours (this bridge) – for glitter, aurora, chase (when \"Bands sparkle\" is on)",
       "title.useOwnColors": "use custom colours",
-      "card.gcDir": "chase: direction(s) – forward, backward or bounce",
+      "card.gcDir": "chase / color_chase: direction(s) – forward, backward or bounce",
       "card.gcDirPh": "same as configuration, e.g. forward",
       "title.gcDir": "forward / backward: loops endlessly (like a conveyor belt); bounce: reflects off both ends (Larson scanner). With several strips (see strip lengths), comma-separated, one direction per strip, e.g. forward,backward.",
       "card.gcStrips": "chase: strip lengths", "card.gcStripsPh": "1 strip, e.g. 7,5",
       "card.gcCount": "chase: number of bands", "card.gcLength": "chase: length (segments)",
-      "card.gcSpeed": "chase: speed (segments/s)",
+      "card.gcSpeed": "speed – chase (segments/s), color_chase (lamps/s)",
       "card.gcBg": "chase: background colour (this bridge)", "title.useOwnBg": "use custom background colour",
       "card.gcGlitter": "Bands sparkle", "card.gcPulse": "Background pulses",
       "card.color2": "second colour (this bridge) – for police, duel",
@@ -727,6 +729,7 @@
                 <option value="strobe" data-i18n="opt.strobe">strobe (Stroboskop)</option>
                 <option value="duel" data-i18n="opt.duel">duel (Duell)</option>
                 <option value="chase" data-i18n="opt.chase">chase (Lauflicht)</option>
+                <option value="color_chase" data-i18n="opt.colorChase">color_chase (Farbverlauf)</option>
                 <option value="neutral" data-i18n="opt.neutral">neutral (nicht steuern)</option>
               </select></div>
 

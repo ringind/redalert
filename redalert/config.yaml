@@ -1,5 +1,5 @@
 name: "Red Alert Entertainment"
-version: "1.16.1"
+version: "1.18.0"
 slug: "redalert"
 description: >-
   Konfigurierbare Hue-Entertainment-Lichteffekte über mehrere Bridges
@@ -63,7 +63,7 @@ schema:
     - bridge_host: "str"
       area_id: "str"
       channel_order: "str?"
-      effect: "list(pulse|comet|glitter|chase|police|lightning|heartbeat|aurora|rainbow|meteor|wipe|firework|ripple|wave|flicker|strobe|duel|neutral)?"
+      effect: "list(pulse|comet|glitter|chase|police|lightning|heartbeat|aurora|rainbow|meteor|wipe|firework|ripple|wave|flicker|strobe|duel|color_chase|neutral)?"
       color: "match(^#[0-9A-Fa-f]{6}$)?"
       sweep_seconds: "float(0.3,300.0)?"
       chase_pause: "float(0,60)?"
@@ -94,7 +94,7 @@ schema:
       wave_length: "float(0.5,50)?"
       flicker_interval_ms: "float(20,10000)?"
       flicker_dip_ms: "float(20,5000)?"
-  effect: "list(pulse|comet|glitter|chase|police|lightning|heartbeat|aurora|rainbow|meteor|wipe|firework|ripple|wave|flicker|strobe|duel|neutral)?"
+  effect: "list(pulse|comet|glitter|chase|police|lightning|heartbeat|aurora|rainbow|meteor|wipe|firework|ripple|wave|flicker|strobe|duel|color_chase|neutral)?"
   color: "match(^#[0-9A-Fa-f]{6}$)?"
   fps: "int(5,50)"
   sweep_seconds: "float(0.3,300.0)"

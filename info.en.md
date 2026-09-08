@@ -4,7 +4,7 @@
 
 This integration controls the **Red Alert Entertainment App** from Home
 Assistant – an app for freely configurable Hue Entertainment light effects
-(17 effects, including pulse, comet, diamond sparkle, emergency lights,
+(18 effects, including pulse, comet, diamond sparkle, emergency lights,
 storm, heartbeat, northern lights, rainbow, meteors, firework, duel, and a
 running-lights chase for Gradient Lightstrips; colour, timing, and up to 3
 bridges configurable per effect set).
@@ -16,10 +16,11 @@ its own docs, not here:
 [App documentation](https://github.com/ringind/redalert/blob/main/redalert/DOCS.en.md) ·
 [Main README](https://github.com/ringind/redalert#readme).
 
-Creates five entities on one device: `binary_sensor` (is the effect
-currently running?), `switch` (animation on/off), `switch` (armed – keep the
-DTLS stream open ahead of time for an instant start), `select` (pick & load a
-saved effect set), `sensor` (name of the currently loaded set).
+Creates six entities on one device: `binary_sensor` (is the effect
+currently running?), `binary_sensor` (are the bridges armed?), `switch`
+(animation on/off), `switch` (armed – keep the DTLS stream open ahead of time
+for an instant start), `select` (load an effect set – only starts it if an
+animation is running), `sensor` (name of the loaded set).
 
 ## Installation
 

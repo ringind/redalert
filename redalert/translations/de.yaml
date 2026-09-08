@@ -85,7 +85,7 @@ configuration:
         Überschreibt die Option glitter_colors für diese eine Bridge
         (Hex-Farben, durch Leerzeichen getrennt). Leer = Standard weiter unten.
     gc_direction:
-      name: chase – Richtung(en) (diese Bridge)
+      name: chase/color_chase – Richtung(en) (diese Bridge)
       description: >-
         Überschreibt die Option gc_direction für diese eine Bridge. Ein Wert
         (forward/backward/bounce) gilt für alle Strips dieser Bridge; mit
@@ -111,10 +111,10 @@ configuration:
         Überschreibt die Option gc_length für diese eine Bridge. Leer =
         Standard weiter unten.
     gc_speed:
-      name: chase – Geschwindigkeit (diese Bridge)
+      name: chase/color_chase – Geschwindigkeit (diese Bridge)
       description: >-
-        Überschreibt die Option gc_speed für diese eine Bridge. Leer =
-        Standard weiter unten.
+        Überschreibt die Option gc_speed für diese eine Bridge (bei
+        color_chase: Lampen/Schritte pro Sekunde). Leer = Standard weiter unten.
     gc_background_color:
       name: chase – Background-Farbe (diese Bridge)
       description: >-
@@ -219,8 +219,12 @@ configuration:
       der Mitte und prallen zurück. chase = nur für Gradient Lightstrips: ein
       oder mehrere weich
       überblendete Zwei-Farben-Bänder laufen über die Segmente, siehe die
-      gc_*-Optionen. neutral = die Lampen werden nicht gesteuert (z. B. für
-      ein Effektset, in dem nur einzelne Bridges laufen).
+      gc_*-Optionen. color_chase = ein Farbverlauf füllt sich lampenweise auf
+      (jede Lampe blendet beim Vorbeilauf auf ihre Zielfarbe), drei Paletten
+      im Wechsel – Rot→Gelb, Grün→Cyan, Blau→Magenta; Tempo über gc_speed
+      (dann Lampen pro Sekunde), Richtung über gc_direction. neutral = die
+      Lampen werden nicht gesteuert (z. B. für ein Effektset, in dem nur
+      einzelne Bridges laufen).
   color:
     name: Farbe (Standard)
     description: >-
@@ -288,12 +292,13 @@ configuration:
       z. B. "#FFFFFF #CFE8FF #FFF1D0"), aus denen jeder Funken zufällig eine
       Farbe zieht. Leer = die Farbe der jeweiligen Bridge.
   gc_direction:
-    name: chase – Richtung (Standard)
+    name: chase/color_chase – Richtung (Standard)
     description: >-
-      Nur effect chase (Gradient Lightstrips). Standard-Chaserichtung für Bridges ohne
+      Für effect chase und color_chase. Standard-Richtung für Bridges ohne
       eigene Einstellung: forward (vorwärts, umlaufend), backward (rückwärts,
       umlaufend) oder bounce (prallt an beiden Enden ab wie ein
-      Larson-Scanner, statt umzulaufen).
+      Larson-Scanner, statt umzulaufen; bei color_chase kehrt die Füllrichtung
+      mit jeder Palette um).
   gc_count:
     name: chase – Anzahl Chases (Standard)
     description: >-
@@ -306,10 +311,11 @@ configuration:
       Chase-Bands in Segmenten (Standard 2.0), mit weichem Übergang zur
       Background-Farbe an den Rändern.
   gc_speed:
-    name: chase – Geschwindigkeit (Standard)
+    name: chase/color_chase – Geschwindigkeit (Standard)
     description: >-
-      Nur effect chase (Gradient Lightstrips). Wie viele Segmente ein Chase-Kopf pro
-      Sekunde zurücklegt (Standard 4.0).
+      Für effect chase (Segmente/Sekunde eines Chase-Kopfs) und color_chase
+      (Lampen bzw. Schritte pro Sekunde; setzt zugleich die Überblendzeit je
+      Schritt = 1/Wert). Standard 4.0.
   gc_background_color:
     name: chase – Background-Farbe (Standard)
     description: >-

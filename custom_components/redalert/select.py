@@ -1,13 +1,15 @@
-"""Select: gespeichertes Effektset auswählen und laden (POST /start {"preset": ...}).
+"""Select: gespeichertes Effektset auswählen.
 
-Auswahl startet den Effekt sofort mit diesem Set – ein separates
-"laden vs. starten" wie im Web-UI (§ Effektsets) gibt es hier nicht, das
-passt besser zu einer Select-Entity als ein Zwei-Schritt-Formular.
+Die Auswahl **startet den Effekt nicht** – sie merkt das Set nur als *geladen*
+(``POST /select`` → ``current_preset``), genau wie „Laden" im Web-UI. Ausnahme:
+läuft gerade eine Animation, wird sofort mit dem neuen Set weitergefahren
+(``POST /stop`` + ``POST /start {"preset": …}``), weil ein reines ``/start`` bei
+bereits laufenden Bridges nur übersprungen würde.
 """
 
 from __future__ import annotations
 
-from homeassistant.components.select import SelectEntity
+from homeassistant.components.select import DOMAIN as SELECT_DOMAIN, SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
@@ -32,7 +34,7 @@ class RedAlertPresetSelect(RedAlertEntity, SelectEntity):
     _attr_icon = "mdi:star-four-points"
 
     def __init__(self, coordinator: RedAlertDataUpdateCoordinator, entry: ConfigEntry) -> None:
-        super().__init__(coordinator, entry, "preset")
+        super().__init__(coordinator, entry, "preset", domain=SELECT_DOMAIN)
 
     @property
     def options(self) -> list[str]:
@@ -46,8 +48,17 @@ class RedAlertPresetSelect(RedAlertEntity, SelectEntity):
         return current if current in self.options else None
 
     async def async_select_option(self, option: str) -> None:
+        running = bool(self.coordinator.data.get("running"))
         try:
-            await self.coordinator.client.async_start(preset=option)
+            if running:
+                # Animation läuft – sofort mit dem neuen Set weiterfahren.
+                await self.coordinator.client.async_stop()
+                await self.coordinator.client.async_start(preset=option)
+            else:
+                # Nur laden/merken, nicht starten.
+                await self.coordinator.client.async_select_preset(option)
         except RedAlertApiError as exc:
-            raise HomeAssistantError(f"Effektset '{option}' konnte nicht geladen werden: {exc}") from exc
+            raise HomeAssistantError(
+                f"Effektset '{option}' konnte nicht geladen werden: {exc}"
+            ) from exc
         await self.coordinator.async_request_refresh()

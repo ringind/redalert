@@ -84,7 +84,7 @@ configuration:
         Overrides the glitter_colors option for this one bridge (hex colours
         separated by spaces). Empty = use the default below.
     gc_direction:
-      name: chase direction(s) (this bridge)
+      name: chase/color_chase direction(s) (this bridge)
       description: >-
         Overrides the gc_direction option for this one bridge. A single value
         (forward/backward/bounce) applies to every strip on this bridge; once
@@ -110,10 +110,10 @@ configuration:
         Overrides the gc_length option for this one bridge. Empty = use the
         default below.
     gc_speed:
-      name: chase speed (this bridge)
+      name: chase/color_chase speed (this bridge)
       description: >-
-        Overrides the gc_speed option for this one bridge. Empty = use the
-        default below.
+        Overrides the gc_speed option for this one bridge (for color_chase:
+        lamps/steps per second). Empty = use the default below.
     gc_background_color:
       name: chase background colour (this bridge)
       description: >-
@@ -215,9 +215,12 @@ configuration:
       fade, party-strobe style. duel = two comets launch from opposite ends,
       meet in the middle and bounce back. chase = Gradient Lightstrips only:
       one or more soft-edged two-colour bands
-      slide along the segments, see the gc_* options. neutral = the lamps
-      are not driven at all (e.g. for an effect set where only some bridges
-      run).
+      slide along the segments, see the gc_* options. color_chase = a
+      gradient fills itself lamp by lamp (each lamp fades to its target
+      colour as the head passes), three palettes in turn – red→yellow,
+      green→cyan, blue→magenta; speed via gc_speed (then lamps per second),
+      direction via gc_direction. neutral = the lamps are not driven at all
+      (e.g. for an effect set where only some bridges run).
   color:
     name: Colour (default)
     description: >-
@@ -284,11 +287,12 @@ configuration:
       "#FFFFFF #CFE8FF #FFF1D0") each spark picks from at random. Empty = the
       colour of the respective bridge.
   gc_direction:
-    name: chase direction (default)
+    name: chase/color_chase direction (default)
     description: >-
-      effect chase only (Gradient Lightstrips). Default chase direction for bridges without
+      For effect chase and color_chase. Default direction for bridges without
       their own setting: forward (looping), backward (looping) or bounce
-      (reflects off both ends like a Larson scanner instead of looping).
+      (reflects off both ends like a Larson scanner instead of looping; for
+      color_chase the fill direction flips with every palette).
   gc_count:
     name: chase count (default)
     description: >-
@@ -301,10 +305,11 @@ configuration:
       in segments (default 2.0), with a soft edge fading to the background
       colour.
   gc_speed:
-    name: chase speed (default)
+    name: chase/color_chase speed (default)
     description: >-
-      effect chase only (Gradient Lightstrips). How many segments a chase head crosses per
-      second (default 4.0).
+      For effect chase (segments per second a chase head crosses) and
+      color_chase (lamps/steps per second; also sets the per-step fade time =
+      1/value). Default 4.0.
   gc_background_color:
     name: chase background colour (default)
     description: >-

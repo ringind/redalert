@@ -27,9 +27,11 @@ several crests visible at once), `flicker` (per-lamp brief dips from full
 brightness, like a failing bulb), `strobe` (hard instant on/off flash, no
 fade), `duel` (two comets launched from opposite ends, meeting and bouncing
 back), `chase` (Gradient Lightstrips only — soft-edged two-colour bands
-sliding along the segments) or `neutral` (bridge left untouched — no
+sliding along the segments), `color_chase` (a gradient repaints itself
+lamp-by-lamp over 3 palettes R→Y / G→C / B→M; reuses `gc_speed` as lamps/s and
+`gc_direction`) or `neutral` (bridge left untouched — no
 stream/restore; per-bridge only, for effect sets where some bridges run and
-others don't). 17 effects total. **Effect, colour, and timing are
+others don't). 18 effects total. **Effect, colour, and timing are
 configurable per bridge**
 (falling back to shared defaults when not overridden); all bridges still start
 **simultaneously** (parallel DTLS handshakes, shared start epoch) for a
@@ -74,14 +76,23 @@ info.md / info.en.md       what HACS renders instead of README.md when
                             to the app's own docs rather than duplicating them
 custom_components/redalert/  HA integration talking to the app's REST API
   manifest.json, const.py, api.py, coordinator.py, config_flow.py, entity.py
-  binary_sensor.py (running, any bridge) / switch.py (global start+stop; a
-  global arm/disarm switch `RedAlertArmSwitch` since 1.16.0 — POST /arm|/disarm,
-  is_on = all non-neutral bridges armed; plus one per-bridge start/stop switch
-  per paired bridge since 1.15.0 — dynamically added from coordinator data via a
-  coordinator-listener, this platform's only dynamic-entity registration) /
-  select.py (pick+load a preset) / sensor.py
-  (currently loaded preset) — one DataUpdateCoordinator polling GET /config
-  every 10s; README.md/README.en.md document install + entities
+  binary_sensor.py (`running` + `armed` since 1.2.0 — `armed` mirrors /config
+  `armed`, `armed_bridges` attribute, read-only twin of the arm switch) /
+  switch.py (global start+stop; a global arm/disarm switch `RedAlertArmSwitch`
+  since 1.16.0 — POST /arm|/disarm, is_on = all non-neutral bridges armed; plus
+  one per-bridge start/stop switch per paired bridge since 1.15.0 — dynamically
+  added from coordinator data via a coordinator-listener, this platform's only
+  dynamic-entity registration) / select.py (since 1.2.0: selecting only *loads*
+  the preset via POST /select — sets current_preset, no start — unless an
+  animation is already running, then it stop+starts with the new preset) /
+  sensor.py (currently loaded preset) — one DataUpdateCoordinator polling GET
+  /config every 10s; README.md/README.en.md document install + entities.
+  entity.py: since 1.2.0 each entity's `entity_id` is built explicitly via
+  `async_generate_entity_id(f"{domain}.{{}}", f"{entry.title} {key}", …)` so it
+  is language-independent English (HA otherwise derives it from the *translated*
+  name — German installs got `…_betriebszustand`); `unique_id` gained a platform
+  prefix (`…_<domain>_<key>`) → upgrading recreates all entities with the new
+  IDs. `translation_key` still set per class → display names stay localized.
   brand/icon.png, brand/logo.png — copies of redalert/{icon,logo}.png; HA
   2026.3+ shows these inline (no home-assistant/brands PR needed), and the
   `hacs/action` CI check requires them regardless of HA version
@@ -95,7 +106,7 @@ redalert/                  the app
   icon.png / logo.png      store graphics (generated, solid-red beacon)
   rootfs/etc/s6-overlay/s6-rc.d/redalert/{type,run,finish}  s6 service (bashio)
   rootfs/app/main.py        REST server + streaming loop + serves panel.html
-  rootfs/app/chase.py       17 effects' pure math, no I/O: RedAlertPulse
+  rootfs/app/chase.py       18 effects' pure math, no I/O: RedAlertPulse
     (pulse beat-gate, also drives heartbeat via .heartbeat()) +
     RedAlertComet (comet+tail) + RedAlertGlitter (per-lamp sparkle) +
     RedAlertChase (Gradient Lightstrip bands) + RedAlertPolice (two-group
@@ -109,14 +120,20 @@ redalert/                  the app
     (randomised multi-comet) + RedAlertWipe (fill-and-hold) + RedAlertFirework
     (radiating one-shot bursts) + RedAlertRipple (firework that echoes back) +
     RedAlertWave (scrolling sine) + RedAlertFlicker (per-lamp dips, stateful) +
-    RedAlertStrobe (hard on/off) + RedAlertDuel (two comets, two shapes)
+    RedAlertStrobe (hard on/off) + RedAlertDuel (two comets, two shapes) +
+    RedAlertColorChase (`color_chase` — closed-form pure `colors_for(t)`, no
+    state: a gradient repaints lamp-by-lamp over 3 palettes; each lamp fades
+    over one step, holds until the next sweep; `gc_speed` = lamps/s and the
+    per-step fade time, `gc_direction` incl. `bounce` = flip fill direction
+    each palette; sent at constant `glow_high` like rainbow)
   rootfs/app/panel.html     Ingress web UI (vanilla JS, relative fetch URLs,
     bilingual DE/EN via an I18N dict + data-i18n attributes, see below)
 ```
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.16.1**.
+No build system, linter, or test suite. Current version: **1.18.0**
+(integration `manifest.json` versioned separately: **1.2.0**).
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
   after every code change — the only static check available.
@@ -184,14 +201,17 @@ Three layers under `redalert/rootfs/app/`:
 
 - **`main.py`** — aiohttp server. Endpoints: `/` (serves `panel.html`),
   `/health` (also the Docker HEALTHCHECK target; `{status, paired, running,
-  current_preset}` — `current_preset` is `state["current_preset"]`, the name
-  of the last `preset` started via `/start`, `None` after an ad-hoc start with
+  armed, current_preset}` — `current_preset` is `state["current_preset"]`, the
+  name of the last `preset` started via `/start` **or** set via `POST /select`
+  (since 1.17.0 — sets it without starting), `None` after an ad-hoc start with
   no `preset`; consumed by `custom_components/redalert`'s select/sensor pair),
   `/config` (effective config for the UI, same `current_preset` field),
   `/pair` (one-time Bridge link-button pairing, body `bridge_host` — Pflicht bei
   mehr als einer konfigurierten Bridge — → merged into `/data/credentials.json`),
   `/areas` (query `bridge_host` — Pflicht bei mehr als einer gepaarten Bridge),
-  `/start`, `/stop`, `/arm`, `/disarm`, `/identify`. All mutable runtime state is
+  `/start`, `/stop`, `/arm`, `/disarm`, `/select` (since 1.17.0 — body
+  `{"preset": name|null}`, only sets `state["current_preset"]`, no streaming),
+  `/identify`. All mutable runtime state is
   one module-level
   `state` dict; `state["tasks"]` is a `dict[bridge_host, asyncio.Task]` — since
   1.15.0 every bridge runs its effect (or an `/identify` run) in its **own**
@@ -238,7 +258,7 @@ Three layers under `redalert/rootfs/app/`:
   → physical lamp. Shares that bridge's `state["tasks"][host]` slot with
   `/start` (`already_running` guard for that bridge only; `/stop` with that
   `bridge_host`, or no `bridge_host` at all, cancels it).
-- **`chase.py`** — one class per effect (17 total), pure math, no I/O, each
+- **`chase.py`** — one class per effect (18 total), pure math, no I/O, each
   emitting a **0..1 shape**/blend; `_run_single_bridge` maps brightness shapes
   onto `[glow_low, glow_high]` (options / `/start` body, clamped, `glow_high`
   forced ≥ `glow_low`) — so "0" is the resting glow, not necessarily black.
