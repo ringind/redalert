@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.18.2
+
+- **`color_chase`: gleichmäßiges Timing.** Die Schrittdauer wird auf eine ganze
+  Zahl Frames gerundet. Vorher war `fps/gc_speed` meist nicht ganzzahlig,
+  wodurch jeder 2.–3. Schritt einen Frame länger dauerte – bei einem hart
+  umschaltenden Effekt las sich das als „hängt manchmal und springt dann".
+- **Protokollanzeige aus dem Web-UI entfernt.** Der mitwachsende
+  Protokoll-Bereich war wiederholt die Ursache dafür, dass das Web-UI nach
+  längerer Laufzeit hängte. Statusinfos gibt es weiterhin über die Pills
+  (Pairing, „läuft", „scharf"); Diagnosemeldungen des Panels landen jetzt in
+  der Browser-Konsole. Das App-Protokoll (Log-Tab der App) ist unverändert.
+
 ## 1.18.1
 
 - **`color_chase`: kein Überblenden mehr.** Jede Lampe schaltet beim

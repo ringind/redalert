@@ -138,15 +138,6 @@
     </div>
   </section>
 
-  <section class="card">
-    <h2 data-i18n="log.title">Protokoll</h2>
-    <div class="row" style="margin-bottom:.6rem">
-      <label><input type="checkbox" id="log-requests"> <span data-i18n="log.showRequests">Anfragen einblenden</span></label>
-      <button class="secondary" id="btn-log-download" style="margin-left:auto" data-i18n="btn.download">Herunterladen</button>
-      <button class="secondary" id="btn-log-clear" data-i18n="btn.delete">Löschen</button>
-    </div>
-    <pre id="log">Bereit.</pre>
-  </section>
 </main>
 
 <script>
@@ -267,6 +258,13 @@
       <code>glow_low</code> zu bleiben. Mehrere kombinierte Gradient Lightstrips
       (ein Entertainment-Bereich mit mehreren Geräten) und je Strip eine eigene
       Richtung: siehe „Strip-Längen“ in der jeweiligen Bridge-Karte.<br>
+      <strong>color_chase</strong> (nur <code>effect: color_chase</code>): ein
+      Farbverlauf füllt sich Lampe für Lampe auf – jede Lampe schaltet beim
+      Vorbeilauf sofort auf ihre Zielfarbe, drei Paletten im Wechsel
+      (Rot→Gelb, Grün→Cyan, Blau→Magenta). <code>Geschwindigkeit</code> =
+      Lampen pro Sekunde, <code>Richtung</code> = <code>forward</code>/
+      <code>backward</code>/<code>bounce</code> (bei <code>bounce</code> kehrt
+      die Füllrichtung mit jeder Palette um).<br>
       <strong>neutral</strong>: die Bridge wird nicht angefasst – so kann ein Effektset
       z. B. Bridge 1 laufen lassen und Bridge 2 auslassen.`,
       "section3.title": "3 · Effektsets",
@@ -279,7 +277,6 @@
       "preset.namePh": "z. B. Star Trek – Alarmstufe Rot",
       "btn.load": "Laden", "btn.presetStart": "▶ Starten", "btn.download": "Herunterladen",
       "btn.delete": "Löschen", "btn.save": "Speichern", "btn.upload": "Hochladen…",
-      "log.title": "Protokoll", "log.showRequests": "Anfragen einblenden", "log.ready": "Bereit.",
       "log.timeout": "Zeitüberschreitung", "log.netError": "Netzwerkfehler: ",
       "log.noBridgeIp": (i) => `Bridge ${i}: keine Bridge-IP eingetragen.`,
       "log.areaSet": (i, id) => `Bridge ${i}: area_id gesetzt: ${id}`,
@@ -472,6 +469,13 @@
       quietly at <code>glow_low</code>. Several combined Gradient Lightstrips
       (one Entertainment area with several devices) can each get their own
       direction: see "strip lengths" on the respective bridge card.<br>
+      <strong>color_chase</strong> (only <code>effect: color_chase</code>): a
+      colour gradient fills itself lamp by lamp – each lamp switches to its
+      target colour instantly as the head passes, three palettes in turn
+      (red→yellow, green→cyan, blue→magenta). <code>speed</code> = lamps per
+      second, <code>direction</code> = <code>forward</code>/<code>backward</code>/
+      <code>bounce</code> (with <code>bounce</code> the fill direction flips
+      with every palette).<br>
       <strong>neutral</strong>: this bridge is left untouched – handy for an
       effect set that runs bridge 1 while leaving bridge 2 out.`,
       "section3.title": "3 · Effect Sets",
@@ -484,7 +488,6 @@
       "preset.namePh": "e.g. Star Trek – Red Alert",
       "btn.load": "Load", "btn.presetStart": "▶ Start", "btn.download": "Download",
       "btn.delete": "Delete", "btn.save": "Save", "btn.upload": "Upload…",
-      "log.title": "Log", "log.showRequests": "Show requests", "log.ready": "Ready.",
       "log.timeout": "Timed out", "log.netError": "Network error: ",
       "log.noBridgeIp": (i) => `Bridge ${i}: no bridge IP entered.`,
       "log.areaSet": (i, id) => `Bridge ${i}: area_id set: ${id}`,
@@ -596,7 +599,6 @@
     $("lang-de").classList.toggle("active", lang === "de");
     $("lang-en").classList.toggle("active", lang === "en");
     applyI18n();
-    renderLog();
     // Text, das nur einmal per Template-Literal eingefügt wurde (Bridge-Pills,
     // Bereichsliste, Kanal-Zuordnung), trägt kein data-i18n und muss beim
     // Sprachwechsel gesondert neu gerendert werden. Für Bridge-Karten, die der
@@ -624,22 +626,13 @@
   $("lang-de").onclick = () => setLang("de");
   $("lang-en").onclick = () => setLang("en");
 
-  const logEl = $("log");
-  let LOG_ENTRIES = [];
-  // Obergrenze: ohne Deckel wuchs LOG_ENTRIES unbegrenzt (jeder /config-Poll
-  // alle 5 s hängt eine Zeile an), und renderLog() fügt bei jedem Eintrag das
-  // *komplette* Array neu zusammen - nach ein paar Stunden dauert dieser
-  // join()+textContent-Schreib Sekunden und blockiert den Main-Thread ("Web-UI
-  // hängt nach einiger Zeit"). Alte Einträge werden abgeschnitten.
-  const LOG_MAX = 200;
-  function renderLog() {
-    logEl.textContent = LOG_ENTRIES.join("\n\n") || t("log.ready");
-  }
+  // Die frühere Protokollanzeige im UI ist entfernt - der wachsende <pre> war
+  // wiederholt die Ursache dafür, dass das Web-UI nach längerer Laufzeit
+  // hängte. Statusinfos gibt es weiterhin über die Pills (Pairing, läuft,
+  // scharf); Diagnosemeldungen landen nur noch in der Browser-Konsole.
   function logLine(msg, obj) {
-    const time = new Date().toLocaleTimeString();
-    LOG_ENTRIES.unshift(`[${time}] ${msg}` + (obj !== undefined ? "\n" + JSON.stringify(obj, null, 2) : ""));
-    if (LOG_ENTRIES.length > LOG_MAX) LOG_ENTRIES.length = LOG_MAX;
-    renderLog();
+    if (obj !== undefined) console.warn("[Red Alert]", msg, obj);
+    else console.warn("[Red Alert]", msg);
   }
   // Ohne Timeout blieb ein hängender fetch() (z. B. Bridge kurz nicht
   // erreichbar) unbegrenzt offen; der Browser erlaubt nur wenige gleichzeitige
@@ -649,21 +642,12 @@
   // länger, siehe dessen Aufruf) und bricht danach kontrolliert ab.
   const DEFAULT_TIMEOUT_MS = 15000;
   async function api(path, opts, timeoutMs) {
-    // Request/Response nur protokollieren, wenn "Anfragen einblenden" aktiv ist
-    // - sonst schrieb der 5s-/config-Poll dauerhaft je eine (große) Zeile mit.
-    const trace = $("log-requests").checked;
-    if (trace) {
-      let reqBody = opts?.body;
-      try { reqBody = opts?.body ? JSON.parse(opts.body) : undefined; } catch { /* keep raw */ }
-      logLine(`→ ${opts?.method || "GET"} ${path}`, reqBody);
-    }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs || DEFAULT_TIMEOUT_MS);
     try {
       const res = await fetch(path, Object.assign({}, opts, { signal: controller.signal }));
       const data = await res.json().catch(() => ({}));
-      if (trace) logLine(`${opts?.method || "GET"} ${path} → ${res.status}`, data);
-      else if (!res.ok) logLine(`${opts?.method || "GET"} ${path} → ${res.status}`, data);
+      if (!res.ok) logLine(`${opts?.method || "GET"} ${path} → ${res.status}`, data);
       return { ok: res.ok, data };
     } catch (e) {
       logLine(`${path} → ${e.name === "AbortError" ? t("log.timeout") : t("log.netError") + e}`);
@@ -685,11 +669,6 @@
   }
   const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  $("btn-log-clear").onclick = () => { LOG_ENTRIES = []; renderLog(); };
-  $("btn-log-download").onclick = () => {
-    const text = LOG_ENTRIES.slice().reverse().join("\n\n") || t("log.ready");
-    downloadText(text, `redalert-log-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`, "text/plain");
-  };
   function setPill(el, on, label) {
     el.classList.toggle("on", !!on);
     el.lastChild.textContent = " " + label;

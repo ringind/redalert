@@ -436,11 +436,10 @@ automation:
 
 ## Log
 
-The app's **log** (Log tab) shows the configuration at startup, pairing,
-start/stop events and errors. Verbosity via `log_level`. The web UI
-additionally shows the most recent API calls in the "Log" section – the
-"Show requests" checkbox also shows the sent request bodies, and the
-buttons next to it clear the log or download it as a text file.
+The app's **log** (Log tab of the app) shows the configuration at startup,
+pairing, start/stop events and errors. Verbosity via `log_level`. (The web UI
+no longer has its own log section; the panel's diagnostic messages go to the
+browser console.)
 
 ## Troubleshooting
 
@@ -450,7 +449,7 @@ buttons next to it clear the log or download it as a text file.
 | `/start` → `already_running` | This bridge (or, for a call without `bridge_host`, all requested ones) is already running. Call `/stop` first, or – without `bridge_host` – just call `/start` again: already-running bridges are skipped (`skipped_bridges`), only the rest are newly started. |
 | `/start` → 404 `area_id not found` | Check `/areas` – the area may have been renamed/deleted. |
 | `/start` → 404 `effect set '…' not found` | The `preset` name doesn't exactly match (case, spaces) a saved set – check `GET /presets` or the "3 · Effect Sets" web UI dropdown. |
-| `rest_command` call with `preset`/`duration`/… changes nothing | After changing `configuration.yaml`, **Developer Tools → YAML → Reload All YAML Configurations** (or restart HA); the "Show requests" checkbox in the web UI log, or the request under Developer Tools → Actions, shows the `payload` that was actually sent. |
+| `rest_command` call with `preset`/`duration`/… changes nothing | After changing `configuration.yaml`, **Developer Tools → YAML → Reload All YAML Configurations** (or restart HA); the request under Developer Tools → Actions shows the `payload` that was actually sent. |
 | `/start` → 502 `no bridge reachable` | Did the bridge IP change? Network/VLAN between the HA host and the bridge (UDP 2100). With multiple bridges, `502` only means **none** of them were reachable – individual failures are in the `/start` response's `failed_bridges`, the other bridges still run. |
 | The light only starts after a few seconds | Normal DTLS handshake; on Wi-Fi bridges sometimes a `ServerHello timeout` retry appears in the log. `/start` itself still responds immediately regardless. |
 | Lamps don't react | V1 bridge (no Entertainment) or UDP port 2100 to the bridge is blocked. |

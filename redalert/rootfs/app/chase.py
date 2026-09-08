@@ -625,8 +625,9 @@ class RedAlertColorChase:
       forward, palette 1 backward, palette 2 forward, …) so the fill point
       pendulums between the ends.
 
-    ``speed_steps_per_s`` is how many lamps the head paints per second (one
-    lamp every ``1 / speed`` seconds); the switch itself is instant.
+    ``speed_steps_per_s`` is how many lamps the head paints per second; the
+    switch itself is instant. The dwell is rounded to a whole number of
+    frames (``fps``) so every step lasts exactly the same time.
 
     Emits per-lamp ``(r, g, b)`` 0..255 directly (no brightness shape);
     ``main.py`` sends it at a constant ``glow_high`` like ``rainbow``.
@@ -638,10 +639,19 @@ class RedAlertColorChase:
         num_lights: int,
         speed_steps_per_s: float = 4.0,
         direction: str = "forward",
+        fps: float = 25.0,
     ) -> None:
         self.num_lights = max(1, num_lights)
         self.speed = max(0.01, speed_steps_per_s)
         self.direction = direction if direction in ("forward", "backward", "bounce") else "forward"
+        # Jeden Schritt auf eine ganze Zahl Frames rasten. Sonst ist fps/speed
+        # nicht ganzzahlig und jeder 2.–3. Schritt dauert einen Frame länger –
+        # bei einem hart umschaltenden Schritt-Effekt liest sich das als
+        # "hängt manchmal und springt dann". So dauert jeder Schritt exakt
+        # gleich lang.
+        fps = max(1.0, float(fps))
+        self.frames_per_step = max(1, round(fps / self.speed))
+        self.step_dur = self.frames_per_step / fps
 
     def _ramp(self, k: int) -> float:
         """0..255: chase-index ``k`` along the palette ramp (last index → 255)."""
@@ -671,15 +681,11 @@ class RedAlertColorChase:
     def colors_for(self, t: float) -> list[tuple[float, float, float]]:
         """Per-lamp ``(r, g, b)`` 0..255 (float) at time ``t`` (seconds)."""
         n = self.num_lights
-        step_dur = 1.0 / self.speed          # seconds the head dwells per lamp
-        seq_dur = n * step_dur               # one full palette sweep
-        period = 6.0 * seq_dur               # palettes cycle /3, bounce dir /2
-        tm = t % period
-        q = int(tm // seq_dur)               # current palette-sweep index, 0..5
-        t_in = tm - q * seq_dur
-        # How many chase-indices the head has already reached this sweep: index
-        # k switches the instant t_in >= k*step_dur.
-        reached = int(t_in / step_dur) + 1
+        # Global step index (0, 1, 2, …): how many lamps the head has arrived
+        # at in total. +1e-9 guards a step boundary that floats miss by an ulp.
+        step = int(t / self.step_dur + 1e-9)
+        q = step // n                        # palette-sweep index (palette q%3, bounce dir q%2)
+        reached = step % n + 1               # chase-indices 0..reached-1 painted this sweep
         out: list[tuple[float, float, float]] = []
         for i in range(n):
             k = self._chase_index(i, q)

@@ -442,12 +442,10 @@ automation:
 
 ## Protokoll
 
-Das App-**Protokoll** (Log-Tab) zeigt Konfiguration beim Start, Pairing-,
-Start-/Stop-Ereignisse und Fehler. Ausführlichkeit über `log_level`. Das Web-UI
-zeigt zusätzlich die letzten API-Aufrufe im Abschnitt „Protokoll“ – die
-Checkbox „Anfragen einblenden“ zeigt zusätzlich die gesendeten Request-Bodys,
-und die Knöpfe daneben löschen das Protokoll oder laden es als Textdatei
-herunter.
+Das App-**Protokoll** (Log-Tab der App) zeigt Konfiguration beim Start,
+Pairing-, Start-/Stop-Ereignisse und Fehler. Ausführlichkeit über `log_level`.
+(Das Web-UI hat keinen eigenen Protokoll-Bereich mehr; Diagnosemeldungen des
+Panels landen in der Browser-Konsole.)
 
 ## Fehlerbehebung
 
@@ -457,7 +455,7 @@ herunter.
 | `/start` → `already_running` | Diese Bridge (bzw. bei einem Aufruf ohne `bridge_host` alle angefragten) läuft schon. Erst `/stop` aufrufen, oder – ohne `bridge_host` – einfach nochmal `/start`: bereits laufende Bridges werden übersprungen (`skipped_bridges`), nur die übrigen neu gestartet. |
 | `/start` → 404 `area_id nicht gefunden` | `/areas` prüfen – Bereich evtl. umbenannt/gelöscht. |
 | `/start` → 404 `Effektset '…' nicht gefunden` | `preset`-Name stimmt nicht exakt (Groß-/Kleinschreibung, Leerzeichen) mit einem gespeicherten Set überein – `GET /presets` bzw. Web-UI-Dropdown „3 · Effektsets“ prüfen. |
-| `rest_command`-Aufruf mit `preset`/`duration`/… ändert nichts | Nach Änderungen an `configuration.yaml` **Entwicklerwerkzeuge → YAML → Alle YAML-Konfigurationen neu laden** (oder HA neu starten); Checkbox „Anfragen einblenden“ im Web-UI-Protokoll bzw. der gesendete Request unter Entwicklerwerkzeuge → Aktionen zeigen den tatsächlich gesendeten `payload`. |
+| `rest_command`-Aufruf mit `preset`/`duration`/… ändert nichts | Nach Änderungen an `configuration.yaml` **Entwicklerwerkzeuge → YAML → Alle YAML-Konfigurationen neu laden** (oder HA neu starten); der gesendete Request unter Entwicklerwerkzeuge → Aktionen zeigt den tatsächlich gesendeten `payload`. |
 | `/start` → 502 `Bridge nicht erreichbar` | Bridge-IP geändert? Netzwerk/VLAN zwischen HA-Host und Bridge (UDP 2100). Bei mehreren Bridges bedeutet `502` nur, dass **keine** davon erreichbar war – einzelne Ausfälle stehen in `failed_bridges` der `/start`-Antwort, die übrigen Bridges laufen trotzdem. |
 | Licht startet erst nach einigen Sekunden | Normaler DTLS-Handshake; bei WLAN-Bridges teils ein `ServerHello timeout`-Retry im Protokoll. `/start` selbst antwortet trotzdem sofort. |
 | Lampen reagieren nicht | V1-Bridge (kein Entertainment) oder UDP-Port 2100 zur Bridge blockiert. |

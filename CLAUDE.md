@@ -124,16 +124,18 @@ redalert/                  the app
     RedAlertColorChase (`color_chase` — closed-form pure `colors_for(t)`, no
     state: a gradient repaints lamp-by-lamp over 3 palettes; each lamp switches
     **instantly** when the head reaches it, holds until the next sweep;
-    `gc_speed` = lamps/s (one lamp every 1/speed s), `gc_direction` incl.
-    `bounce` = flip fill direction each palette; sent at constant `glow_high`
-    like rainbow)
+    `gc_speed` ≈ lamps/s but the dwell is snapped to a whole number of frames
+    (takes `fps`, since 1.18.2) so every step lasts exactly equal time — an
+    unrounded `fps/speed` made every 2nd–3rd step one frame longer, a visible
+    limp on a hard-switch effect; `gc_direction` incl. `bounce` = flip fill
+    direction each palette; sent at constant `glow_high` like rainbow)
   rootfs/app/panel.html     Ingress web UI (vanilla JS, relative fetch URLs,
     bilingual DE/EN via an I18N dict + data-i18n attributes, see below)
 ```
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.18.1**
+No build system, linter, or test suite. Current version: **1.18.2**
 (integration `manifest.json` versioned separately: **1.2.0**).
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
@@ -402,16 +404,14 @@ trailing `refresh()` could collide with the periodic 5 s poll and get
 dropped, leaving the UI looking unresponsive for up to 5 s after a click. A
 `visibilitychange` listener also forces an immediate refresh when the tab
 regains focus (browsers throttle `setInterval` in hidden tabs).
-**Second "panel hangs after a while" bug, fixed 1.18.1:** `api()` logged every
-*response* via `logLine()` unconditionally (only the *request* line was gated on
-the "Anfragen einblenden" checkbox), and `LOG_ENTRIES` had no cap while
-`renderLog()` re-`join()`s the whole array into `textContent` on every append —
-so the 5 s `/config` poll grew the log a big JSON blob every tick until, after
-hours, each `join()`+`textContent` write took seconds and blocked the main
-thread (reload "fixed" it by resetting the array). Fix: `LOG_MAX = 200`
-(truncate `LOG_ENTRIES.length` after `unshift`), and gate the response log on
-the checkbox too (errors still always logged, now bounded). Any new
-per-frame/per-poll `logLine()` must stay behind the checkbox or the cap.
+**The in-panel Protokoll/Log section was the repeat cause of "panel hangs
+after a while"** — an unbounded `LOG_ENTRIES` array (every 5 s `/config` poll
+appended a big JSON blob) re-`join()`d into a `<pre>` on every append, so after
+hours the write took seconds and blocked the main thread (1.18.1 capped it at
+200; **1.18.2 removed the section entirely**). There is now no log UI: `logLine()`
+is a thin `console.warn` wrapper (call sites kept), `api()` only `console.warn`s
+on error, feedback to the user is the pills. Do not re-add an in-DOM log that
+grows per poll.
 Polls `/config` every 5 s. Section "1 · Bridges" renders `BRIDGE_COUNT` = 3 identical
 cards (`bridgeCardHTML(i)`, ids `b${i}-*`) — pairing (`b${i}-pill`), a
 per-bridge **Start**/**Stop** button pair (`b${i}-start`/`b${i}-stop`, since

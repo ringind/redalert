@@ -308,8 +308,8 @@ configuration:
     name: chase/color_chase speed (default)
     description: >-
       For effect chase (segments per second a chase head crosses) and
-      color_chase (lamps/steps per second – one lamp every 1/value seconds,
-      the switch itself is instant). Default 4.0.
+      color_chase (lamps/steps per second, switch is instant; the dwell is
+      rounded to a whole number of frames). Default 4.0.
   gc_background_color:
     name: chase background colour (default)
     description: >-

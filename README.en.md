@@ -512,7 +512,8 @@ switches **instantly** to its target colour and holds it until the next
 sweep overwrites it. Three palettes run in turn, each a linear ramp from the
 start colour (chase-index 0) to the fully-mixed colour (last chase-index):
 `(255,0,0)→(255,255,0)`, `(0,255,0)→(0,255,255)`, `(0,0,255)→(255,0,255)`.
-- `gc_speed` – lamps (steps) per second (one lamp every `1/gc_speed` s).
+- `gc_speed` – lamps (steps) per second; the dwell is rounded to a whole
+  number of frames so every step lasts exactly the same time.
 - `gc_direction` – `forward`/`backward` always fill from the same end,
   `bounce` flips the fill direction with every palette.
 - Absolute colours at a constant `glow_high` (like `rainbow`); uses no

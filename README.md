@@ -525,7 +525,8 @@ bis der nächste Durchlauf sie überschreibt. Drei Paletten laufen abwechselnd,
 je ein linearer Verlauf von der Startfarbe (Chase-Index 0) zur voll gemischten
 Farbe (letzter Chase-Index): `(255,0,0)→(255,255,0)`, `(0,255,0)→(0,255,255)`,
 `(0,0,255)→(255,0,255)`.
-- `gc_speed` – Lampen (Schritte) pro Sekunde (eine Lampe alle `1/gc_speed` s).
+- `gc_speed` – Lampen (Schritte) pro Sekunde; die Schrittdauer wird auf ganze
+  Frames gerundet, damit jeder Schritt exakt gleich lang ist.
 - `gc_direction` – `forward`/`backward` füllen immer vom selben Ende,
   `bounce` kehrt die Füllrichtung mit jeder Palette um.
 - Absolute Farben, konstant auf `glow_high` (wie `rainbow`); nutzt keine

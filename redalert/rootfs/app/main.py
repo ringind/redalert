@@ -1128,6 +1128,7 @@ async def _run_single_bridge(
         num_lights=n,
         speed_steps_per_s=ctx["gc_speed"],
         direction=ctx["gc_strips"][0]["direction"],
+        fps=fps,
     )
 
     frames = 0
