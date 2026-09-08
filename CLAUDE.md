@@ -122,17 +122,18 @@ redalert/                  the app
     RedAlertWave (scrolling sine) + RedAlertFlicker (per-lamp dips, stateful) +
     RedAlertStrobe (hard on/off) + RedAlertDuel (two comets, two shapes) +
     RedAlertColorChase (`color_chase` — closed-form pure `colors_for(t)`, no
-    state: a gradient repaints lamp-by-lamp over 3 palettes; each lamp fades
-    over one step, holds until the next sweep; `gc_speed` = lamps/s and the
-    per-step fade time, `gc_direction` incl. `bounce` = flip fill direction
-    each palette; sent at constant `glow_high` like rainbow)
+    state: a gradient repaints lamp-by-lamp over 3 palettes; each lamp switches
+    **instantly** when the head reaches it, holds until the next sweep;
+    `gc_speed` = lamps/s (one lamp every 1/speed s), `gc_direction` incl.
+    `bounce` = flip fill direction each palette; sent at constant `glow_high`
+    like rainbow)
   rootfs/app/panel.html     Ingress web UI (vanilla JS, relative fetch URLs,
     bilingual DE/EN via an I18N dict + data-i18n attributes, see below)
 ```
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.18.0**
+No build system, linter, or test suite. Current version: **1.18.1**
 (integration `manifest.json` versioned separately: **1.2.0**).
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
@@ -401,6 +402,16 @@ trailing `refresh()` could collide with the periodic 5 s poll and get
 dropped, leaving the UI looking unresponsive for up to 5 s after a click. A
 `visibilitychange` listener also forces an immediate refresh when the tab
 regains focus (browsers throttle `setInterval` in hidden tabs).
+**Second "panel hangs after a while" bug, fixed 1.18.1:** `api()` logged every
+*response* via `logLine()` unconditionally (only the *request* line was gated on
+the "Anfragen einblenden" checkbox), and `LOG_ENTRIES` had no cap while
+`renderLog()` re-`join()`s the whole array into `textContent` on every append —
+so the 5 s `/config` poll grew the log a big JSON blob every tick until, after
+hours, each `join()`+`textContent` write took seconds and blocked the main
+thread (reload "fixed" it by resetting the array). Fix: `LOG_MAX = 200`
+(truncate `LOG_ENTRIES.length` after `unshift`), and gate the response log on
+the checkbox too (errors still always logged, now bounded). Any new
+per-frame/per-poll `logLine()` must stay behind the checkbox or the cap.
 Polls `/config` every 5 s. Section "1 · Bridges" renders `BRIDGE_COUNT` = 3 identical
 cards (`bridgeCardHTML(i)`, ids `b${i}-*`) — pairing (`b${i}-pill`), a
 per-bridge **Start**/**Stop** button pair (`b${i}-start`/`b${i}-stop`, since

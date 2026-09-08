@@ -626,12 +626,19 @@
 
   const logEl = $("log");
   let LOG_ENTRIES = [];
+  // Obergrenze: ohne Deckel wuchs LOG_ENTRIES unbegrenzt (jeder /config-Poll
+  // alle 5 s hängt eine Zeile an), und renderLog() fügt bei jedem Eintrag das
+  // *komplette* Array neu zusammen - nach ein paar Stunden dauert dieser
+  // join()+textContent-Schreib Sekunden und blockiert den Main-Thread ("Web-UI
+  // hängt nach einiger Zeit"). Alte Einträge werden abgeschnitten.
+  const LOG_MAX = 200;
   function renderLog() {
     logEl.textContent = LOG_ENTRIES.join("\n\n") || t("log.ready");
   }
   function logLine(msg, obj) {
     const time = new Date().toLocaleTimeString();
     LOG_ENTRIES.unshift(`[${time}] ${msg}` + (obj !== undefined ? "\n" + JSON.stringify(obj, null, 2) : ""));
+    if (LOG_ENTRIES.length > LOG_MAX) LOG_ENTRIES.length = LOG_MAX;
     renderLog();
   }
   // Ohne Timeout blieb ein hängender fetch() (z. B. Bridge kurz nicht
@@ -642,7 +649,10 @@
   // länger, siehe dessen Aufruf) und bricht danach kontrolliert ab.
   const DEFAULT_TIMEOUT_MS = 15000;
   async function api(path, opts, timeoutMs) {
-    if ($("log-requests").checked) {
+    // Request/Response nur protokollieren, wenn "Anfragen einblenden" aktiv ist
+    // - sonst schrieb der 5s-/config-Poll dauerhaft je eine (große) Zeile mit.
+    const trace = $("log-requests").checked;
+    if (trace) {
       let reqBody = opts?.body;
       try { reqBody = opts?.body ? JSON.parse(opts.body) : undefined; } catch { /* keep raw */ }
       logLine(`→ ${opts?.method || "GET"} ${path}`, reqBody);
@@ -652,7 +662,8 @@
     try {
       const res = await fetch(path, Object.assign({}, opts, { signal: controller.signal }));
       const data = await res.json().catch(() => ({}));
-      logLine(`${opts?.method || "GET"} ${path} → ${res.status}`, data);
+      if (trace) logLine(`${opts?.method || "GET"} ${path} → ${res.status}`, data);
+      else if (!res.ok) logLine(`${opts?.method || "GET"} ${path} → ${res.status}`, data);
       return { ok: res.ok, data };
     } catch (e) {
       logLine(`${path} → ${e.name === "AbortError" ? t("log.timeout") : t("log.netError") + e}`);

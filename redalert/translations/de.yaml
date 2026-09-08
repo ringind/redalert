@@ -314,8 +314,8 @@ configuration:
     name: chase/color_chase – Geschwindigkeit (Standard)
     description: >-
       Für effect chase (Segmente/Sekunde eines Chase-Kopfs) und color_chase
-      (Lampen bzw. Schritte pro Sekunde; setzt zugleich die Überblendzeit je
-      Schritt = 1/Wert). Standard 4.0.
+      (Lampen bzw. Schritte pro Sekunde – eine Lampe alle 1/Wert Sekunden,
+      Umschalten sofort). Standard 4.0.
   gc_background_color:
     name: chase – Background-Farbe (Standard)
     description: >-

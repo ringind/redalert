@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.18.1
+
+- **`color_chase`: kein Überblenden mehr.** Jede Lampe schaltet beim
+  Vorbeilauf des Kopfs **sofort** auf ihre Zielfarbe, statt über einen
+  Schritt dorthin zu blenden. `gc_speed` bestimmt weiterhin, wie schnell der
+  Kopf weiterrückt (eine Lampe alle `1/gc_speed` s).
+- **Fix: Web-UI wurde nach längerer Laufzeit träge/blockiert.** Das Protokoll
+  (`LOG_ENTRIES`) wuchs unbegrenzt – jeder `/config`-Poll (alle 5 s) hängte
+  eine große JSON-Zeile an, und die Anzeige baute bei jedem Eintrag das
+  komplette Protokoll neu zusammen; nach einigen Stunden dauerte das
+  Sekunden und blockierte den Browser-Hauptthread. Jetzt: Protokoll auf 200
+  Einträge begrenzt, und Anfragen/Antworten werden nur noch protokolliert,
+  wenn „Anfragen einblenden" aktiv ist (Fehler weiterhin immer).
+
 ## 1.18.0
 
 - **Neuer Effekt `color_chase`.** Ein Farbverlauf füllt sich Lampe für Lampe

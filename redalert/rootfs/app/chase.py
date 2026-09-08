@@ -607,10 +607,9 @@ class RedAlertColorChase:
     """A gradient that repaints itself lamp-by-lamp, cycling three palettes.
 
     One "chase step" advances a head to the next lamp; the lamp it reaches
-    fades (over exactly one step) from whatever it showed to a target colour
-    taken from the current palette, then holds it until the head comes back
-    round on the next palette. So a full gradient grows across the array and
-    is pushed out by the next one.
+    switches **instantly** to a target colour taken from the current palette
+    and holds it until the head comes back round on the next palette. So a
+    full gradient grows across the array and is pushed out by the next one.
 
     Three palettes run in turn, each a linear ramp from the start colour at
     chase-index 0 to the fully-mixed colour at the last chase-index:
@@ -626,9 +625,8 @@ class RedAlertColorChase:
       forward, palette 1 backward, palette 2 forward, …) so the fill point
       pendulums between the ends.
 
-    ``speed_steps_per_s`` is how many lamps the head paints per second – it
-    also sets the per-step fade time (``1 / speed``); crank it high enough
-    that a step is shorter than one frame and the fade becomes a hard snap.
+    ``speed_steps_per_s`` is how many lamps the head paints per second (one
+    lamp every ``1 / speed`` seconds); the switch itself is instant.
 
     Emits per-lamp ``(r, g, b)`` 0..255 directly (no brightness shape);
     ``main.py`` sends it at a constant ``glow_high`` like ``rainbow``.
@@ -679,19 +677,16 @@ class RedAlertColorChase:
         tm = t % period
         q = int(tm // seq_dur)               # current palette-sweep index, 0..5
         t_in = tm - q * seq_dur
+        # How many chase-indices the head has already reached this sweep: index
+        # k switches the instant t_in >= k*step_dur.
+        reached = int(t_in / step_dur) + 1
         out: list[tuple[float, float, float]] = []
         for i in range(n):
             k = self._chase_index(i, q)
-            frm = self._target(q - 1, self._chase_index(i, q - 1))
-            reached_at = k * step_dur
-            if t_in < reached_at:
-                out.append(frm)                             # not repainted yet this sweep
-            elif t_in < reached_at + step_dur:
-                tgt = self._target(q, k)
-                f = (t_in - reached_at) / step_dur
-                out.append(tuple(frm[c] + (tgt[c] - frm[c]) * f for c in range(3)))
+            if k < reached:
+                out.append(self._target(q, k))                              # this sweep's target
             else:
-                out.append(self._target(q, k))             # settled on this sweep's target
+                out.append(self._target(q - 1, self._chase_index(i, q - 1)))  # still previous palette
         return out
 
 

@@ -508,12 +508,11 @@ from each other.
 
 `color_chase` – **gradient-fill chase** (`RedAlertColorChase` in `chase.py`):
 a colour gradient repaints itself lamp by lamp – as the head passes, each lamp
-fades over exactly one step to its target colour and holds it until the next
+switches **instantly** to its target colour and holds it until the next
 sweep overwrites it. Three palettes run in turn, each a linear ramp from the
 start colour (chase-index 0) to the fully-mixed colour (last chase-index):
 `(255,0,0)→(255,255,0)`, `(0,255,0)→(0,255,255)`, `(0,0,255)→(255,0,255)`.
-- `gc_speed` – lamps (steps) per second; also sets the per-step fade time
-  (`1/gc_speed` s – high enough and the step becomes a hard snap).
+- `gc_speed` – lamps (steps) per second (one lamp every `1/gc_speed` s).
 - `gc_direction` – `forward`/`backward` always fill from the same end,
   `bounce` flips the fill direction with every palette.
 - Absolute colours at a constant `glow_high` (like `rainbow`); uses no
