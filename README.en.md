@@ -179,7 +179,10 @@ Returns e.g.:
 ```
 
 Enter `bridge_host` + the `id` as a row in the `bridges` app option
-(the app's Configuration tab; one row per bridge). If the `channels` order
+(the app's Configuration tab; one row per bridge) **or** fill in the bridge
+cards in the web UI and click **"Save bridge configuration"** (persisted to
+`/data/bridges.json`, effective immediately without a restart; wins per bridge
+over the option). If the `channels` order
 doesn't match your physical arrangement, you can explicitly set the desired
 order in the same row as `channel_order` – as a comma-separated list (e.g.
 `2,3,1,0,5,4`), either as an app option or directly in the web UI in the
@@ -244,6 +247,7 @@ Restart the app after changing options.
 | `/select` | POST    | Remember an effect set as *loaded* (`current_preset`), **without** starting it. Body `{"preset": "<name>"}` (`404` if unknown) or `{"preset": null}` to clear. For the HA integration (select entity + sensor). |
 | `/identify` | POST  | Cycle through a bridge's lamps individually (`channel_id` → lamp). Body: `bridge_host` (required when more than one bridge is configured), `area_id` (optional, otherwise from the bridges configuration), `channel_id` (omitted = all in sequence), `seconds`, `color`, `restore_state`. One DTLS handshake for the whole run; occupies the same slot as an effect on this one bridge (blocked while the bridge is armed – disarm first). |
 | `/presets` | GET / PUT / POST / DELETE | Manage effect sets (`/data/presets.json`). `GET` = all (`{presets, names}`) or `?name=…` one. `PUT`/`POST` `{"name","config"}` = save/overwrite (also the upload target). `DELETE ?name=…` = delete. |
+| `/bridges` | GET / PUT / POST / DELETE | Persist the web UI's bridge configuration (`/data/bridges.json`). `PUT`/`POST` `{"bridges":[…]}` (same fields as the `bridges` option) – wins per host over the app option and takes effect **immediately** for `/start`, `/arm`, the HA integration and `rest_command` (no restart). `DELETE` = discard, back to the option. **`409`** if an affected bridge is currently running or armed. `GET` = `{saved, option, effective}`. |
 
 Omit `duration` → the effect runs with the default from the `duration` app
 option (default `0` = **unlimited**, runs until `/stop`); with a positive

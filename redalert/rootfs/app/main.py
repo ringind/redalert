@@ -30,6 +30,11 @@ als benanntes **Effektset** unter ``/data/presets.json`` ablegen
 (``GET/PUT/DELETE /presets``) und per ``POST /start {"preset": "..."}``
 wieder starten; ``POST /select {"preset": "..."}`` merkt ein Set nur als
 *geladen* (``current_preset``), ohne es zu starten.
+
+Die Bridge-Konfiguration kommt aus der HA-Option ``bridges`` **und** – falls
+im Web-UI gespeichert (``PUT/DELETE /bridges`` → ``/data/bridges.json``) –
+aus dieser Datei, die je Host über die Option gewinnt und sofort ohne
+Add-on-Neustart wirkt (siehe ``_merge_bridges``).
 """
 
 import asyncio
@@ -80,6 +85,7 @@ DATA_DIR = Path(os.environ.get("REDALERT_DATA_DIR", "/data"))
 CRED_FILE = DATA_DIR / "credentials.json"
 OPTIONS_FILE = DATA_DIR / "options.json"
 PRESETS_FILE = DATA_DIR / "presets.json"
+BRIDGES_FILE = DATA_DIR / "bridges.json"  # im Web-UI gespeicherte Bridge-Konfig
 
 APP_DIR = Path(__file__).parent
 PANEL_HTML = (APP_DIR / "panel.html").read_text(encoding="utf-8")
@@ -365,10 +371,39 @@ def _save_presets(presets: dict) -> None:
     PRESETS_FILE.write_text(json.dumps(presets, indent=2, ensure_ascii=False))
 
 
+# --- Bridge-Konfiguration: App-Option + optionale, im Web-UI gespeicherte -----
+# Die HA-Option ``bridges`` gehört dem Supervisor und wird nur beim Start
+# gelesen. Zusätzlich kann das Web-UI seine Bridge-Karten dauerhaft in
+# ``/data/bridges.json`` sichern (roh, in Eingabeform mit Hex-Farben usw.);
+# beim Ermitteln der effektiven Liste gewinnt diese Datei je Host, die Option
+# füllt die übrigen Hosts. So wirken Web-UI-Änderungen sofort auch für
+# ``/arm``, die HA-Integration und ``rest_command`` (ohne Add-on-Neustart).
+def _load_saved_bridges() -> list[dict]:
+    data = load_json(BRIDGES_FILE, [])
+    return _parse_bridges_option(data if isinstance(data, list) else [])
+
+
+def _save_saved_bridges(raw_list: list) -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    if raw_list:
+        BRIDGES_FILE.write_text(json.dumps(raw_list, indent=2, ensure_ascii=False))
+    elif BRIDGES_FILE.exists():
+        BRIDGES_FILE.unlink()
+
+
+def _merge_bridges(saved: list[dict]) -> list[dict]:
+    """Effektive, normalisierte bridges-Liste (App-Option + gespeicherte Web-UI-Konfig)."""
+    by_host = {b["bridge_host"]: b for b in _parse_bridges_option(options.get("bridges"))}
+    for b in saved:
+        by_host[b["bridge_host"]] = b
+    return list(by_host.values())[:MAX_BRIDGES]
+
+
 state = {
     "credentials": _load_credentials(),
     "presets": _load_presets(),
-    "bridges": _parse_bridges_option(options.get("bridges")),
+    "saved_bridges": _load_saved_bridges(),
+    "bridges": _merge_bridges(_load_saved_bridges()),
     "color": hex_to_rgb(options.get("color", "#FF0000")),
     "effect": _effect_name(options.get("effect", "pulse")),
     "attack_ms": int(options.get("attack_ms", 140)),
@@ -831,6 +866,7 @@ def _bridge_field_hex(b: dict, key: str) -> str | None:
 
 async def handle_config(request: web.Request) -> web.Response:
     r, g, b = state["color"]
+    _saved_hosts = {b["bridge_host"] for b in state["saved_bridges"]}
     return web.json_response(
         {
             "bridges": [
@@ -838,6 +874,7 @@ async def handle_config(request: web.Request) -> web.Response:
                     "bridge_host": bg["bridge_host"],
                     "area_id": bg["area_id"],
                     "channel_order": bg["channel_order"],
+                    "config_source": "saved" if bg["bridge_host"] in _saved_hosts else "option",
                     "paired": bg["bridge_host"] in state["credentials"],
                     "running": _is_running(bg["bridge_host"]),
                     "armed": bg["bridge_host"] in state["armed"],
@@ -914,6 +951,7 @@ async def handle_config(request: web.Request) -> web.Response:
             "running": _any_running(),
             "armed": _armed_all(),
             "armed_bridges": sorted(state["armed"]),
+            "bridges_saved": bool(state["saved_bridges"]),
             "last_start": {
                 "duration": state["last_start_meta"].get("duration"),
                 "fps": state["last_start_meta"].get("fps"),
@@ -2167,6 +2205,108 @@ async def handle_presets_delete(request: web.Request) -> web.Response:
     return web.json_response({"status": "not_found", "name": name}, status=404)
 
 
+# --------------------------------------------------------------------------- #
+# Bridge-Konfiguration (Web-UI, /data/bridges.json)
+# --------------------------------------------------------------------------- #
+def _bridges_change_blocked(new_effective: list[dict]) -> list[str]:
+    """Hosts, deren effektiver Eintrag sich ändern/verschwinden würde und die
+    dabei laufen oder scharfgeschaltet sind (dann ist die Änderung verboten)."""
+    cur = {b["bridge_host"]: b for b in state["bridges"]}
+    nxt = {b["bridge_host"]: b for b in new_effective}
+    blocked: list[str] = []
+    for host, entry in cur.items():
+        if nxt.get(host) == entry:
+            continue  # unverändert
+        why = []
+        if _is_running(host):
+            why.append("Effekt läuft")
+        if host in state["armed"]:
+            why.append("scharfgeschaltet")
+        if why:
+            blocked.append(f"{host} ({', '.join(why)})")
+    return blocked
+
+
+async def handle_bridges_get(request: web.Request) -> web.Response:
+    """GET /bridges – gespeicherte / Options- / effektive Bridge-Konfiguration."""
+    return web.json_response(
+        {
+            "saved": state["saved_bridges"],
+            "option": _parse_bridges_option(options.get("bridges")),
+            "effective": state["bridges"],
+        }
+    )
+
+
+async def handle_bridges_put(request: web.Request) -> web.Response:
+    """PUT/POST /bridges – die Bridge-Karten des Web-UI dauerhaft speichern
+    (``/data/bridges.json``). Body ``{"bridges": [ {bridge_host, area_id,
+    channel_order?, effect?, …}, … ]}`` (dieselben Felder wie die App-Option
+    ``bridges``). Gewinnt je Host über die Option, wirkt sofort (ohne
+    Add-on-Neustart) für ``/start``, ``/arm``, die HA-Integration und
+    ``rest_command``.
+
+    **Abgelehnt (409)**, wenn sich der Eintrag einer Bridge ändern würde, die
+    gerade läuft oder scharfgeschaltet ist – erst ``/stop`` bzw. ``/disarm``.
+    """
+    body = await _json_body(request)
+    raw = body.get("bridges")
+    if not isinstance(raw, list):
+        return web.json_response(
+            {"error": "bridges muss eine Liste von {bridge_host, area_id, …} sein"}, status=400
+        )
+    parsed = _parse_bridges_option(raw)
+    valid_hosts = {b["bridge_host"] for b in parsed}
+    new_effective = _merge_bridges(parsed)
+
+    blocked = _bridges_change_blocked(new_effective)
+    if blocked:
+        return web.json_response(
+            {
+                "error": "Bridge-Konfiguration kann nicht geändert werden, solange eine "
+                         "betroffene Bridge läuft oder scharfgeschaltet ist – erst /stop bzw. /disarm.",
+                "blocked": blocked,
+            },
+            status=409,
+        )
+
+    # Nur gültige Einträge roh (in Eingabeform) sichern.
+    to_save = [
+        e for e in raw
+        if isinstance(e, dict) and str(e.get("bridge_host") or "").strip() in valid_hosts
+    ]
+    _save_saved_bridges(to_save)
+    state["saved_bridges"] = parsed
+    state["bridges"] = new_effective
+    log.info(
+        "Bridge-Konfiguration im Web-UI gespeichert (%d Einträge, effektiv %d Bridges).",
+        len(to_save), len(new_effective),
+    )
+    return web.json_response(
+        {"status": "saved", "bridges": [b["bridge_host"] for b in new_effective]}
+    )
+
+
+async def handle_bridges_delete(request: web.Request) -> web.Response:
+    """DELETE /bridges – die im Web-UI gespeicherte Konfig verwerfen, zurück
+    auf die reine App-Option. Gleiche 409-Sperre wie ``PUT``."""
+    option_only = _merge_bridges([])
+    blocked = _bridges_change_blocked(option_only)
+    if blocked:
+        return web.json_response(
+            {"error": "Bridge-Konfiguration kann nicht zurückgesetzt werden, solange eine "
+                      "betroffene Bridge läuft oder scharfgeschaltet ist – erst /stop bzw. /disarm.",
+             "blocked": blocked},
+            status=409,
+        )
+    _save_saved_bridges([])
+    state["saved_bridges"] = []
+    state["bridges"] = option_only
+    log.info("Web-UI-Bridge-Konfiguration verworfen – zurück auf die App-Option (%d Bridges).",
+             len(option_only))
+    return web.json_response({"status": "reset", "bridges": [b["bridge_host"] for b in option_only]})
+
+
 async def _on_shutdown(app: web.Application) -> None:
     """Beim Herunterfahren (SIGTERM durch HA) laufende Effekte stoppen und alle
     scharfen Bridges entschärfen – sonst blieben Streams offen und der
@@ -2198,6 +2338,10 @@ def create_app() -> web.Application:
     app.router.add_put("/presets", handle_presets_put)
     app.router.add_post("/presets", handle_presets_put)
     app.router.add_delete("/presets", handle_presets_delete)
+    app.router.add_get("/bridges", handle_bridges_get)
+    app.router.add_put("/bridges", handle_bridges_put)
+    app.router.add_post("/bridges", handle_bridges_put)
+    app.router.add_delete("/bridges", handle_bridges_delete)
     app.on_shutdown.append(_on_shutdown)
     return app
 

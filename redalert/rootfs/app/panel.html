@@ -104,6 +104,16 @@
       Standard aus der App-Konfiguration.
     </p>
     <div id="bridges"></div>
+    <div class="row" style="margin-top:.9rem">
+      <button id="btn-bridges-save" data-i18n="btn.saveBridges">Bridge-Konfiguration speichern</button>
+      <button class="secondary" id="btn-bridges-reset" data-i18n="btn.resetBridges">Auf Add-on-Konfiguration zurücksetzen</button>
+      <span id="bridges-save-msg" class="muted" style="align-self:center"></span>
+    </div>
+    <p class="muted" style="margin:.4rem 0 0" data-i18n="section1.saveHint">
+      Gespeicherte Werte gelten auch für Scharfschalten, die Home-Assistant-Integration und rest_command –
+      nicht nur für den Start-Knopf hier. Speichern/Zurücksetzen geht nur, wenn kein Effekt läuft und
+      keine betroffene Bridge scharfgeschaltet ist.
+    </p>
   </section>
 
   <section class="card">
@@ -163,6 +173,15 @@
       Bridge anpassen“ kann jede Bridge ihren eigenen Effekt/Farbe/Timing
       bekommen – „wie Konfiguration“ bzw. leer gelassene Felder übernehmen den
       Standard aus der App-Konfiguration.`,
+      "btn.saveBridges": "Bridge-Konfiguration speichern",
+      "btn.resetBridges": "Auf Add-on-Konfiguration zurücksetzen",
+      "section1.saveHint": `Gespeicherte Werte gelten auch für Scharfschalten, die
+      Home-Assistant-Integration und rest_command – nicht nur für den Start-Knopf hier.
+      Speichern/Zurücksetzen geht nur, wenn kein Effekt läuft und keine betroffene Bridge
+      scharfgeschaltet ist.`,
+      "msg.bridgesSaved": "Bridge-Konfiguration gespeichert.",
+      "msg.bridgesReset": "Zurückgesetzt auf die Add-on-Konfiguration.",
+      "msg.bridgesSaveFail": "Speichern fehlgeschlagen.",
       "section2.title": "2 · Steuerung",
       "btn.start": "▶ Start", "btn.stop": "■ Stop",
       "section2.intro": `Alle Parameter (Effekt, Farbe, Timing, Dauer, fps, …) kommen aus der
@@ -377,6 +396,14 @@
       and pick the one you want. "Customize effect for this bridge" lets each
       bridge get its own effect/colour/timing – "same as configuration" or a
       field left empty falls back to the app configuration's default.`,
+      "btn.saveBridges": "Save bridge configuration",
+      "btn.resetBridges": "Reset to add-on configuration",
+      "section1.saveHint": `Saved values also apply to arming, the Home Assistant
+      integration and rest_command – not just the Start button here. Saving/resetting
+      only works when no effect is running and no affected bridge is armed.`,
+      "msg.bridgesSaved": "Bridge configuration saved.",
+      "msg.bridgesReset": "Reset to the add-on configuration.",
+      "msg.bridgesSaveFail": "Save failed.",
       "section2.title": "2 · Control",
       "btn.start": "▶ Start", "btn.stop": "■ Stop",
       "section2.intro": `All parameters (effect, colour, timing, duration, fps, …) come from the
@@ -1126,6 +1153,34 @@
   }
 
   $("btn-refresh").onclick = refresh;
+
+  // Bridge-Karten dauerhaft in /data/bridges.json speichern (PUT /bridges).
+  let bridgesMsgTimer = null;
+  function bridgesSaveMsg(text, ok) {
+    const el = $("bridges-save-msg");
+    el.textContent = text;
+    el.style.color = ok ? "#2e7d32" : "#c62828";
+    clearTimeout(bridgesMsgTimer);
+    bridgesMsgTimer = setTimeout(() => { el.textContent = ""; el.style.color = ""; }, 8000);
+  }
+  function bridgesErrText(data) {
+    if (data && data.blocked && data.blocked.length) return `${data.error} (${data.blocked.join(", ")})`;
+    return (data && data.error) || t("msg.bridgesSaveFail");
+  }
+  $("btn-bridges-save").onclick = async () => {
+    const bridges = collectBody().bridges || [];
+    const { ok, data } = await api("bridges", {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bridges }),
+    });
+    bridgesSaveMsg(ok ? t("msg.bridgesSaved") : bridgesErrText(data), ok);
+    if (ok) refresh();
+  };
+  $("btn-bridges-reset").onclick = async () => {
+    const { ok, data } = await api("bridges", { method: "DELETE" });
+    bridgesSaveMsg(ok ? t("msg.bridgesReset") : bridgesErrText(data), ok);
+    if (ok) refresh();
+  };
 
   // Nicht in der Bridge-Karte editierbare Felder eines geladenen Effektsets
   // (z. B. duration/fps, sofern das Set sie enthält) – werden beim erneuten

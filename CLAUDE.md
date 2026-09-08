@@ -135,7 +135,7 @@ redalert/                  the app
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.18.3**
+No build system, linter, or test suite. Current version: **1.19.0**
 (integration `manifest.json` versioned separately: **1.2.0**).
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
@@ -217,14 +217,29 @@ Three layers under `redalert/rootfs/app/`:
   `/areas` (query `bridge_host` — Pflicht bei mehr als einer gepaarten Bridge),
   `/start`, `/stop`, `/arm`, `/disarm`, `/select` (since 1.17.0 — body
   `{"preset": name|null}`, only sets `state["current_preset"]`, no streaming),
+  `/bridges` (GET/PUT/POST/DELETE, since 1.19.0 — persist the Web UI's bridge
+  cards to `/data/bridges.json`, merged live over the option, see below),
   `/identify`. All mutable runtime state is
   one module-level
   `state` dict; `state["tasks"]` is a `dict[bridge_host, asyncio.Task]` — since
   1.15.0 every bridge runs its effect (or an `/identify` run) in its **own**
   task, independently start-/stoppable via an optional `bridge_host` in the
   `/start`/`/stop` body (see below), replacing the old single global
-  `state["task"]`. `state["bridges"]` is a list (≤ `MAX_BRIDGES` = 3) parsed by
-  `_parse_bridges_option` from the `bridges` option — each entry always has
+  `state["task"]`. `state["bridges"]` is a list (≤ `MAX_BRIDGES` = 3), the
+  **merge** (`_merge_bridges`, since 1.19.0) of the `bridges` app option with
+  whatever the Web UI has persisted to `/data/bridges.json` (`state["saved_bridges"]`,
+  loaded via `_load_saved_bridges`) — per host the saved entry wins, the option
+  fills the rest. `PUT/POST/DELETE /bridges` rewrites `bridges.json` and
+  recomputes `state["bridges"]` **live** (no restart) — so a Web-UI save takes
+  effect immediately for `/start`, `/arm`, the HA integration and `rest_command`,
+  not just the panel's Start button. `_bridges_change_blocked` rejects a
+  `PUT`/`DELETE` with **409** if any bridge whose *effective* entry would change
+  is currently running or armed (blanket-ish; unchanged bridges don't block).
+  `bridges.json` stores the **raw** input shape (hex colours, comma strings),
+  re-parsed through `_parse_bridges_option` on load. `/config` exposes
+  `bridges_saved: bool` + per-bridge `config_source: "saved"|"option"`. Both
+  `_parse_bridges_option` and `_merge_bridges` are also used for the `bridges`
+  key in the `/start` body. Each `state["bridges"]` entry always has
   `bridge_host`, `area_id`, `channel_order`, and *optionally* (sparse — key
   present only if this bridge overrides it) `effect`, `color`, `sweep_seconds`,
   `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`
@@ -475,6 +490,15 @@ cards are skipped, and if none are filled `bridges` is omitted so the server
 falls back to the configured `bridges` option), merged over `LOADED_EXTRA` —
 any non-`bridges` fields from a preset loaded via `applyBody()`, preserved
 verbatim on save even though the UI no longer exposes controls for them.
+Since 1.19.0 the card values can be **persisted**: a "Bridge-Konfiguration
+speichern" button after the cards sends `collectBody().bridges` to
+`PUT /bridges` (`btn-bridges-save`; `btn-bridges-reset` → `DELETE /bridges`;
+result shown in `#bridges-save-msg`, green/red, auto-clears). Before this the
+card fields only mattered for the panel's own Start button — `/arm`, the HA
+integration and `rest_command` used the add-on option, which is the trap that
+bit the maintainer (a card's `area_id` "worked" for Start but `/arm` used the
+stale option). The 409 guard means the Save button fails while an affected
+bridge runs/is armed.
 
 **Two Hue API surfaces:** the `hue_entertainment` lib (`EntertainmentSession`,
 `HueEntertainmentAPI`) does *only* DTLS streaming + pairing + area listing.

@@ -59,10 +59,21 @@ reicht die erste, leer gelassene Karten werden ignoriert.
    gleichzeitig starten. Die daneben stehende Pille zeigt, ob diese Bridge
    gerade aktiv ist.
 
-Trage Bridge-IP, `area_id` (und optional `channel_order` sowie die
-Effekt-Overrides) zusätzlich als Zeile der App-Option **`bridges`** ein,
-damit `rest_command`-Aufrufe ohne Body funktionieren, und starte die App
-neu.
+Damit die Bridge-Konfiguration auch **außerhalb des Web-UI-Start-Knopfs**
+gilt (Scharfschalten, Home-Assistant-Integration, `rest_command`), muss sie
+persistent sein. Zwei Wege:
+
+- **Im Web-UI:** unter „1 · Bridges" die Karten ausfüllen (IP, „Bereiche
+  laden" → Bereich übernehmen, optional Overrides) und **„Bridge-Konfiguration
+  speichern"** klicken – landet in `/data/bridges.json`, wirkt sofort ohne
+  Neustart. Speichern/Zurücksetzen geht nur, wenn kein Effekt läuft und keine
+  betroffene Bridge scharfgeschaltet ist (sonst Fehlermeldung).
+- **Im Tab „Konfiguration":** Bridge-IP, `area_id` (und optional
+  `channel_order` sowie die Effekt-Overrides) als Zeile der App-Option
+  **`bridges`** eintragen und die App neu starten.
+
+Beides zusammen: die gespeicherte Web-UI-Konfig gewinnt je Bridge, die Option
+füllt die übrigen Bridges.
 
 Alternativ per REST: `POST /pair` (Body `{"bridge_host": "192.168.1.50"}`),
 `GET /areas?bridge_host=192.168.1.50`.
@@ -197,6 +208,9 @@ Panel-Pfad).
 | `/presets` | GET    | Alle gespeicherten Effektsets: `{"presets": {Name: Body, …}, "names": [...]}`. Mit `?name=…` nur dieses eine (`{"name", "config"}`, `404` wenn unbekannt). |
 | `/presets` | PUT / POST | Ein Effektset speichern/überschreiben (auch Upload-Ziel). Body `{"name": "...", "config": { <start-Body> }}` – `config` sind die kompletten `/start`-Felder inkl. `bridges`; abgelegt unter `/data/presets.json`. |
 | `/presets` | DELETE | Effektset löschen. Query `?name=…` (oder Body `{"name": …}`). `404` wenn unbekannt. |
+| `/bridges` | GET    | `{"saved": [...], "option": [...], "effective": [...]}` – im Web-UI gespeicherte Bridge-Konfig, die App-Option `bridges`, und die daraus zusammengeführte (je Host gewinnt „saved"). |
+| `/bridges` | PUT / POST | Die Bridge-Karten des Web-UI dauerhaft speichern (`/data/bridges.json`). Body `{"bridges": [ {bridge_host, area_id, channel_order?, effect?, …}, … ]}` – dieselben Felder wie die App-Option `bridges`. Gewinnt je Host über die Option und wirkt **sofort** (ohne Add-on-Neustart) für `/start`, `/arm`, die HA-Integration und `rest_command`. **`409`**, wenn sich der Eintrag einer Bridge ändern würde, die gerade läuft oder scharfgeschaltet ist – erst `/stop` bzw. `/disarm` (`blocked` in der Antwort nennt die betroffenen Bridges). |
+| `/bridges` | DELETE | Die im Web-UI gespeicherte Konfig verwerfen, zurück auf die reine App-Option. Gleiche `409`-Sperre. |
 
 - `duration` (Sekunden, Standard aus der gleichnamigen App-Option, **`0` =
   unbegrenzt**) – wie lange der Effekt läuft, bevor er von selbst endet;

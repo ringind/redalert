@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.19.0
+
+- **Bridge-Konfiguration im Web-UI dauerhaft speicherbar.** Bisher galten die
+  Werte der Bridge-Karten (IP, `area_id`, `channel_order`, Effekt-Overrides)
+  nur für den „Start"-Knopf im Web-UI – Scharfschalten, die
+  Home-Assistant-Integration und `rest_command` nutzten weiterhin die
+  Add-on-Option `bridges` (typische Falle: im Web-UI eine `area_id` gesetzt,
+  Scharfschalten scheiterte trotzdem an der alten Option).
+  Neu: Knopf **„Bridge-Konfiguration speichern"** unter „1 · Bridges" (bzw.
+  `PUT /bridges` → `/data/bridges.json`). Diese Konfig gewinnt je Bridge über
+  die Option und wirkt **sofort ohne Add-on-Neustart** für `/start`, `/arm`,
+  die Integration und `rest_command`. **„Auf Add-on-Konfiguration
+  zurücksetzen"** (`DELETE /bridges`) verwirft sie wieder.
+  Speichern/Zurücksetzen wird mit Fehlermeldung **abgelehnt**, solange eine
+  betroffene Bridge läuft oder scharfgeschaltet ist – erst `/stop` bzw.
+  `/disarm`.
+- `/config` zeigt neu `bridges_saved` (bool) und je Bridge `config_source`
+  (`saved`/`option`); `GET /bridges` liefert `{saved, option, effective}`.
+
 ## 1.18.3
 
 - **Fix: `POST /arm` / der „Scharfschalten"-Schalter lieferte HTTP 500**, sobald

@@ -58,9 +58,21 @@ first is enough, cards left empty are ignored.
    only together. The pill next to it shows whether this bridge is
    currently active.
 
-Also enter the bridge IP, `area_id` (and optionally `channel_order` plus the
-effect overrides) as a row of the **`bridges`** app option, so that
-`rest_command` calls without a body work, and restart the app.
+For the bridge config to apply **beyond the web UI's Start button** (arming,
+the Home Assistant integration, `rest_command`), it has to be persistent.
+Two ways:
+
+- **In the web UI:** fill in the cards under "1 · Bridges" (IP, "Load areas"
+  → pick one, optional overrides) and click **"Save bridge configuration"** –
+  stored in `/data/bridges.json`, effective immediately without a restart.
+  Saving/resetting only works when no effect is running and no affected bridge
+  is armed (otherwise an error is shown).
+- **In the "Configuration" tab:** enter the bridge IP, `area_id` (and
+  optionally `channel_order` plus the effect overrides) as a row of the
+  **`bridges`** app option and restart the app.
+
+Both together: the saved web-UI config wins per bridge, the option fills the
+rest.
 
 Alternatively via REST: `POST /pair` (body `{"bridge_host": "192.168.1.50"}`),
 `GET /areas?bridge_host=192.168.1.50`.
@@ -194,6 +206,9 @@ panel path).
 | `/presets` | GET    | All saved effect sets: `{"presets": {name: body, …}, "names": [...]}`. With `?name=…` just that one (`{"name", "config"}`, `404` if unknown). |
 | `/presets` | PUT / POST | Save/overwrite an effect set (also the upload target). Body `{"name": "...", "config": { <start body> }}` – `config` is the complete set of `/start` fields incl. `bridges`; stored under `/data/presets.json`. |
 | `/presets` | DELETE | Delete an effect set. Query `?name=…` (or body `{"name": …}`). `404` if unknown. |
+| `/bridges` | GET    | `{"saved": [...], "option": [...], "effective": [...]}` – the bridge config saved from the web UI, the `bridges` app option, and the two merged (per host, "saved" wins). |
+| `/bridges` | PUT / POST | Persist the web UI's bridge cards (`/data/bridges.json`). Body `{"bridges": [ {bridge_host, area_id, channel_order?, effect?, …}, … ]}` – the same fields as the `bridges` app option. Wins per host over the option and takes effect **immediately** (no add-on restart) for `/start`, `/arm`, the HA integration and `rest_command`. **`409`** if a bridge whose entry would change is currently running or armed – stop/disarm it first (`blocked` in the response names them). |
+| `/bridges` | DELETE | Discard the web-UI-saved config, back to the plain app option. Same `409` guard. |
 
 - `duration` (seconds, default from the like-named app option, **`0` =
   unlimited**) – how long the effect runs before ending on its own; can be

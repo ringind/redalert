@@ -182,7 +182,10 @@ Liefert z. B.:
 ```
 
 Trage `bridge_host` + die `id` als Zeile der App-Option `bridges` ein
-(Konfiguration-Tab der App; eine Zeile pro Bridge). Falls die
+(Konfiguration-Tab der App; eine Zeile pro Bridge) **oder** fülle die
+Bridge-Karten im Web-UI aus und klicke **„Bridge-Konfiguration speichern"**
+(persistiert in `/data/bridges.json`, wirkt sofort ohne Neustart; gewinnt je
+Bridge über die Option). Falls die
 `channels`-Reihenfolge nicht deiner physischen Anordnung entspricht, kannst
 du die gewünschte Reihenfolge in derselben Zeile explizit als
 `channel_order` setzen – als kommagetrennte Liste (z. B. `2,3,1,0,5,4`),
@@ -248,6 +251,7 @@ App nach einer Options-Änderung neu starten.
 | `/select` | POST    | Ein Effektset als *geladen* merken (`current_preset`), **ohne** es zu starten. Body `{"preset": "<name>"}` (`404` wenn unbekannt) oder `{"preset": null}` zum Zurücksetzen. Für die HA-Integration (Select-Entity + Sensor). |
 | `/identify` | POST  | Lampen einer Bridge einzeln durchtesten (`channel_id` → Lampe). Body: `bridge_host` (Pflicht bei mehr als einer konfigurierten Bridge), `area_id` (optional, sonst aus der bridges-Konfiguration), `channel_id` (fehlt = alle nacheinander), `seconds`, `color`, `restore_state`. Ein DTLS-Handshake für den Durchlauf; belegt denselben Slot wie ein Effekt auf dieser einen Bridge (bei scharfer Bridge blockiert – erst `/disarm`). |
 | `/presets` | GET / PUT / POST / DELETE | Effektsets verwalten (`/data/presets.json`). `GET` = alle (`{presets, names}`) bzw. `?name=…` eines. `PUT`/`POST` `{"name","config"}` = speichern/überschreiben (auch Datei-Upload). `DELETE ?name=…` = löschen. |
+| `/bridges` | GET / PUT / POST / DELETE | Bridge-Konfiguration aus dem Web-UI dauerhaft speichern (`/data/bridges.json`). `PUT`/`POST` `{"bridges":[…]}` (Felder wie die Option `bridges`) – gewinnt je Host über die App-Option und wirkt **sofort** für `/start`, `/arm`, HA-Integration, `rest_command` (kein Neustart nötig). `DELETE` = verwerfen, zurück auf die Option. **`409`**, wenn eine betroffene Bridge gerade läuft oder scharf ist. `GET` = `{saved, option, effective}`. |
 
 `duration` weglassen → Effekt läuft mit dem Standard aus der App-Option
 `duration` (Vorgabe `0` = **unbegrenzt**, läuft bis `/stop`); mit einem
