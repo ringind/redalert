@@ -135,7 +135,7 @@ redalert/                  the app
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.18.2**
+No build system, linter, or test suite. Current version: **1.18.3**
 (integration `manifest.json` versioned separately: **1.2.0**).
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
@@ -183,7 +183,10 @@ curl -s -X POST $B/start -H 'Content-Type: application/json' \
 - **Arming** (`POST /arm`/`/disarm`, since 1.16.0): `state["armed"]` is
   `dict[bridge_host, ArmContext]` — a persistent `EntertainmentSession`
   (`idle_timeout=0`) held open with a low-rate `_arm_idle_loop` streaming an
-  approximated still (`_idle_frame_from_snapshot` via `_xy_to_rgb`). A `/start`
+  approximated still (`_idle_frame_from_snapshot` → `_snapshot_light_rgb` →
+  `_xy_to_rgb`; note the snapshot's `xy` is the CLIP-v2 **object** `{"x","y"}`,
+  not a list — treating it as a list 500'd `/arm` for any lit colour lamp,
+  fixed 1.18.3, `_arm_one` also wraps the idle-frame build). A `/start`
   for an armed bridge reuses that session (`handle_start._resolve` skips creating
   one, `_run_single_bridge` gets `arm_ctx` and skips handshake + snapshot + the
   `aclose`/`restore` in `finally` — it re-arms the idle loop instead). `/disarm`

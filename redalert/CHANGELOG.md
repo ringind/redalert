@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.18.3
+
+- **Fix: `POST /arm` / der „Scharfschalten"-Schalter lieferte HTTP 500**, sobald
+  im Entertainment-Bereich mindestens eine Lampe an und im Farb-(xy-)Modus war
+  (also im Normalfall). Das Ruhebild las die Lampenfarbe `color.xy` als Liste
+  `[x, y]`, die Hue-API liefert sie aber als Objekt `{"x": …, "y": …}` →
+  `KeyError`. `xy` wird jetzt als Objekt gelesen (Listen-Form bleibt als
+  Fallback); zusätzlich kann ein fehlerhafter Snapshot `/arm` nicht mehr zum
+  Absturz bringen. Betraf 1.16.0–1.18.2. `/disarm` und die Wiederherstellung
+  beim normalen Stop waren nicht betroffen.
+
 ## 1.18.2
 
 - **`color_chase`: gleichmäßiges Timing.** Die Schrittdauer wird auf eine ganze

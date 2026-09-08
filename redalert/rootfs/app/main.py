@@ -648,15 +648,22 @@ def _snapshot_light_rgb(st: dict) -> tuple[int, int, int]:
     """RGB einer einzelnen Snapshot-Lampe (aus, mit Farbe oder mit Weißton)."""
     if not st.get("on"):
         return (0, 0, 0)
-    bri = st.get("brightness")
-    bri = 100.0 if bri is None else float(bri)
-    xy = st.get("xy")
-    if xy and len(xy) == 2:
-        return _xy_to_rgb(float(xy[0]), float(xy[1]), bri)
-    if st.get("mirek") is not None:
-        return _mirek_to_rgb(float(st["mirek"]), bri)
-    s = bri / 100.0
-    return (int(round(255 * s)), int(round(200 * s)), int(round(150 * s)))
+    try:
+        bri = st.get("brightness")
+        bri = 100.0 if bri is None else float(bri)
+        # CLIP v2 liefert color.xy als Objekt {"x": .., "y": ..}; ein früherer
+        # [x, y]-Listen-Fallback wird zur Sicherheit weiter akzeptiert.
+        xy = st.get("xy")
+        if isinstance(xy, dict) and xy.get("x") is not None and xy.get("y") is not None:
+            return _xy_to_rgb(float(xy["x"]), float(xy["y"]), bri)
+        if isinstance(xy, (list, tuple)) and len(xy) == 2:
+            return _xy_to_rgb(float(xy[0]), float(xy[1]), bri)
+        if st.get("mirek") is not None:
+            return _mirek_to_rgb(float(st["mirek"]), bri)
+        s = bri / 100.0
+        return (int(round(255 * s)), int(round(200 * s)), int(round(150 * s)))
+    except (TypeError, ValueError, KeyError):
+        return (0, 0, 0)
 
 
 def _idle_frame_from_snapshot(
@@ -740,7 +747,11 @@ async def _arm_one(cfg: dict) -> dict:
         log.exception("Scharfschalten %s fehlgeschlagen (DTLS-Handshake)", host)
         return {"bridge_host": host, "error": f"DTLS-Handshake fehlgeschlagen ({exc})"}
 
-    idle_frame = _idle_frame_from_snapshot(snapshot, channel_ids)
+    try:
+        idle_frame = _idle_frame_from_snapshot(snapshot, channel_ids)
+    except Exception:  # noqa: BLE001 – Ruhebild darf /arm nie zum Absturz bringen
+        log.exception("Scharfschalten %s: Ruhebild aus Snapshot fehlgeschlagen – nutze 0", host)
+        idle_frame = [LightColorCommand(channel_id=cid, red=0, green=0, blue=0) for cid in channel_ids]
     session.send(idle_frame)
     state["armed"][host] = {
         "session": session,
@@ -2009,9 +2020,14 @@ async def handle_arm(request: web.Request) -> web.Response:
         else:
             to_arm.append(cfg)
 
-    results = await asyncio.gather(*(_arm_one(cfg) for cfg in to_arm))
-    for r in results:
-        if r.get("armed"):
+    results = await asyncio.gather(
+        *(_arm_one(cfg) for cfg in to_arm), return_exceptions=True
+    )
+    for cfg, r in zip(to_arm, results):
+        if isinstance(r, BaseException):
+            log.error("Scharfschalten %s: unerwarteter Fehler", cfg["bridge_host"], exc_info=r)
+            failed.append({"bridge_host": cfg["bridge_host"], "error": f"interner Fehler ({r})"})
+        elif r.get("armed"):
             armed_report.append(r["bridge_host"])
         else:
             failed.append(r)
