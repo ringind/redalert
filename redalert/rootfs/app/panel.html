@@ -1138,13 +1138,15 @@
   $("btn-refresh").onclick = refresh;
 
   // Kurze Statusmeldung neben den Effektset-Knöpfen (Laden-Ergebnis).
+  // Erfolg blendet nach 8 s aus; ein Fehler (z. B. „erst /stop") bleibt stehen,
+  // bis der nächste Ladeversuch ihn ersetzt.
   let presetMsgTimer = null;
   function presetMsg(text, ok) {
     const el = $("preset-msg");
     el.textContent = text;
     el.style.color = ok ? "#2e7d32" : "#c62828";
     clearTimeout(presetMsgTimer);
-    presetMsgTimer = setTimeout(() => { el.textContent = ""; el.style.color = ""; }, 8000);
+    if (ok) presetMsgTimer = setTimeout(() => { el.textContent = ""; el.style.color = ""; }, 8000);
   }
 
   // Nicht in der Bridge-Karte editierbare Felder eines geladenen Effektsets
@@ -1281,16 +1283,24 @@
   $("btn-preset-load").onclick = async () => {
     const name = $("preset-select").value;
     if (!name || !PRESETS[name]) { presetMsg(t("log.noPresetSelected"), false); return; }
-    // Formular füllen (zum Ansehen/Anpassen) und serverseitig laden: übernimmt
-    // die Bereiche des Sets, schaltet eine laufende Animation live um bzw. 409.
-    applyBody(PRESETS[name]);
-    $("preset-name").value = name;
+    // Erst serverseitig laden (übernimmt die Bereiche des Sets, schaltet eine
+    // laufende Animation mit gleichen Bereichen live um, sonst 409). Das
+    // Formular wird **nur bei Erfolg** mit den Set-Werten gefüllt – sonst
+    // liefen Bridge-Karten und Server auseinander (Karten zeigen das neue Set,
+    // der Server hält noch das alte) und ein anschließender Start täte nichts.
     const { ok, data } = await api("select", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ preset: name }),
     });
-    presetMsg(ok ? t("msg.presetLoaded") : ((data && data.error) || t("msg.presetLoadFail")), ok);
-    if (ok) fastPollRefresh(4, 500); else refresh();
+    if (ok) {
+      applyBody(PRESETS[name]);
+      $("preset-name").value = name;
+      presetMsg(t("msg.presetLoaded"), true);
+      fastPollRefresh(4, 500);
+    } else {
+      presetMsg((data && data.error) || t("msg.presetLoadFail"), false);
+      refresh();
+    }
   };
   $("btn-preset-save").onclick = async () => {
     const name = $("preset-name").value.trim();

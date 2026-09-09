@@ -2304,6 +2304,17 @@ async def handle_select(request: web.Request) -> web.Response:
     if not isinstance(base, dict):
         return web.json_response({"error": f"Effektset '{name}' nicht gefunden"}, status=404)
 
+    # Ein Set mit bridges-Liste, aus der keine gültige Bridge übrig bleibt (z. B.
+    # von Hand/Upload kaputt gemacht), würde sonst still die alte Konfiguration
+    # behalten – lieber klar ablehnen.
+    raw_bridges = base.get("bridges")
+    if isinstance(raw_bridges, list) and raw_bridges and not _parse_bridges_option(raw_bridges):
+        return web.json_response(
+            {"error": f"Effektset '{name}' hat keine gültigen Bridge-Einträge "
+                      "(bridge_host + area_id fehlen)"},
+            status=400,
+        )
+
     reason = _load_blocked_reason(base)
     if reason:
         return web.json_response(

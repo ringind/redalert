@@ -139,7 +139,7 @@ redalert/                  the app
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.20.0**
+No build system, linter, or test suite. Current version: **1.20.1**
 (integration `manifest.json` versioned separately: **1.2.0**).
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
@@ -515,10 +515,16 @@ gone), "2 · Steuerung" (Start/Stop, Arm, **and** the effect-set controls that
 used to be in section 3 — select / Laden / Herunterladen / Löschen / Speichern
 / Hochladen; no separate "▶ Starten" button any more), and "3 · Parameter"
 (the `section2.intro` + `section2.effects` explanation paragraphs, pinned at
-the bottom). "Laden" (`btn-preset-load`) now `applyBody()`s the set into the
-form **and** calls `POST /select`, showing the result (or the 409 error text)
-in `#preset-msg` (`presetMsg()`, green/red, auto-clears). To persist a
-bridge's `area_id` beyond the panel's Start button, save it in an effect set
+the bottom). "Laden" (`btn-preset-load`) calls `POST /select` **first** and only
+`applyBody()`s the set into the form on success (`preset-name` too) — filling
+the form before the call meant that on a 409 (animation running, different
+`area_id`) the cards showed the new set while the server still held the old one,
+and a following Start silently no-op'd the running bridge (fixed 1.20.1). The
+result / 409 error text goes to `#preset-msg` (`presetMsg()`, green/red); a
+**failure message sticks** (no auto-clear) until the next load, a success one
+clears after 8 s. `POST /select` also 400s a preset whose non-empty `bridges`
+list has no valid entry rather than silently keeping the old config. To persist
+a bridge's `area_id` beyond the panel's Start button, save it in an effect set
 and load that (or put it in the add-on `bridges` option).
 
 **Two Hue API surfaces:** the `hue_entertainment` lib (`EntertainmentSession`,

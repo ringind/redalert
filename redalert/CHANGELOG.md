@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.20.1
+
+- **Fix Web-UI „Laden": geänderte `area_id` wurde bei laufender Animation nicht
+  übernommen.** Der Knopf füllte die Bridge-Karten schon **vor** dem
+  Server-Aufruf. Wurde das Laden dann abgelehnt (Animation läuft, anderer
+  Bereich → `409`), zeigten die Karten bereits das neue Set, der Server hielt
+  aber noch das alte – und ein anschließender „Start" tat nichts (die laufende
+  Bridge wird übersprungen). Jetzt wird zuerst `POST /select` aufgerufen und
+  das Formular **nur bei Erfolg** befüllt; die Fehlermeldung („zuerst /stop")
+  bleibt stehen, bis der nächste Ladeversuch sie ersetzt.
+- `POST /select` lehnt ein Effektset jetzt mit `400` ab, wenn seine
+  `bridges`-Liste keinen gültigen Eintrag (`bridge_host` + `area_id`) enthält,
+  statt still die bisherige Konfiguration zu behalten.
+
 ## 1.20.0
 
 - **Die `area_id` jeder Bridge wird jetzt im Effektset gespeichert.** Ein Set
