@@ -119,7 +119,13 @@ redalert/                  the app
     colour drift period is `sweep_seconds*4` but the brightness "breath" that
     `main.py` layers on top via `RedAlertPulse.periodic` is capped at 12 s
     since 1.16.1, so a very high `sweep_seconds` no longer parks the lamps
-    near `glow_low` for minutes where the bridge renders colour poorly) +
+    near `glow_low` for minutes where the bridge renders colour poorly. Both,
+    plus `RedAlertColorChase`, run every emitted colour through module-level
+    `hue_safe_rgb()` since 1.20.3 — caps saturation+value at 0.92 so a
+    fully-saturated green/cyan/blue held steady for seconds (large
+    `sweep_seconds` / small `gc_speed`) doesn't make the Hue bridge's colour
+    regulation hunt = flicker; effects that emit the fixed bridge `color`
+    (red, in-gamut) are untouched) +
     RedAlertMeteor
     (randomised multi-comet) + RedAlertWipe (fill-and-hold) + RedAlertFirework
     (radiating one-shot bursts) + RedAlertRipple (firework that echoes back) +
@@ -139,7 +145,7 @@ redalert/                  the app
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.20.2**
+No build system, linter, or test suite. Current version: **1.20.3**
 (integration `manifest.json` versioned separately: **1.2.0**).
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`

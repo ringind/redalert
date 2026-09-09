@@ -79,6 +79,42 @@ import random
 
 HUE_16BIT_MAX = 65535
 
+# Vollständig gesättigte, volle Farben (``s≈1``/``v≈1``) – vor allem Grün-,
+# Cyan- und Blautöne – liegen am Rand des Philips-Hue-Farbraums. Hält eine
+# Lampe eine solche Farbe länger als einen Moment ruhig (z. B. ``rainbow`` bei
+# großem ``sweep_seconds`` oder ``color_chase`` bei kleiner ``gc_speed``),
+# beginnt die Echtzeit-Farb-/Helligkeitsregelung der Bridge zu „pendeln" – ein
+# sichtbares Flackern mit ~10–30 Hz. Ein kleiner Rückzug aus der Ecke (Sättigung
+# und Helligkeit der Farbtriple je gedeckelt) hält jede erzeugte Farbe sicher
+# im Gamut, wo sie ruhig steht; der optische Unterschied ist minimal.
+_HUE_SAFE_SAT = 0.92
+_HUE_SAFE_VAL = 0.92
+
+
+def hue_safe_rgb(
+    r: float, g: float, b: float, sat: float = _HUE_SAFE_SAT, val: float = _HUE_SAFE_VAL
+) -> tuple[float, float, float]:
+    """Ein 0..255-Farbtriple in die flimmerfreie Hülle ziehen: Sättigung und
+    Helligkeit werden – nur wenn nötig – auf ``sat``/``val`` gedeckelt. Bereits
+    weiche oder dunkle Farben bleiben praktisch unberührt; die Skalierung ist
+    in jedem Kanal linear, ein glatt rampender Eingang bleibt glatt."""
+    m = max(r, g, b)
+    if m <= 0.0:
+        return (0.0, 0.0, 0.0)
+    lo = min(r, g, b)
+    s = (m - lo) / m
+    if s > sat:
+        k = sat / s  # Chroma zur Grauachse hin skalieren
+        r = m - (m - r) * k
+        g = m - (m - g) * k
+        b = m - (m - b) * k
+        m = max(r, g, b)
+    cap = val * 255.0
+    if m > cap:
+        f = cap / m
+        r, g, b = r * f, g * f, b * f
+    return (r, g, b)
+
 
 class RedAlertComet:
     """Comet running continuously around the channels, dragging a tail.
@@ -564,7 +600,11 @@ class RedAlertAurora:
         self.period_s = max(0.5, period_s)
 
     def colors_for(self, t: float) -> list[tuple[float, float, float]]:
-        """Per-lamp ``(r, g, b)`` in 0..255 (float), blended from the palette."""
+        """Per-lamp ``(r, g, b)`` in 0..255 (float), blended from the palette
+        and pulled just inside the Hue gamut (:func:`hue_safe_rgb`) – the drift
+        is very slow (``period_s`` = ``sweep_seconds × 4``), so a fully
+        saturated blend colour would sit still long enough to make the lamp
+        flicker."""
         n = len(self.palette)
         out: list[tuple[float, float, float]] = []
         for i in range(self.num_lights):
@@ -574,7 +614,10 @@ class RedAlertAurora:
             nxt = (idx + 1) % n
             frac = pos - int(pos)
             c0, c1 = self.palette[idx], self.palette[nxt]
-            out.append(tuple(c0[k] + (c1[k] - c0[k]) * frac for k in range(3)))
+            blended = tuple(c0[k] + (c1[k] - c0[k]) * frac for k in range(3))
+            # Bei großem period_s driftet die Farbe sehr langsam – eine lange
+            # ruhig gehaltene, voll gesättigte Farbe lässt Hue-Lampen flimmern.
+            out.append(hue_safe_rgb(*blended))
         return out
 
 
@@ -593,13 +636,19 @@ class RedAlertRainbow:
         self.period_s = max(0.2, period_s)
 
     def colors_for(self, t: float) -> list[tuple[float, float, float]]:
-        """Per-lamp ``(r, g, b)`` in 0..255 (float), full saturation/value."""
+        """Per-lamp ``(r, g, b)`` in 0..255 (float).
+
+        Colours are pulled just inside the Philips Hue gamut
+        (:func:`hue_safe_rgb`) – at a large ``period_s`` a lamp dwells on one
+        hue for seconds, and a fully saturated green/cyan/blue held that long
+        makes the bridge's colour regulation hunt (visible flicker).
+        """
         n = self.num_lights
         out: list[tuple[float, float, float]] = []
         for i in range(n):
             hue = ((t / self.period_s) + i / n) % 1.0
             r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
-            out.append((r * 255.0, g * 255.0, b * 255.0))
+            out.append(hue_safe_rgb(r * 255.0, g * 255.0, b * 255.0))
         return out
 
 
@@ -612,7 +661,9 @@ class RedAlertColorChase:
     full gradient grows across the array and is pushed out by the next one.
 
     Three palettes run in turn, each a linear ramp from the start colour at
-    chase-index 0 to the fully-mixed colour at the last chase-index:
+    chase-index 0 to the fully-mixed colour at the last chase-index (then
+    pulled just inside the Hue gamut by :func:`hue_safe_rgb`, so a lamp holding
+    a saturated green/cyan/blue for ``num_lights / speed`` s doesn't flicker):
 
     - palette 0: ``(255, 0, 0)`` → ``(255, 255, 0)``  (green ramps up)
     - palette 1: ``(0, 255, 0)`` → ``(0, 255, 255)``  (blue ramps up)
@@ -659,14 +710,21 @@ class RedAlertColorChase:
         return 255.0 * (k / (n - 1)) if n > 1 else 0.0
 
     def _target(self, q: int, k: int) -> tuple[float, float, float]:
-        """Target colour of palette ``q`` (mod 3) at chase-index ``k``."""
+        """Target colour of palette ``q`` (mod 3) at chase-index ``k``.
+
+        Pulled just inside the Hue gamut (:func:`hue_safe_rgb`): each lamp
+        holds its target for ``num_lights / speed`` s, and a fully saturated
+        green/cyan/blue held that long makes Hue lamps flicker.
+        """
         v = self._ramp(k)
         p = q % 3
         if p == 0:
-            return (255.0, v, 0.0)
-        if p == 1:
-            return (0.0, 255.0, v)
-        return (v, 0.0, 255.0)
+            raw = (255.0, v, 0.0)
+        elif p == 1:
+            raw = (0.0, 255.0, v)
+        else:
+            raw = (v, 0.0, 255.0)
+        return hue_safe_rgb(*raw)
 
     def _chase_index(self, i: int, q: int) -> int:
         """Physical lamp ``i`` → chase-index (order the head visits) for palette ``q``."""

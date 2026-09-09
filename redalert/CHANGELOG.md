@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.20.3
+
+- **`rainbow`-Flackern bei großem `sweep_seconds` behoben.** Bei z. B. `sweep_seconds:
+  30` oder `60` verweilt jede Lampe sekundenlang auf einem Farbton. Voll
+  gesättigte Grün-, Cyan- und Blautöne liegen am Rand des Hue-Farbraums; hält
+  eine Lampe so eine Farbe ruhig, beginnt die Farb-/Helligkeitsregelung der
+  Bridge zu „pendeln" – sichtbares Flackern. `rainbow` (und ebenso `aurora` und
+  `color_chase`, die intern Farben erzeugen) zieht jede Farbe jetzt minimal aus
+  der Ecke (Sättigung/Helligkeit je auf 92 % gedeckelt), sodass sie sicher im
+  Gamut liegt und ruhig steht. Der optische Unterschied ist minimal; die
+  restlichen Effekte nutzen die (rote, gamut-interne) Bridge-Farbe und sind
+  unverändert.
+
 ## 1.20.2
 
 - **Nahtloser Effektwechsel bei scharfgeschalteter Bridge.** Endete ein Effekt
