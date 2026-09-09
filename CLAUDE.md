@@ -139,7 +139,7 @@ redalert/                  the app
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.20.1**
+No build system, linter, or test suite. Current version: **1.20.2**
 (integration `manifest.json` versioned separately: **1.2.0**).
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
@@ -193,9 +193,17 @@ curl -s -X POST $B/start -H 'Content-Type: application/json' \
   fixed 1.18.3, `_arm_one` also wraps the idle-frame build). A `/start`
   for an armed bridge reuses that session (`handle_start._resolve` skips creating
   one, `_run_single_bridge` gets `arm_ctx` and skips handshake + snapshot + the
-  `aclose`/`restore` in `finally` — it re-arms the idle loop instead). `/disarm`
+  `aclose`/`restore` in `finally`). When an effect **ends** on an armed bridge the
+  `finally` no longer jumps straight back to the idle still (that flashed the
+  approximated white room-colour between effects, 1.20.2) — it schedules
+  `_arm_idle_fallback` (`arm_ctx["idle_fallback"]`, ~2 s) which sends the idle
+  frame + restarts `_arm_idle_loop` only if no new effect took over meanwhile;
+  the armed-branch top of `_run_single_bridge` cancels a pending `idle_fallback`
+  (and the idle loop) so a quick effect switch is seamless, the stream just
+  holding the last effect frame in between. `/disarm`
   pops `state["armed"]` first, then cancels any running effect task so its
-  `finally` does the `aclose` + `restore_light_state`. `_on_shutdown` (aiohttp
+  `finally` does the `aclose` + `restore_light_state` (both `_disarm_one` and
+  `handle_disarm` also cancel `idle_fallback`). `_on_shutdown` (aiohttp
   `on_shutdown`) stops all tasks and disarms all bridges. `/identify` on an armed
   bridge → 409 (single Entertainment slot). `stop_others=False` on
   `session.start` (via `_session_start`, one-shot retry with `True`) also shaves

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.20.2
+
+- **Nahtloser Effektwechsel bei scharfgeschalteter Bridge.** Endete ein Effekt
+  auf einer scharfen Bridge, sprang der Stream sofort zurück auf das angenäherte
+  Ruhe-Standbild – bei hellem Raumlicht ein kurzes weißes Aufblitzen, bevor der
+  nächste Effekt loslief. Jetzt bleibt nach einem Effekt-Ende der letzte
+  Effekt-Frame ~2 s stehen; startet in dieser Zeit ein neuer Effekt
+  (Effektset-Wechsel), gibt es keinen Zwischenzustand mehr. Läuft nichts nach,
+  kehrt das Standbild wie bisher zurück.
+
 ## 1.20.1
 
 - **Fix Web-UI „Laden": geänderte `area_id` wurde bei laufender Animation nicht

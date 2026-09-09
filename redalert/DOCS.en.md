@@ -222,7 +222,10 @@ While a bridge is armed:
   `/identify` for this bridge are blocked until `/disarm`;
 - its lamps are under stream control and show an **approximated still** of the
   state present at arm time (the exact colours are restored only on `/disarm`
-  via CLIP v2);
+  via CLIP v2). When an effect ends, the last effect frame is held for ~2 s
+  before the still returns – if a new effect starts within that window (e.g.
+  switching effect sets) the transition is seamless, with no brief flash of
+  the still in between;
 - it stays armed until `/disarm` is called or the app restarts (on shutdown
   the app disarms automatically and restores the light state).
 

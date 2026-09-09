@@ -729,6 +729,31 @@ async def _arm_idle_loop(host: str) -> None:
         pass
 
 
+async def _arm_idle_fallback(host: str, delay: float = 2.0) -> None:
+    """Nach Effekt-Ende auf einer scharfen Bridge kurz warten und **dann** –
+    nur falls inzwischen kein neuer Effekt läuft – ins angenäherte
+    Ruhe-Standbild zurückgehen und die Ruhe-Loop wieder aufnehmen.
+
+    Die Frist macht einen unmittelbar folgenden Effekt(wechsel) nahtlos: bis
+    ein neuer Effekt übernimmt hält der Entertainment-Stream einfach den
+    letzten Effekt-Frame, statt das Ruhebild (bei hellem Raumlicht ein weißes
+    Aufblitzen) dazwischenzuschieben."""
+    try:
+        await asyncio.sleep(delay)
+    except asyncio.CancelledError:
+        return
+    ctx = state["armed"].get(host)
+    if ctx is None or _is_running(host):
+        # entschärft, oder ein neuer Effekt hat den Stream übernommen → nahtlos
+        log.debug("Bridge %s: Ruhebild-Rücksprung übersprungen (Effekt übernommen).", host)
+        return
+    with contextlib.suppress(Exception):
+        ctx["session"].send(ctx["idle_frame"])
+    if ctx.get("idle_task") is None or ctx["idle_task"].done():
+        ctx["idle_task"] = asyncio.create_task(_arm_idle_loop(host))
+    log.debug("Bridge %s: nach Effekt-Ende ins Ruhebild zurück (Frist %.1fs).", host, delay)
+
+
 async def _arm_one(cfg: dict) -> dict:
     """Eine Bridge scharfschalten: Area/Kanäle auflösen, Lichtzustand sichern,
     DTLS-Stream öffnen und offen halten. Rückgabe ``{"bridge_host": ...}`` mit
@@ -778,6 +803,10 @@ async def _arm_one(cfg: dict) -> dict:
         "snapshot": snapshot,
         "idle_frame": idle_frame,
         "idle_task": None,
+        # Verzögerter Rücksprung ins Ruhebild nach einem Effekt-Ende (s.
+        # _arm_idle_fallback) – None, solange kein Effekt lief bzw. während
+        # ein Effekt läuft.
+        "idle_fallback": None,
     }
     state["armed"][host]["idle_task"] = asyncio.create_task(_arm_idle_loop(host))
     log.info("Bridge %s scharfgeschaltet (Stream offen, %d Kanäle).", host, len(channel_ids))
@@ -790,11 +819,12 @@ async def _disarm_one(host: str) -> bool:
     ctx = state["armed"].pop(host, None)
     if not ctx:
         return False
-    idle_task = ctx.get("idle_task")
-    if idle_task and not idle_task.done():
-        idle_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await idle_task
+    for key in ("idle_task", "idle_fallback"):
+        t = ctx.get(key)
+        if t and not t.done():
+            t.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await t
     with contextlib.suppress(Exception):
         await ctx["session"].aclose()
     await restore_light_state(host, ctx["app_key"], ctx["snapshot"])
@@ -1177,14 +1207,17 @@ async def _run_single_bridge(
     state["run_ctx"][host] = ctx
     try:
         if arm_ctx is not None:
-            # Scharfe Bridge: Stream läuft schon, Snapshot liegt vor. Nur die
-            # Ruhe-Loop pausieren, damit sie nicht um session.send() konkurriert.
+            # Scharfe Bridge: Stream läuft schon, Snapshot liegt vor. Ruhe-Loop
+            # und einen evtl. noch laufenden Ruhebild-Rücksprung (aus dem Ende
+            # eines vorherigen Effekts) abbrechen – dieser Effekt übernimmt den
+            # Stream jetzt, ohne das Ruhebild dazwischen.
             snapshot = arm_ctx["snapshot"]
-            idle_task = arm_ctx.get("idle_task")
-            if idle_task and not idle_task.done():
-                idle_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await idle_task
+            for key in ("idle_task", "idle_fallback"):
+                t = arm_ctx.get(key)
+                if t and not t.done():
+                    t.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await t
         else:
             # Vor dem Streaming den aktuellen Lichtzustand dieser Bridge sichern –
             # parallel zum Handshake (der dominiert die Zeit, ~1,5–9 s).
@@ -1343,13 +1376,15 @@ async def _run_single_bridge(
         if state["run_ctx"].get(host) is ctx:
             state["run_ctx"].pop(host, None)
         if arm_ctx is not None and host in state["armed"]:
-            # Bridge weiterhin scharf: Stream offen lassen, ins Ruhebild
-            # zurückgehen und die Ruhe-Loop wieder aufnehmen.
+            # Bridge weiterhin scharf: Stream offen lassen. **Nicht** sofort ins
+            # Ruhebild springen – erst nach einer kurzen Frist (_arm_idle_fallback),
+            # damit ein direkt folgender Effekt(wechsel) nahtlos ist (kein weißes
+            # Aufblitzen des angenäherten Standbilds dazwischen). Bis dahin hält
+            # der Stream den letzten Effekt-Frame.
             live = state["armed"][host]
-            with contextlib.suppress(Exception):
-                live["session"].send(live["idle_frame"])
-            if live.get("idle_task") is None or live["idle_task"].done():
-                live["idle_task"] = asyncio.create_task(_arm_idle_loop(host))
+            fb = live.get("idle_fallback")
+            if fb is None or fb.done():
+                live["idle_fallback"] = asyncio.create_task(_arm_idle_fallback(host))
         else:
             await ctx["session"].aclose()
             # Nach dem Ende des Streams den gesicherten Lichtzustand zurückschreiben.
@@ -2257,8 +2292,10 @@ async def handle_disarm(request: web.Request) -> web.Response:
             # dessen finally sieht „nicht mehr scharf" und übernimmt aclose() +
             # restore_light_state selbst.
             ctx = state["armed"].pop(host, None)
-            if ctx and ctx.get("idle_task") and not ctx["idle_task"].done():
-                ctx["idle_task"].cancel()
+            for key in ("idle_task", "idle_fallback"):
+                t = ctx.get(key) if ctx else None
+                if t and not t.done():
+                    t.cancel()
             task = state["tasks"].get(host)
             if task and not task.done():
                 task.cancel()

@@ -227,7 +227,10 @@ Solange eine Bridge scharf ist:
   bzw. `/identify` für diese Bridge sind blockiert, bis `/disarm`;
 - stehen ihre Lampen unter Stream-Kontrolle und zeigen ein **angenähertes
   Standbild** des Zustands, der beim Scharfschalten geherrscht hat (die exakten
-  Farben werden erst bei `/disarm` per CLIP v2 wiederhergestellt);
+  Farben werden erst bei `/disarm` per CLIP v2 wiederhergestellt). Endet ein
+  Effekt, bleibt der letzte Effekt-Frame ~2 s stehen, bevor das Standbild
+  zurückkehrt – startet in dieser Zeit ein neuer Effekt (z. B. Effektset-
+  Wechsel), ist der Übergang nahtlos, ohne dass das Standbild kurz aufblitzt;
 - bleibt sie scharf, bis `/disarm` aufgerufen wird oder die App neu startet
   (beim Herunterfahren entschärft die App automatisch und stellt den
   Lichtzustand wieder her).
