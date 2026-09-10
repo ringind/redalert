@@ -148,6 +148,7 @@ Bridge nach dem Stream-Ende).
 
 | Option          | Typ                | Standard   | Bedeutung |
 |-----------------|--------------------|------------|-----------|
+| `api_token`     | String             | `""` (auto) | Token für den Zugriff auf die REST-API von außerhalb (HA-Integration, `rest_command`). Leer lassen: Das Add-on erzeugt beim ersten Start selbst einen Token, trägt ihn hier ein (sichtbar nach einem Reload des Konfigurationsdialogs) und schreibt ihn ins Add-on-Log. Zugriffe über Ingress (Web-UI) brauchen keinen Token. |
 | `bridges`       | Liste (max. 3)     | `[]`       | Eine Zeile pro Bridge: `bridge_host` (IP), `area_id` (Schritt 1), optional `channel_order` sowie je Bridge optional `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors`, `gc_direction`, `gc_strip_lengths`, `gc_count`, `gc_length`, `gc_speed`, `gc_background_color`, `gc_chase_glitter`, `gc_background_pulse`, `color2`, `lightning_interval_ms`, `lightning_flash_ms`, `meteor_count`, `meteor_speed`, `firework_interval_ms`, `firework_speed`, `ripple_interval_ms`, `ripple_speed`, `wave_length`, `flicker_interval_ms`, `flicker_dip_ms` (überschreiben die gleichnamige Option unten nur für diese Bridge). |
 | `effect`        | `pulse` \| `comet` \| `glitter` \| `police` \| `lightning` \| `heartbeat` \| `aurora` \| `rainbow` \| `meteor` \| `wipe` \| `firework` \| `ripple` \| `wave` \| `flicker` \| `strobe` \| `duel` \| `chase` \| `color_chase` \| `neutral` | `pulse`    | Standard-Lichteffekt für Bridges ohne eigene Einstellung, siehe oben. `neutral` sinnvoll nur je Bridge. |
 | `color`         | Hex-String         | `#FF0000`  | Standard-Farbe für Bridges ohne eigene Einstellung. |
@@ -187,8 +188,20 @@ Bridge nach dem Stream-Ende).
 
 ## REST-API
 
-Erreichbar unter `http://<ha-ip>:8099` (Port) bzw. über Ingress (relativ zum
-Panel-Pfad).
+**Zugang (seit 2.0.0):** Das Add-on veröffentlicht **keinen LAN-Port** mehr.
+Die API ist nur noch erreichbar
+
+- über **Ingress** (das Web-UI, relativ zum Panel-Pfad) – ohne Token, und
+- über das **interne Docker-Netz von Home Assistant** unter
+  `http://<add-on-hostname>:8099` (der Hostname steht auf der Add-on-Seite unter
+  *Info*, z. B. `local-redalert` oder `<repo>-redalert`).
+
+Jeder Aufruf, der **nicht** über Ingress kommt (HA-Integration, `rest_command`,
+`curl` aus dem HA-Container), braucht den Header
+`Authorization: Bearer <api_token>` (ersatzweise `?api_token=<token>` als
+Query). Ohne/falsch → `401`. Den Token zeigt die Add-on-Konfiguration bzw. das
+Add-on-Log beim ersten Start; die **Home-Assistant-Integration übernimmt ihn
+unter Supervisor automatisch** (siehe unten).
 
 | Endpoint  | Methode | Zweck |
 |-----------|---------|-------|
@@ -281,8 +294,10 @@ gelistet: HACS → *Benutzerdefinierte Repositories* →
 `https://github.com/ringind/redalert`, Kategorie *Integration*) oder manuell
 (Ordner nach `config/custom_components/` kopieren). Danach HA neu starten,
 dann **Einstellungen → Geräte & Dienste → Integration hinzufügen → „Red Alert
-Entertainment App“** (Host + Port 8099). Details: das `README.md` in
-diesem Ordner.
+Entertainment App“**. Unter Supervisor werden **Host und API-Token automatisch
+erkannt** – nur bestätigen; sonst Host (`<add-on-hostname>`), Port `8099` und
+den API-Token aus der Add-on-Konfiguration eintragen. Details: das `README.md`
+in diesem Ordner.
 
 **Ohne Zusatzinstallation:** die REST-API (siehe oben) lässt sich auch direkt
 über die eingebaute **[`rest_command`](https://www.home-assistant.io/integrations/rest_command/)**-
@@ -307,30 +322,42 @@ ein template-seitiger Default (z. B. `0`) das ungewollt überschreibt.
 
 ### `configuration.yaml`
 
+`<add-on-hostname>` steht auf der Add-on-Seite unter *Info* (z. B.
+`local-redalert` oder `<repo>-redalert`); `<api_token>` in der
+Add-on-Konfiguration. Der `Authorization`-Header ist seit App-2.0.0 **Pflicht**
+(ohne ihn `401`). Am übersichtlichsten in `secrets.yaml`:
+`redalert_token: "…"` und dann `!secret redalert_token`.
+
 ```yaml
 rest_command:
   # Startet mit den in der App konfigurierten Standardwerten (Options bzw. Web-UI).
   redalert_start:
-    url: "http://<ha-ip>:8099/start"
+    url: "http://<add-on-hostname>:8099/start"
     method: POST
     content_type: "application/json"
+    headers:
+      Authorization: "Bearer <api_token>"
     payload: '{}'   # Dauer ohne Angabe: Standard aus der App-Option duration
 
   # Startet ein gespeichertes Effektset (Web-UI „2 · Steuerung“ bzw. PUT /presets).
   # Aufruf z. B. mit data: {preset: "Star Trek – Alarmstufe Rot"}
   # optional zusätzlich data: {duration: 30} um die Dauer für diesen einen Aufruf zu übersteuern.
   redalert_start_preset:
-    url: "http://<ha-ip>:8099/start"
+    url: "http://<add-on-hostname>:8099/start"
     method: POST
     content_type: "application/json"
+    headers:
+      Authorization: "Bearer <api_token>"
     payload: >-
       {"preset": {{ preset | to_json }}
       {%- if duration is defined %}, "duration": {{ duration | float }}{% endif -%}
       }
 
   redalert_stop:
-    url: "http://<ha-ip>:8099/stop"
+    url: "http://<add-on-hostname>:8099/stop"
     method: POST
+    headers:
+      Authorization: "Bearer <api_token>"
 ```
 
 Nach dem Speichern **Entwicklerwerkzeuge → YAML → Alle YAML-Konfigurationen neu
@@ -403,9 +430,11 @@ Effekt und Farbe unabhängig vom konfigurierten Standard setzen:
 ```yaml
 rest_command:
   redalert_start_custom:
-    url: "http://<ha-ip>:8099/start"
+    url: "http://<add-on-hostname>:8099/start"
     method: POST
     content_type: "application/json"
+    headers:
+      Authorization: "Bearer <api_token>"
     payload: >-
       {"effect": {{ effect | to_json }}, "color": {{ color | to_json }}
       {%- if duration is defined %}, "duration": {{ duration | float }}{% endif -%}
@@ -474,6 +503,9 @@ Panels landen in der Browser-Konsole.)
 | Symptom | Ursache / Lösung |
 |---------|------------------|
 | `/pair` schlägt fehl | Link-Button nicht rechtzeitig gedrückt (~30 s) oder falsche IP. |
+| Aufruf → `401` „Nicht autorisiert" | Seit 2.0.0 braucht jeder Zugriff außerhalb von Ingress den Header `Authorization: Bearer <api_token>`. Token in der Add-on-Konfiguration bzw. im Add-on-Log; in der HA-Integration ins Feld „API-Token" (unter Supervisor meist automatisch vorbelegt). |
+| HA-Integration wird nach dem Update auf 2.0.0 „nicht bereit" | Der bestehende Config-Eintrag hat noch keinen Token und zeigt auf die alte LAN-IP. Eintrag entfernen und neu hinzufügen (Host/Token werden unter Supervisor automatisch erkannt). |
+| Add-on-Hostname für `rest_command` unbekannt | Add-on-Seite → *Info* (Feld „Hostname", z. B. `local-redalert`); alternativ im Add-on-Log die Startzeile. |
 | `/start` → `already_running` | Diese Bridge (bzw. bei einem Aufruf ohne `bridge_host` alle angefragten) läuft schon. Erst `/stop` aufrufen, oder – ohne `bridge_host` – einfach nochmal `/start`: bereits laufende Bridges werden übersprungen (`skipped_bridges`), nur die übrigen neu gestartet. |
 | `/start` → 404 `area_id nicht gefunden` | `/areas` prüfen – Bereich evtl. umbenannt/gelöscht. |
 | `/start` → 404 `Effektset '…' nicht gefunden` | `preset`-Name stimmt nicht exakt (Groß-/Kleinschreibung, Leerzeichen) mit einem gespeicherten Set überein – `GET /presets` bzw. Web-UI-Dropdown „2 · Steuerung“ prüfen. |

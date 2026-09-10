@@ -3,12 +3,16 @@
     "step": {
       "user": {
         "title": "Red Alert Entertainment App",
-        "description": "Adresse der App (nicht Ingress – der feste Port aus der App-Konfiguration, Standard 8099).",
+        "description": "Unter Supervisor werden das Add-on und sein API-Token automatisch erkannt – nur bestätigen. Sonst Host und Port (interner Port 8099) sowie den API-Token aus der Add-on-Konfiguration / dem Add-on-Log eintragen.",
         "data": {
           "host": "Host / IP",
           "port": "Port",
+          "api_token": "API-Token",
           "ssl": "SSL verwenden",
           "verify_ssl": "SSL-Zertifikat prüfen"
+        },
+        "data_description": {
+          "api_token": "Steht in der Add-on-Konfiguration und wird beim ersten Start ins Add-on-Log geschrieben. Nur leer lassen, wenn die App ohne Authentifizierung erreichbar ist (z. B. eigenständige Installation)."
         }
       }
     },

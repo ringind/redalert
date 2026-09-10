@@ -16,7 +16,14 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import RedAlertApiClient, RedAlertApiError
-from .const import CONF_HOST, CONF_PORT, CONF_SSL, CONF_VERIFY_SSL, DOMAIN
+from .const import (
+    CONF_API_TOKEN,
+    CONF_HOST,
+    CONF_PORT,
+    CONF_SSL,
+    CONF_VERIFY_SSL,
+    DOMAIN,
+)
 from .coordinator import RedAlertDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -36,7 +43,7 @@ def _base_url(entry: ConfigEntry) -> str:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     session = async_get_clientsession(hass, verify_ssl=entry.data.get(CONF_VERIFY_SSL, True))
-    client = RedAlertApiClient(session, _base_url(entry))
+    client = RedAlertApiClient(session, _base_url(entry), entry.data.get(CONF_API_TOKEN))
     coordinator = RedAlertDataUpdateCoordinator(hass, client)
 
     try:

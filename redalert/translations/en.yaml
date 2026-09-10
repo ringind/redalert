@@ -1,4 +1,11 @@
 configuration:
+  api_token:
+    name: API token
+    description: >-
+      Token for accessing the REST API from outside (HA integration,
+      rest_command). Leave empty: on first start the add-on generates a token,
+      fills it in here and writes it to the log. Access via Ingress (web UI)
+      needs no token.
   bridges:
     name: Hue Bridges
     description: >-
@@ -408,5 +415,3 @@ configuration:
   log_level:
     name: Log level
     description: Verbosity of the app log (trace, debug, info, notice, warning, error, fatal).
-network:
-  8099/tcp: REST API and web UI (only needed for access outside Ingress, e.g. rest_command)

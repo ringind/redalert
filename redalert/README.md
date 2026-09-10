@@ -15,15 +15,16 @@ Vollständige Anleitung: siehe **[DOCS.md](DOCS.md)** (wird in HA als Tab
 - **Steuerung**: Seitenleisten-Panel „Red Alert“ (Ingress) – Pairing/Bereiche
   je Bridge (bis zu 3), optional eigener Effekt/Farbe/Timing je Bridge;
   Dauer/fps und Start/Stop gemeinsam für alle Bridges.
-- **REST-API** auf Port `8099`: `/health`, `/config`, `/pair`, `/areas`,
-  `/start`, `/stop` – für `rest_command`-Automationen.
+- **REST-API** (`/health`, `/config`, `/pair`, `/areas`, `/start`, `/stop`, …):
+  seit 2.0.0 ohne LAN-Port – nur über Ingress bzw. das interne Docker-Netz
+  (`http://<add-on-hostname>:8099`) und mit `Authorization: Bearer <api_token>`.
 - Container-HEALTHCHECK auf `/health`, s6-Supervision, DE/EN-Übersetzung.
 
 ## Dateien
 
 | Datei | Zweck |
 |-------|-------|
-| `config.yaml` | App-Manifest (Optionen, Ingress, Ports). |
+| `config.yaml` | App-Manifest (Optionen, Ingress, `hassio_api`). |
 | `build.yaml` | Basis-Images (`home-assistant/base-python`). |
 | `Dockerfile` | Image-Build. |
 | `translations/` | Beschriftung der Konfigurationsoberfläche (de/en). |

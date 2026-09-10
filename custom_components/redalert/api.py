@@ -26,9 +26,15 @@ class RedAlertApiError(Exception):
 class RedAlertApiClient:
     """Spricht mit einer laufenden Red-Alert-App-Instanz."""
 
-    def __init__(self, session: aiohttp.ClientSession, base_url: str) -> None:
+    def __init__(
+        self,
+        session: aiohttp.ClientSession,
+        base_url: str,
+        token: str | None = None,
+    ) -> None:
         self._session = session
         self._base_url = base_url.rstrip("/")
+        self._token = (token or "").strip() or None
 
     @property
     def base_url(self) -> str:
@@ -36,9 +42,10 @@ class RedAlertApiClient:
 
     async def _request(self, method: str, path: str, json: dict | None = None) -> dict[str, Any]:
         url = f"{self._base_url}{path}"
+        headers = {"Authorization": f"Bearer {self._token}"} if self._token else None
         try:
             async with asyncio.timeout(REQUEST_TIMEOUT):
-                async with self._session.request(method, url, json=json) as resp:
+                async with self._session.request(method, url, json=json, headers=headers) as resp:
                     # Die App antwortet auch bei Fehlern (400/404/502) mit
                     # einem JSON-Body ({"error": "..."}) – trotzdem einlesen,
                     # damit die Fehlermeldung im Log/UI landet.

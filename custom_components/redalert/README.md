@@ -27,6 +27,12 @@ Sechs plus eine Entity je gepaarter Bridge hängen an einem gemeinsamen Gerät
 > z. B. `…_betriebszustand`) verschwinden. Verweise in Automationen und
 > Dashboards entsprechend anpassen.
 
+> **Update auf ≥ 2.0.0 (App 2.0.0):** Die App-REST-API braucht jetzt einen
+> **API-Token** und ist nicht mehr über einen LAN-Port erreichbar. Ein
+> bestehender Config-Eintrag wird nach dem Update „nicht bereit" (falscher
+> Host, kein Token) – **Eintrag entfernen und neu hinzufügen**. Unter Supervisor
+> werden Add-on-Host und Token dann automatisch erkannt.
+
 ## Installation
 
 ### Über HACS (empfohlen)
@@ -58,11 +64,19 @@ danach: `config/custom_components/redalert/…`), Home Assistant neu starten.
 ## Einrichten
 
 **Einstellungen → Geräte & Dienste → Integration hinzufügen → „Red Alert
-Entertainment App“.** Abgefragt werden:
+Entertainment App“.**
 
-- **Host / IP** – z. B. `homeassistant.local` oder die IP des HA-Hosts (**nicht**
-  der Ingress-Pfad – der feste REST-Port).
-- **Port** – Standard `8099` (App-Tab „Netzwerk“, falls dort umgemappt).
+Läuft Home Assistant unter **Supervisor**, sucht der Dialog das Add-on über die
+Supervisor-API und **belegt Host und API-Token automatisch vor** – in der Regel
+reicht Bestätigen. Andernfalls (oder wenn die Erkennung scheitert) manuell:
+
+- **Host / IP** – der Add-on-Hostname (Add-on-Seite → *Info*, z. B.
+  `local-redalert`) bzw. bei eigenständiger Installation Host/IP der App.
+  **Nicht** der Ingress-Pfad.
+- **Port** – interner Port `8099`.
+- **API-Token** – steht in der Add-on-Konfiguration (Feld „API-Token") und im
+  Add-on-Log beim ersten Start. Nur leer lassen, wenn die App ohne
+  Authentifizierung läuft.
 - **SSL** / **SSL-Zertifikat prüfen** – nur relevant, falls die App hinter
   einem eigenen TLS-Reverse-Proxy läuft; im Normalfall beides aus/an lassen
   (kein SSL).

@@ -152,12 +152,14 @@ and add this GitHub repository's URL. The app then appears in the store as
 ## 3. Pair with Each Bridge Once
 
 Press the physical link button on the Hue Bridge, then pair **within
-~30 seconds** – either in the web UI (sidebar **Red Alert** → bridge card
-under "1 · Bridges") or via REST, for each bridge individually:
+~30 seconds**. Easiest in the web UI (sidebar **Red Alert** → bridge card
+under "1 · Bridges"). Via REST it only works from inside the HA container now
+(no LAN port) and needs the API token:
 
 ```bash
-curl -X POST http://<home-assistant-ip>:8099/pair \
+curl -X POST http://<addon-hostname>:8099/pair \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <api_token>" \
   -d '{"bridge_host": "192.168.1.50"}'
 ```
 
@@ -169,8 +171,11 @@ the app completely.
 ## 4. Determine Area ID and Channel Order
 
 ```bash
-curl "http://<home-assistant-ip>:8099/areas?bridge_host=192.168.1.50"
+curl -H "Authorization: Bearer <api_token>" \
+  "http://<addon-hostname>:8099/areas?bridge_host=192.168.1.50"
 ```
+
+(or "Load areas" in the web UI – no token there.)
 
 Returns e.g.:
 
@@ -193,6 +198,7 @@ Restart the app after changing options.
 
 | Option           | Type          | Default | Meaning                                                       |
 |-------------------|--------------|----------|-------------------------------------------------------------------|
+| `api_token`       | String        | empty (auto) | Token for REST access from outside (HA integration, `rest_command`). Leave empty: on first start the add-on generates one, fills it in here and writes it to the add-on log. Ingress (web UI) needs no token. |
 | `bridges`         | List (max. 3) | empty   | One row per bridge: `bridge_host` (IP), `area_id` (see step 4), optional `channel_order`, plus optional per-bridge `effect`, `color`, `sweep_seconds`, `chase_pause`, `attack_ms`, `release_ms`, `glow_low`, `glow_high`, `glitter_interval_ms`, `glitter_flash_ms`, `glitter_colors`, `gc_direction`, `gc_strip_lengths`, `gc_count`, `gc_length`, `gc_speed`, `gc_background_color`, `gc_chase_glitter`, `gc_background_pulse`, `color2`, `lightning_interval_ms`, `lightning_flash_ms`, `meteor_count`, `meteor_speed`, `firework_interval_ms`, `firework_speed`, `ripple_interval_ms`, `ripple_speed`, `wave_length`, `flicker_interval_ms`, `flicker_dip_ms` (override the like-named option below only for this bridge). |
 | `effect`          | `pulse`\|`comet`\|`glitter`\|`police`\|`lightning`\|`heartbeat`\|`aurora`\|`rainbow`\|`meteor`\|`wipe`\|`firework`\|`ripple`\|`wave`\|`flicker`\|`strobe`\|`duel`\|`chase`\|`neutral` | `pulse` | Default for bridges without their own setting, see §8 for all effects in detail. `neutral` (only useful per bridge) = bridge is not driven. |
 | `color`           | Hex string    | `#FF0000`| Default colour for bridges without their own setting.                |
@@ -231,6 +237,13 @@ Restart the app after changing options.
 | `log_level`       | List          | `info`   | Verbosity of the app log (`trace`…`fatal`).           |
 
 ## 6. REST API
+
+**Access (since 2.0.0):** no LAN port any more. Reachable via **Ingress** (web
+UI, no token) and over the **internal Docker network** at
+`http://<addon-hostname>:8099` (hostname on the add-on page under *Info*). Every
+call outside Ingress needs the header `Authorization: Bearer <api_token>` (or
+`?api_token=…`), otherwise `401`. The HA integration adopts the token
+automatically under Supervisor.
 
 | Endpoint  | Method  | Purpose                                                                                 |
 |-----------|---------|-----------------------------------------------------------------------------------------|
@@ -272,22 +285,28 @@ Install via **HACS** (repo category *Integration*, add as a custom
 repository – `hacs.json` at the repo root) or manually (copy the folder to
 `config/custom_components/`); then restart HA and go to
 **Settings → Devices & Services → Add Integration → "Red Alert
-Entertainment App"**. Details in
+Entertainment App"**. Under Supervisor host and API token are detected
+automatically – just confirm. Details in
 [`custom_components/redalert/README.md`](custom_components/redalert/README.md).
 
-**Without extra installation** – `configuration.yaml`:
+**Without extra installation** – `configuration.yaml` (`<addon-hostname>` from
+the add-on page under *Info*, `<api_token>` from the add-on configuration):
 
 ```yaml
 rest_command:
   redalert_start:
-    url: "http://<home-assistant-ip>:8099/start"
+    url: "http://<addon-hostname>:8099/start"
     method: POST
     content_type: "application/json"
+    headers:
+      Authorization: "Bearer <api_token>"
     payload: '{}'   # duration omitted: default from the duration app option
 
   redalert_stop:
-    url: "http://<home-assistant-ip>:8099/stop"
+    url: "http://<addon-hostname>:8099/stop"
     method: POST
+    headers:
+      Authorization: "Bearer <api_token>"
 ```
 
 Example automation combining sound and light for the namesake red-alert
@@ -577,7 +596,7 @@ App Store repository: `repository.yaml` at the root, the app itself in the
 │   │                             technical entity IDs, see the README there)
 │   └── brand/icon.png, brand/logo.png  copies of the store graphics (for the HA UI)
 ├── redalert/                   >>> the actual app <<<
-│   ├── config.yaml              manifest: options, ingress, ports
+│   ├── config.yaml              manifest: options, ingress (no LAN port)
 │   ├── build.yaml               base images (home-assistant/base-python)
 │   ├── Dockerfile               image build
 │   ├── requirements.txt         Python dependencies (hue-entertainment, aiohttp)

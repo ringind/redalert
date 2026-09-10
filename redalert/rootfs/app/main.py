@@ -42,9 +42,11 @@ Server mit einem Fehler (409).
 
 import asyncio
 import contextlib
+import hmac
 import json
 import logging
 import os
+import secrets
 from pathlib import Path
 
 import aiohttp
@@ -88,6 +90,18 @@ DATA_DIR = Path(os.environ.get("REDALERT_DATA_DIR", "/data"))
 CRED_FILE = DATA_DIR / "credentials.json"
 OPTIONS_FILE = DATA_DIR / "options.json"
 PRESETS_FILE = DATA_DIR / "presets.json"
+API_TOKEN_FILE = DATA_DIR / "api_token"
+
+# Die Supervisor-API ist nur aus dem Add-on-Container heraus erreichbar und nur,
+# wenn HA das Add-on unter Supervisor betreibt (SUPERVISOR_TOKEN gesetzt).
+SUPERVISOR_TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
+
+# Von der Auth-Middleware ungeprüft durchgelassene Gegenstellen: der Loopback
+# (Docker-HEALTHCHECK curlt localhost) und der Ingress-Proxy des Supervisors.
+# Alles andere – auch die HA-Integration über das interne hassio-Netz und jeder
+# rest_command – braucht „Authorization: Bearer <api_token>".
+_AUTH_EXEMPT_IPS = {"127.0.0.1", "::1", "::ffff:127.0.0.1"}
+_INGRESS_PEER_IP = "172.30.32.2"
 
 APP_DIR = Path(__file__).parent
 PANEL_HTML = (APP_DIR / "panel.html").read_text(encoding="utf-8")
@@ -133,6 +147,76 @@ def hex_to_rgb(value: str) -> tuple[int, int, int]:
 
 
 options = load_json(OPTIONS_FILE, {})
+
+
+def _resolve_api_token() -> str:
+    """Token für die REST-API bestimmen: explizite Option ``api_token`` schlägt
+    alles; sonst ein einmal erzeugter, in ``/data/api_token`` persistierter
+    Zufallswert (bleibt über Neustarts/Updates stabil, ohne dass der Nutzer
+    etwas eintragen muss)."""
+    opt = str(options.get("api_token") or "").strip()
+    if opt:
+        return opt
+    with contextlib.suppress(OSError):
+        existing = API_TOKEN_FILE.read_text(encoding="utf-8").strip()
+        if existing:
+            return existing
+    token = secrets.token_urlsafe(32)
+    with contextlib.suppress(OSError):
+        API_TOKEN_FILE.write_text(token, encoding="utf-8")
+        API_TOKEN_FILE.chmod(0o600)
+    return token
+
+
+API_TOKEN = _resolve_api_token()
+
+
+async def _publish_token_to_addon_options() -> None:
+    """Den erzeugten Token best-effort in die eigenen Add-on-Optionen schreiben,
+    damit er (a) im Add-on-Konfigurationsdialog sichtbar ist und (b) die
+    HA-Integration ihn über die Supervisor-API auslesen und sich selbst
+    einrichten kann. Schlägt außerhalb von Supervisor bzw. ohne ausreichende
+    Rechte fehl – dann bleibt der Token im Log und in ``/data/api_token``."""
+    if not SUPERVISOR_TOKEN:
+        return
+    headers = {"Authorization": f"Bearer {SUPERVISOR_TOKEN}"}
+    timeout = aiohttp.ClientTimeout(total=10)
+    try:
+        async with aiohttp.ClientSession(timeout=timeout) as sess:
+            async with sess.get("http://supervisor/addons/self/info", headers=headers) as resp:
+                if resp.status != 200:
+                    log.warning("Supervisor /addons/self/info → HTTP %s; API-Token nicht veröffentlicht.", resp.status)
+                    return
+                current = ((await resp.json()).get("data") or {}).get("options") or {}
+            if str(current.get("api_token") or "").strip() == API_TOKEN:
+                return
+            merged = {**current, "api_token": API_TOKEN}
+            async with sess.post(
+                "http://supervisor/addons/self/options", headers=headers, json={"options": merged}
+            ) as resp:
+                if resp.status != 200:
+                    log.warning("Supervisor /addons/self/options → HTTP %s; API-Token nicht veröffentlicht.", resp.status)
+                    return
+        log.info("API-Token in die Add-on-Optionen geschrieben (für Add-on-Dialog & Integration).")
+    except Exception as exc:  # noqa: BLE001 – best effort, niemals den Start blockieren
+        log.warning("API-Token konnte nicht in die Add-on-Optionen geschrieben werden: %s", exc)
+
+
+@web.middleware
+async def _auth_middleware(request: web.Request, handler):
+    """Alles außer Loopback und Ingress-Proxy braucht ``Authorization: Bearer
+    <api_token>`` (ersatzweise ``?api_token=``). Ohne/falsch → 401."""
+    peer = request.remote or ""
+    if peer in _AUTH_EXEMPT_IPS or peer == _INGRESS_PEER_IP:
+        return await handler(request)
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:].strip() if auth.startswith("Bearer ") else request.query.get("api_token", "")
+    if token and hmac.compare_digest(token, API_TOKEN):
+        return await handler(request)
+    return web.json_response(
+        {"error": "Nicht autorisiert – 'Authorization: Bearer <api_token>' fehlt oder ist falsch."},
+        status=401,
+    )
 
 
 _EFFECTS = (
@@ -507,6 +591,12 @@ log.info(
     state["duration"],
     sorted(state["presets"].keys()) or "(keine)",
 )
+log.info(
+    "REST-API-Zugang: Ingress & Loopback frei, sonst 'Authorization: Bearer <api_token>'. "
+    "API-Token: %s",
+    API_TOKEN,
+)
+
 if state["bridges"]:
     paired = [b["bridge_host"] for b in state["bridges"] if b["bridge_host"] in state["credentials"]]
     log.info("%d/%d konfigurierte Bridges bereits gepaart: %s", len(paired), len(state["bridges"]), paired)
@@ -2431,6 +2521,9 @@ async def _on_shutdown(app: web.Application) -> None:
     """Beim Herunterfahren (SIGTERM durch HA) laufende Effekte stoppen und alle
     scharfen Bridges entschärfen – sonst blieben Streams offen und der
     Lichtzustand nicht wiederhergestellt."""
+    pub = app.get("token_publish_task")
+    if pub and not pub.done():
+        pub.cancel()
     running = [t for t in state["tasks"].values() if not t.done()]
     for t in running:
         t.cancel()
@@ -2441,8 +2534,15 @@ async def _on_shutdown(app: web.Application) -> None:
             await _disarm_one(host)
 
 
+async def _on_startup(app: web.Application) -> None:
+    # Nicht awaiten: der Supervisor-Aufruf darf den Serverstart weder verzögern
+    # noch (falls er die Add-on-Optionen ändert und einen Neustart auslöst)
+    # mitten im on_startup abbrechen.
+    app["token_publish_task"] = asyncio.create_task(_publish_token_to_addon_options())
+
+
 def create_app() -> web.Application:
-    app = web.Application()
+    app = web.Application(middlewares=[_auth_middleware])
     app.router.add_get("/", handle_panel)
     app.router.add_get("/health", handle_health)
     app.router.add_get("/config", handle_config)
@@ -2458,6 +2558,7 @@ def create_app() -> web.Application:
     app.router.add_put("/presets", handle_presets_put)
     app.router.add_post("/presets", handle_presets_put)
     app.router.add_delete("/presets", handle_presets_delete)
+    app.on_startup.append(_on_startup)
     app.on_shutdown.append(_on_shutdown)
     return app
 

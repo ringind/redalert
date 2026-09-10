@@ -32,7 +32,9 @@ für sofortigen Start), `select` (Effektset laden – schaltet laufende/scharfe 
 2. „Red Alert Entertainment“ in HACS suchen → **Herunterladen**.
 3. Home Assistant neu starten.
 4. **Einstellungen → Geräte & Dienste → Integration hinzufügen** → „Red Alert
-   Entertainment App“ suchen, Host + Port der App eingeben (Standard `8099`).
+   Entertainment App“ suchen. Unter Supervisor werden Add-on-Host und API-Token
+   automatisch erkannt – sonst Host, Port `8099` und den API-Token aus der
+   Add-on-Konfiguration eintragen.
 
 **Voraussetzung:** die App **Red Alert Entertainment** muss bereits
 installiert und erreichbar sein – sie ist kein Bestandteil dieser Integration

@@ -1,5 +1,31 @@
 # Changelog
 
+## 2.0.0
+
+**Breaking – REST-API abgesichert (HA-üblicher Standard).**
+
+- **Kein LAN-Port mehr.** Die App veröffentlicht `8099` nicht mehr auf den
+  Host (`ports:` aus `config.yaml` entfernt). Die REST-API ist nur noch über
+  **Ingress** (Web-UI, ohne Token) und über das **interne Docker-Netz von Home
+  Assistant** erreichbar (`http://<add-on-hostname>:8099`).
+- **API-Token-Pflicht.** Jeder Aufruf, der nicht über Ingress kommt
+  (HA-Integration, `rest_command`, `curl` aus dem HA-Container), braucht den
+  Header `Authorization: Bearer <api_token>` (ersatzweise `?api_token=…`).
+  Loopback (Container-HEALTHCHECK) und der Ingress-Proxy sind ausgenommen.
+  Fehlt/falsch → `401`.
+- Neue Option **`api_token`**: leer lassen – die App erzeugt beim ersten Start
+  selbst einen Token, schreibt ihn ins Add-on-Log und (best effort, unter
+  Supervisor) in die eigenen Add-on-Optionen, sodass er im
+  Konfigurationsdialog sichtbar ist und die Integration ihn automatisch
+  übernehmen kann. `hassio_api: true` neu gesetzt.
+- **HA-Integration (Manifest 2.0.0):** Config-Flow hat ein neues Feld
+  **API-Token**; unter Supervisor werden Add-on-Host (interner Hostname) und
+  Token über die Supervisor-API automatisch erkannt und vorbelegt. Bestehende
+  Einträge werden nach dem Update „nicht bereit" (kein Token, alte LAN-IP) –
+  Eintrag entfernen und neu hinzufügen.
+- `rest_command`-Beispiele in der Doku nutzen jetzt `<add-on-hostname>` und
+  einen `Authorization`-Header.
+
 ## 1.20.3
 
 - **`rainbow`-Flackern bei großem `sweep_seconds` behoben.** Bei z. B. `sweep_seconds:

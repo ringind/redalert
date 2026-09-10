@@ -42,7 +42,21 @@ set** in `/data/presets.json` (`GET/PUT/DELETE /presets`, `POST /select
 {"preset": "..."}` to load, `POST /start {"preset": "..."}` to load+start —
 loading adopts the set's per-bridge `area_id`s and hot-swaps a running effect
 in place when the areas match, else 409). It ships an
-aiohttp REST service **and** an Ingress web UI for control. HA builds the
+aiohttp REST service **and** an Ingress web UI for control. **Since 2.0.0 the
+add-on publishes no `ports:` — the REST API is reachable only via Ingress
+(web UI, no token) and HA's internal Docker network (`http://<addon-hostname>:8099`),
+and every non-Ingress call needs `Authorization: Bearer <api_token>`** (query
+`?api_token=` also accepted). `_auth_middleware` in `main.py` exempts loopback
+(the Docker HEALTHCHECK) and the Ingress peer `172.30.32.2` by `request.remote`,
+everything else 401s without a valid token (`hmac.compare_digest`). The token is
+the `api_token` option, else an auto-generated value persisted to
+`/data/api_token`; on startup `_publish_token_to_addon_options` best-effort
+writes it into the add-on's own options via the Supervisor API (`hassio_api:
+true`) so it shows in the config dialog and the HA integration can read it. The
+integration's `config_flow` gained an `api_token` field + `_discover_addon`
+(Supervisor `/addons` + `/addons/<slug>/info` → hostname + `options.api_token`,
+pre-fills the form) + an `async_step_hassio` stub; `after_dependencies:
+["hassio"]` in its manifest. HA builds the
 image locally from `redalert/Dockerfile` (no `image:` key, no prebuilt registry).
 Primary docs are German: repo overview in `README.md`, in-HA docs in
 `redalert/DOCS.md`. Each has a standalone English counterpart
@@ -101,7 +115,8 @@ custom_components/redalert/  HA integration talking to the app's REST API
   2026.3+ shows these inline (no home-assistant/brands PR needed), and the
   `hacs/action` CI check requires them regardless of HA version
 redalert/                  the app
-  config.yaml              manifest: options schema, ingress, ports
+  config.yaml              manifest: options schema, ingress, hassio_api
+                           (no `ports:` since 2.0.0 — Ingress + internal net only)
   build.yaml               base images: ghcr.io/home-assistant/{arch}-base-python
   Dockerfile               installs requirements, copies rootfs, chmods s6 scripts
   DOCS.md / DOCS.en.md / CHANGELOG.md   "Documentation" / "Changelog" tabs in
@@ -145,8 +160,8 @@ redalert/                  the app
 
 ## Commands
 
-No build system, linter, or test suite. Current version: **1.20.3**
-(integration `manifest.json` versioned separately: **1.2.0**).
+No build system, linter, or test suite. Current version: **2.0.0**
+(integration `manifest.json` versioned separately: **2.0.0**).
 
 - `python3 -m py_compile redalert/rootfs/app/main.py redalert/rootfs/app/chase.py`
   after every code change — the only static check available.
@@ -170,8 +185,11 @@ load, see `_load_credentials`) and deleting it forces a physical re-pair
 python3 -m venv .venv && .venv/bin/pip install -r redalert/requirements.txt   # once
 mkdir -p devdata
 REDALERT_DATA_DIR=./devdata REDALERT_LOG_LEVEL=debug .venv/bin/python redalert/rootfs/app/main.py &
-B=http://localhost:8099
+B=http://localhost:8099    # localhost is auth-exempt (loopback) → no token needed locally
 until curl -sf -o /dev/null $B/health; do sleep 0.5; done          # bind race: ~3 s, always gate
+# a non-loopback peer needs -H "Authorization: Bearer $(cat devdata/api_token)"; the
+# token is auto-generated + logged at startup. macOS blocks inbound to the LAN IP, so
+# to exercise the 401 path drive _auth_middleware via aiohttp.test_utils instead.
 # pair only if devdata/credentials.json has no entry for this host (needs a fresh link-button press):
 #   curl -s -X POST $B/pair -H 'Content-Type: application/json' -d '{"bridge_host":"<ip>"}'
 # without devdata/options.json "bridges", pass it in the body instead:

@@ -1,5 +1,5 @@
 name: "Red Alert Entertainment"
-version: "1.20.3"
+version: "2.0.0"
 slug: "redalert"
 description: >-
   Konfigurierbare Hue-Entertainment-Lichteffekte über mehrere Bridges
@@ -13,17 +13,15 @@ arch:
   - amd64
 init: false
 ingress: true
+hassio_api: true
 panel_icon: mdi:alarm-light
 panel_title: "Red Alert"
-ports:
-  8099/tcp: 8099
-ports_description:
-  8099/tcp: "REST-API & Web-UI – nur nötig für Zugriff außerhalb von Ingress (z. B. rest_command aus HA)"
 map:
   - addon_config:rw
   - share:rw
 options:
   bridges: []
+  api_token: ""
   effect: pulse
   color: "#FF0000"
   fps: 25
@@ -59,6 +57,7 @@ options:
   duration: 0.0
   log_level: info
 schema:
+  api_token: "str?"
   bridges:
     - bridge_host: "str"
       area_id: "str"
