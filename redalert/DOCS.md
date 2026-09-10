@@ -193,7 +193,7 @@ Die API ist nur noch erreichbar
 
 - über **Ingress** (das Web-UI, relativ zum Panel-Pfad) – ohne Token, und
 - über das **interne Docker-Netz von Home Assistant** unter
-  `http://<add-on-hostname>:8099` (der Hostname steht auf der Add-on-Seite unter
+  `http://<addon-hostname>:8099` (der Hostname steht auf der Add-on-Seite unter
   *Info*, z. B. `local-redalert` oder `<repo>-redalert`).
 
 Jeder Aufruf, der **nicht** über Ingress kommt (HA-Integration, `rest_command`,
@@ -295,7 +295,7 @@ gelistet: HACS → *Benutzerdefinierte Repositories* →
 (Ordner nach `config/custom_components/` kopieren). Danach HA neu starten,
 dann **Einstellungen → Geräte & Dienste → Integration hinzufügen → „Red Alert
 Entertainment App“**. Unter Supervisor werden **Host und API-Token automatisch
-erkannt** – nur bestätigen; sonst Host (`<add-on-hostname>`), Port `8099` und
+erkannt** – nur bestätigen; sonst Host (`<addon-hostname>`), Port `8099` und
 den API-Token aus der Add-on-Konfiguration eintragen. Details: das `README.md`
 in diesem Ordner.
 
@@ -322,7 +322,7 @@ ein template-seitiger Default (z. B. `0`) das ungewollt überschreibt.
 
 ### `configuration.yaml`
 
-`<add-on-hostname>` steht auf der Add-on-Seite unter *Info* (z. B.
+`<addon-hostname>` steht auf der Add-on-Seite unter *Info* (z. B.
 `local-redalert` oder `<repo>-redalert`); `<api_token>` in der
 Add-on-Konfiguration. Der `Authorization`-Header ist seit App-2.0.0 **Pflicht**
 (ohne ihn `401`). Am übersichtlichsten in `secrets.yaml`:
@@ -332,7 +332,7 @@ Add-on-Konfiguration. Der `Authorization`-Header ist seit App-2.0.0 **Pflicht**
 rest_command:
   # Startet mit den in der App konfigurierten Standardwerten (Options bzw. Web-UI).
   redalert_start:
-    url: "http://<add-on-hostname>:8099/start"
+    url: "http://<addon-hostname>:8099/start"
     method: POST
     content_type: "application/json"
     headers:
@@ -343,7 +343,7 @@ rest_command:
   # Aufruf z. B. mit data: {preset: "Star Trek – Alarmstufe Rot"}
   # optional zusätzlich data: {duration: 30} um die Dauer für diesen einen Aufruf zu übersteuern.
   redalert_start_preset:
-    url: "http://<add-on-hostname>:8099/start"
+    url: "http://<addon-hostname>:8099/start"
     method: POST
     content_type: "application/json"
     headers:
@@ -354,7 +354,7 @@ rest_command:
       }
 
   redalert_stop:
-    url: "http://<add-on-hostname>:8099/stop"
+    url: "http://<addon-hostname>:8099/stop"
     method: POST
     headers:
       Authorization: "Bearer <api_token>"
@@ -430,7 +430,7 @@ Effekt und Farbe unabhängig vom konfigurierten Standard setzen:
 ```yaml
 rest_command:
   redalert_start_custom:
-    url: "http://<add-on-hostname>:8099/start"
+    url: "http://<addon-hostname>:8099/start"
     method: POST
     content_type: "application/json"
     headers:

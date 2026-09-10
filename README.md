@@ -160,7 +160,7 @@ Bridge-Karte unter „1 · Bridges“). Per REST geht es nur noch aus dem
 HA-Container heraus (kein LAN-Port mehr) und mit API-Token:
 
 ```bash
-curl -X POST http://<add-on-hostname>:8099/pair \
+curl -X POST http://<addon-hostname>:8099/pair \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <api_token>" \
   -d '{"bridge_host": "192.168.1.50"}'
@@ -175,7 +175,7 @@ setzt die App komplett zurück.
 
 ```bash
 curl -H "Authorization: Bearer <api_token>" \
-  "http://<add-on-hostname>:8099/areas?bridge_host=192.168.1.50"
+  "http://<addon-hostname>:8099/areas?bridge_host=192.168.1.50"
 ```
 
 (oder im Web-UI „Bereiche laden“ – dort ohne Token.)
@@ -243,7 +243,7 @@ App nach einer Options-Änderung neu starten.
 
 **Zugang (seit 2.0.0):** kein LAN-Port mehr. Erreichbar über **Ingress** (Web-UI,
 ohne Token) und über das **interne Docker-Netz** unter
-`http://<add-on-hostname>:8099` (Hostname auf der Add-on-Seite unter *Info*).
+`http://<addon-hostname>:8099` (Hostname auf der Add-on-Seite unter *Info*).
 Jeder Aufruf außerhalb von Ingress braucht den Header
 `Authorization: Bearer <api_token>` (ersatzweise `?api_token=…`), sonst `401`.
 Die HA-Integration übernimmt den Token unter Supervisor automatisch.
@@ -292,13 +292,13 @@ hinzufügen – `hacs.json` im Wurzelverzeichnis) oder manuell (Ordner nach
 Entertainment App“**. Unter Supervisor werden Host und API-Token automatisch
 erkannt – nur bestätigen. Details siehe [`custom_components/redalert/README.md`](custom_components/redalert/README.md).
 
-**Ohne Zusatzinstallation** – `configuration.yaml` (`<add-on-hostname>` von der
+**Ohne Zusatzinstallation** – `configuration.yaml` (`<addon-hostname>` von der
 Add-on-Seite unter *Info*, `<api_token>` aus der Add-on-Konfiguration):
 
 ```yaml
 rest_command:
   redalert_start:
-    url: "http://<add-on-hostname>:8099/start"
+    url: "http://<addon-hostname>:8099/start"
     method: POST
     content_type: "application/json"
     headers:
@@ -306,7 +306,7 @@ rest_command:
     payload: '{}'   # Dauer ohne Angabe: Standard aus der App-Option duration
 
   redalert_stop:
-    url: "http://<add-on-hostname>:8099/stop"
+    url: "http://<addon-hostname>:8099/stop"
     method: POST
     headers:
       Authorization: "Bearer <api_token>"

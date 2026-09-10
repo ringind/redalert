@@ -17,7 +17,7 @@ Vollständige Anleitung: siehe **[DOCS.md](DOCS.md)** (wird in HA als Tab
   Dauer/fps und Start/Stop gemeinsam für alle Bridges.
 - **REST-API** (`/health`, `/config`, `/pair`, `/areas`, `/start`, `/stop`, …):
   seit 2.0.0 ohne LAN-Port – nur über Ingress bzw. das interne Docker-Netz
-  (`http://<add-on-hostname>:8099`) und mit `Authorization: Bearer <api_token>`.
+  (`http://<addon-hostname>:8099`) und mit `Authorization: Bearer <api_token>`.
 - Container-HEALTHCHECK auf `/health`, s6-Supervision, DE/EN-Übersetzung.
 
 ## Dateien
