@@ -11,6 +11,9 @@ venv/
 # Local dev data (contains real bridge credentials)
 devdata/
 
+# Claude Code / dev session transcripts – nicht ins öffentliche Repo
+sessions/
+
 # Audio sources – nicht mitliefern (siehe Rechtlicher Hinweis in der README);
 # nur die abgeleitete redalert_cue.json wird versioniert.
 *.mp3
